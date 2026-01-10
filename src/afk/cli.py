@@ -740,7 +740,10 @@ def explain(ctx: click.Context, verbose: bool) -> None:
 
     Shows what task would be selected next, why, and session statistics.
     """
+    from typing import Any
+
     from afk.learnings import load_learnings
+    from afk.prd_store import load_prd
     from afk.progress import SessionProgress
     from afk.sources import aggregate_tasks
 
@@ -751,7 +754,22 @@ def explain(ctx: click.Context, verbose: bool) -> None:
         return
 
     progress = SessionProgress.load()
-    tasks = aggregate_tasks(config.sources) if config.sources else []
+
+    # Get tasks from sources, or fall back to PRD if no sources configured
+    # Tasks can be Task objects (from sources) or UserStory objects (from PRD)
+    prd = load_prd()
+    tasks: list[Any]
+    pending_tasks: list[Any]
+    if config.sources:
+        tasks = aggregate_tasks(config.sources)
+        # Completed from progress.json (source-based tracking)
+        completed_ids = {t.id for t in progress.get_completed_tasks()}
+        pending_tasks = [t for t in tasks if t.id not in completed_ids]
+    else:
+        # Zero-config mode: read directly from PRD, completion is passes=true
+        tasks = list(prd.userStories)
+        completed_ids = {t.id for t in tasks if t.passes}
+        pending_tasks = [t for t in tasks if not t.passes]
 
     # Session info
     console.print(Panel.fit("[bold]Session State[/bold]", title="afk explain"))
@@ -762,10 +780,8 @@ def explain(ctx: click.Context, verbose: bool) -> None:
     console.print()
 
     # Task breakdown
-    completed_ids = {t.id for t in progress.get_completed_tasks()}
     failed_tasks = [t for t in progress.tasks.values() if t.status == "failed"]
     skipped_tasks = [t for t in progress.tasks.values() if t.status == "skipped"]
-    pending_tasks = [t for t in tasks if t.id not in completed_ids]
 
     console.print("  [cyan]Tasks:[/cyan]")
     console.print(f"    Total: {len(tasks)}")
@@ -779,13 +795,29 @@ def explain(ctx: click.Context, verbose: bool) -> None:
 
     # Next task
     if pending_tasks:
-        priority_order = {"high": 0, "medium": 1, "low": 2}
-        pending_tasks.sort(key=lambda t: priority_order.get(t.priority, 1))
+        # Sort by priority (int for UserStory, string for Task)
+        def priority_sort_key(t: Any) -> int:
+            p = t.priority
+            if isinstance(p, int):
+                return p
+            return {"high": 1, "medium": 2, "low": 3}.get(str(p).lower(), 2)
+
+        pending_tasks.sort(key=priority_sort_key)
         next_task = pending_tasks[0]
         console.print("  [cyan]Next task:[/cyan]")
         console.print(f"    ID: [bold]{next_task.id}[/bold]")
-        console.print(f"    Priority: {next_task.priority.upper()}")
-        console.print(f"    Description: {next_task.description[:80]}...")
+        # Priority can be int (UserStory) or string (Task)
+        priority_val = next_task.priority
+        if isinstance(priority_val, int):
+            priority_str = {1: "HIGH", 2: "MEDIUM", 3: "MEDIUM", 4: "LOW", 5: "LOW"}.get(
+                priority_val, "MEDIUM"
+            )
+        else:
+            priority_str = str(priority_val).upper()
+        console.print(f"    Priority: {priority_str}")
+        # Description field may be 'description' or 'title' depending on type
+        desc = getattr(next_task, "description", None) or getattr(next_task, "title", "")
+        console.print(f"    Description: {str(desc)[:80]}...")
     else:
         console.print("  [green]All tasks complete![/green]")
 
