@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from afk.sources import Task
 
 
-def load_beads_tasks() -> list["Task"]:
+def load_beads_tasks() -> list[Task]:
     """Load tasks from beads (bd ready)."""
     from afk.sources import Task
 
@@ -37,13 +37,15 @@ def load_beads_tasks() -> list["Task"]:
             priority = _map_beads_priority(item.get("priority"))
 
             if task_id and description:
-                tasks.append(Task(
-                    id=task_id,
-                    description=description,
-                    priority=priority,
-                    source="beads",
-                    metadata=item,
-                ))
+                tasks.append(
+                    Task(
+                        id=task_id,
+                        description=description,
+                        priority=priority,
+                        source="beads",
+                        metadata=item,
+                    )
+                )
 
         return tasks
 
@@ -56,7 +58,7 @@ def load_beads_tasks() -> list["Task"]:
         return _parse_beads_text_output()
 
 
-def _parse_beads_text_output() -> list["Task"]:
+def _parse_beads_text_output() -> list[Task]:
     """Parse text output from bd ready (fallback)."""
     from afk.sources import Task
 
@@ -87,12 +89,14 @@ def _parse_beads_text_output() -> list["Task"]:
                 task_id = line[:20].replace(" ", "-").lower()
                 description = line
 
-            tasks.append(Task(
-                id=task_id,
-                description=description,
-                priority="medium",
-                source="beads",
-            ))
+            tasks.append(
+                Task(
+                    id=task_id,
+                    description=description,
+                    priority="medium",
+                    source="beads",
+                )
+            )
 
         return tasks
 

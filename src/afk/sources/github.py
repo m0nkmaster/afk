@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import subprocess
 import json
+import subprocess
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 def load_github_tasks(
     repo: str | None = None,
     labels: list[str] | None = None,
-) -> list["Task"]:
+) -> list[Task]:
     """Load tasks from GitHub issues using gh CLI.
 
     Requires GitHub CLI (gh) to be installed and authenticated.
@@ -53,13 +53,15 @@ def load_github_tasks(
             priority = _priority_from_labels(issue_labels)
 
             if number and title:
-                tasks.append(Task(
-                    id=f"#{number}",
-                    description=title,
-                    priority=priority,
-                    source="github",
-                    metadata=issue,
-                ))
+                tasks.append(
+                    Task(
+                        id=f"#{number}",
+                        description=title,
+                        priority=priority,
+                        source="github",
+                        metadata=issue,
+                    )
+                )
 
         return tasks
 

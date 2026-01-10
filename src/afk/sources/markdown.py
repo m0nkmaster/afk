@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from afk.sources import Task
 
 
-def load_markdown_tasks(path: str | None) -> list["Task"]:
+def load_markdown_tasks(path: str | None) -> list[Task]:
     """Load tasks from a markdown file with checkboxes.
 
     Supports formats:
@@ -51,12 +51,14 @@ def load_markdown_tasks(path: str | None) -> list["Task"]:
 
         task_id, description, priority = _parse_task_line(text)
 
-        tasks.append(Task(
-            id=task_id,
-            description=description,
-            priority=priority,
-            source=f"markdown:{path}",
-        ))
+        tasks.append(
+            Task(
+                id=task_id,
+                description=description,
+                priority=priority,
+                source=f"markdown:{path}",
+            )
+        )
 
     return tasks
 

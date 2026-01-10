@@ -28,27 +28,112 @@ def main(ctx: click.Context) -> None:
 
 
 @main.command()
+@click.option("--dry-run", "-n", is_flag=True, help="Show what would be configured without writing")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing config")
-def init(force: bool) -> None:
-    """Initialize afk in the current directory."""
-    if AFK_DIR.exists() and not force:
-        console.print("[yellow]afk already initialized.[/yellow] Use --force to reinitialize.")
+@click.option("--yes", "-y", is_flag=True, help="Accept all defaults without prompting")
+def init(dry_run: bool, force: bool, yes: bool) -> None:
+    """Initialize afk by analysing the project.
+
+    Detects project type, available tools, task sources, and context files
+    to generate a sensible configuration.
+    """
+    from afk.bootstrap import analyse_project, generate_config
+
+    # Check for existing config
+    if AFK_DIR.exists() and not force and not dry_run:
+        console.print(
+            "[yellow]afk already initialized.[/yellow] "
+            "Use --force to reconfigure or --dry-run to preview."
+        )
         return
 
-    AFK_DIR.mkdir(parents=True, exist_ok=True)
+    result = analyse_project()
 
-    config = AfkConfig()
+    # Display analysis
+    console.print(Panel.fit("[bold]Project Analysis[/bold]", title="afk init"))
+    console.print()
+
+    # Stack detection
+    if result.stack:
+        console.print(f"  [green]✓[/green] Stack: [cyan]{result.stack.name}[/cyan]")
+    else:
+        console.print("  [yellow]?[/yellow] Stack: [dim]Not detected[/dim]")
+
+    # Available tools
+    console.print()
+    console.print("  [bold]Tools:[/bold]")
+    for tool, available in result.available_tools.items():
+        icon = "[green]✓[/green]" if available else "[dim]✗[/dim]"
+        console.print(f"    {icon} {tool}")
+
+    # Sources
+    console.print()
+    console.print("  [bold]Task Sources:[/bold]")
+    if result.sources:
+        for src in result.sources:
+            path_info = f" ({src.path})" if src.path else ""
+            console.print(f"    [green]✓[/green] {src.type}{path_info}")
+    else:
+        console.print("    [dim]None detected[/dim]")
+
+    # Context files
+    console.print()
+    console.print("  [bold]Context Files:[/bold]")
+    if result.context_files:
+        for f in result.context_files:
+            console.print(f"    [green]✓[/green] {f}")
+    else:
+        console.print("    [dim]None found[/dim]")
+
+    # Feedback loops
+    if result.stack:
+        console.print()
+        console.print("  [bold]Feedback Loops:[/bold]")
+        loops = result.stack.feedback_loops
+        if loops.lint:
+            console.print(f"    lint: [cyan]{loops.lint}[/cyan]")
+        if loops.types:
+            console.print(f"    types: [cyan]{loops.types}[/cyan]")
+        if loops.test:
+            console.print(f"    test: [cyan]{loops.test}[/cyan]")
+        if loops.build:
+            console.print(f"    build: [cyan]{loops.build}[/cyan]")
+
+    # Warnings
+    if result.warnings:
+        console.print()
+        for warning in result.warnings:
+            console.print(f"  [yellow]⚠[/yellow] {warning}")
+
+    if dry_run:
+        console.print()
+        console.print("[dim]Dry run - no changes made.[/dim]")
+        return
+
+    # Confirm unless --yes
+    if not yes:
+        console.print()
+        if not click.confirm("Apply this configuration?", default=True):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    # Generate and save config
+    config = generate_config(result)
+    AFK_DIR.mkdir(parents=True, exist_ok=True)
     config.save()
 
-    console.print(Panel.fit(
-        "[green]afk initialized![/green]\n\n"
-        f"Config: [cyan]{CONFIG_FILE}[/cyan]\n\n"
-        "Next steps:\n"
-        "  1. Add task sources: [cyan]afk source add beads[/cyan]\n"
-        "  2. Check status: [cyan]afk status[/cyan]\n"
-        "  3. Get next prompt: [cyan]afk next[/cyan]",
-        title="afk",
-    ))
+    console.print()
+    console.print(
+        Panel.fit(
+            "[green]Configuration saved![/green]\n\n"
+            f"Config: [cyan]{CONFIG_FILE}[/cyan]\n\n"
+            "Next steps:\n"
+            "  1. Review config: [cyan]cat .afk/config.json[/cyan]\n"
+            "  2. Check status: [cyan]afk status[/cyan]\n"
+            "  3. Get next prompt: [cyan]afk next[/cyan]",
+            title="afk",
+        )
+    )
 
 
 @main.command()
@@ -176,8 +261,8 @@ def next(
     output_mode = output_mode or config.output.default
 
     # Import here to avoid circular imports
-    from afk.prompt import generate_prompt
     from afk.output import output_prompt
+    from afk.prompt import generate_prompt
 
     prompt = generate_prompt(config, bootstrap=bootstrap, limit_override=limit)
     output_prompt(prompt, mode=output_mode, config=config)  # type: ignore[arg-type]

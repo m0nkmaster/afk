@@ -41,6 +41,7 @@ pytest                       # Tests (when added)
 src/afk/
 ├── cli.py           # Click CLI - commands and argument handling
 ├── config.py        # Pydantic models for .afk/config.json
+├── bootstrap.py     # Project analysis and auto-configuration
 ├── progress.py      # Session and task progress tracking
 ├── prompt.py        # Jinja2 prompt generation
 ├── output.py        # Output handlers (clipboard, file, stdout)

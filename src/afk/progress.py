@@ -149,7 +149,8 @@ def check_limits(
 
     # Check for tasks that have failed too many times
     stuck_tasks = [
-        t for t in progress.tasks.values()
+        t
+        for t in progress.tasks.values()
         if t.failure_count >= max_failures and t.status != "skipped"
     ]
 
@@ -157,9 +158,7 @@ def check_limits(
         # Auto-skip tasks that keep failing
         for task in stuck_tasks:
             progress.set_task_status(
-                task.id,
-                "skipped",
-                message=f"Skipped after {task.failure_count} failures"
+                task.id, "skipped", message=f"Skipped after {task.failure_count} failures"
             )
 
     # Check completion - need to compare against total tasks from sources

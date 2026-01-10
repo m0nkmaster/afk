@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from jinja2 import Environment, BaseLoader
+from jinja2 import BaseLoader, Environment
 
 from afk.config import AfkConfig
 from afk.progress import SessionProgress, check_limits
-from afk.sources import aggregate_tasks, Task
-
+from afk.sources import aggregate_tasks
 
 DEFAULT_TEMPLATE = """\
 # afk Iteration {{ iteration }}

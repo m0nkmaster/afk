@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from afk.sources import Task
 
 
-def load_json_tasks(path: str | None) -> list["Task"]:
+def load_json_tasks(path: str | None) -> list[Task]:
     """Load tasks from a JSON PRD file.
 
     Supports two formats:
@@ -64,13 +64,15 @@ def load_json_tasks(path: str | None) -> list["Task"]:
         priority = _map_priority(item.get("priority"))
 
         if task_id and description:
-            tasks.append(Task(
-                id=task_id,
-                description=description,
-                priority=priority,
-                source=f"json:{path}",
-                metadata=item,
-            ))
+            tasks.append(
+                Task(
+                    id=task_id,
+                    description=description,
+                    priority=priority,
+                    source=f"json:{path}",
+                    metadata=item,
+                )
+            )
 
     return tasks
 

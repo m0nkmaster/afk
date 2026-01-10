@@ -33,10 +33,10 @@ pip install -e .
 ## Quick Start
 
 ```bash
-# Initialize in your project
+# Initialize afk (auto-detects project settings)
 afk init
 
-# Add a task source
+# Add a task source (if not auto-detected)
 afk source add json prd.json      # JSON PRD file
 afk source add markdown tasks.md  # Markdown checklist
 afk source add beads              # Use beads (bd) for issues
@@ -56,6 +56,23 @@ afk done <task-id>
 # Run multiple iterations (with configured AI CLI)
 afk run 5
 ```
+
+## Initialization
+
+The `init` command analyses your project and auto-configures afk:
+
+```bash
+afk init           # Interactive mode
+afk init --yes     # Accept defaults
+afk init --dry-run # Preview without changes
+afk init --force   # Reconfigure existing setup
+```
+
+It detects:
+- **Project type**: Python, Node.js, Rust, Go, Java (Maven/Gradle)
+- **Available tools**: bd, gh, claude, aider
+- **Task sources**: beads, PRD files, markdown task lists
+- **Context files**: AGENTS.md, README.md, CONTRIBUTING.md
 
 ## Configuration
 
