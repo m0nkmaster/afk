@@ -12,6 +12,18 @@ This is a Python CLI tool that implements the Ralph Wiggum pattern for autonomou
 pip install -e ".[dev]"
 ```
 
+## Issue Tracking
+
+This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --status in_progress  # Claim work
+bd close <id>         # Complete work
+bd sync               # Sync with git
+```
+
 ## Code Quality
 
 Before committing, run:
@@ -57,14 +69,17 @@ src/afk/
 
 When ending a work session, you MUST:
 
-1. **Run quality gates** - `ruff check . && mypy src/afk`
-2. **Commit and push**:
+1. **File issues for remaining work** - Use `bd new` for follow-up items
+2. **Run quality gates** - `ruff check . && mypy src/afk`
+3. **Update issue status** - `bd close <id>` for finished work
+4. **Commit and push**:
    ```bash
    git add -A
    git commit -m "descriptive message"
    git pull --rebase
+   bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
 
-Work is NOT complete until `git push` succeeds.
+**CRITICAL:** Work is NOT complete until `git push` succeeds. Never stop before pushing.
