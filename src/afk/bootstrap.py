@@ -138,34 +138,34 @@ PROMPT_FILES = [
 ]
 
 # Known AI CLI tools with metadata
-# Args are configured for autonomous (non-interactive) operation where the prompt
-# is passed via stdin and the tool runs without user confirmation prompts.
+# Args are configured for autonomous (non-interactive) operation.
+# The prompt is passed as the final command-line argument after these args.
 AI_CLIS: list[AiCliInfo] = [
     AiCliInfo(
         command="claude",
         name="Claude Code",
-        args=["--dangerously-skip-permissions", "-p"],
+        args=["--dangerously-skip-permissions"],
         description="Anthropic's Claude CLI for autonomous terminal-based AI coding",
         install_url="https://docs.anthropic.com/en/docs/claude-code",
     ),
     AiCliInfo(
         command="agent",
         name="Cursor Agent",
-        args=["--force", "-p"],
+        args=["-p", "--force"],
         description="Cursor's CLI agent for autonomous terminal-based AI coding",
         install_url="https://docs.cursor.com/cli",
     ),
     AiCliInfo(
         command="codex",
         name="Codex",
-        args=["--approval-mode", "full-auto", "-q"],
+        args=["--approval-mode", "full-auto"],
         description="OpenAI's Codex CLI for terminal-based AI coding",
         install_url="https://github.com/openai/codex",
     ),
     AiCliInfo(
         command="aider",
         name="Aider",
-        args=["--yes"],
+        args=["--yes", "--message"],
         description="AI pair programming in your terminal",
         install_url="https://aider.chat",
     ),

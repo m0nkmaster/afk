@@ -307,18 +307,17 @@ class IterationRunner:
     ) -> IterationResult:
         """Execute AI CLI command and return result."""
         try:
+            # Pass prompt as final argument (universal across AI CLIs)
+            full_cmd = cmd + [prompt]
+
             process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
+                full_cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
             )
-
-            if process.stdin:
-                process.stdin.write(prompt)
-                process.stdin.close()
 
             if stream and process.stdout:
                 output_buffer: list[str] = []
@@ -369,18 +368,17 @@ class IterationRunner:
     ) -> tuple[IterationResult, bool]:
         """Execute command and detect completion signal."""
         try:
+            # Pass prompt as final argument (universal across AI CLIs)
+            full_cmd = cmd + [prompt_content]
+
             process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
+                full_cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
             )
-
-            if process.stdin:
-                process.stdin.write(prompt_content)
-                process.stdin.close()
 
             output_buffer: list[str] = []
             completion_detected = False
