@@ -241,6 +241,7 @@ class TestDetectTools:
         assert "codex" in tools
         assert "aider" in tools
         assert "amp" in tools
+        assert "kiro" in tools
 
 
 class TestDetectAiCli:
@@ -266,16 +267,29 @@ class TestDetectAiCli:
 
     def test_aider_fallback(self) -> None:
         """Test falling back to aider."""
-        config = _detect_ai_cli(
-            {"claude": False, "agent": False, "codex": False, "aider": True}
-        )
+        config = _detect_ai_cli({"claude": False, "agent": False, "codex": False, "aider": True})
         assert config.command == "aider"
         assert config.args == ["--yes"]
+
+    def test_kiro_fallback(self) -> None:
+        """Test falling back to kiro."""
+        config = _detect_ai_cli(
+            {"claude": False, "agent": False, "codex": False, "kiro": True, "aider": True}
+        )
+        assert config.command == "kiro"
+        assert config.args == ["--auto"]
 
     def test_amp_fallback(self) -> None:
         """Test falling back to amp."""
         config = _detect_ai_cli(
-            {"claude": False, "agent": False, "codex": False, "aider": False, "amp": True}
+            {
+                "claude": False,
+                "agent": False,
+                "codex": False,
+                "kiro": False,
+                "aider": False,
+                "amp": True,
+            }
         )
         assert config.command == "amp"
         assert config.args == ["--dangerously-allow-all"]
@@ -283,7 +297,7 @@ class TestDetectAiCli:
     def test_default(self) -> None:
         """Test default when nothing available."""
         config = _detect_ai_cli(
-            {"claude": False, "agent": False, "codex": False, "aider": False}
+            {"claude": False, "agent": False, "codex": False, "kiro": False, "aider": False}
         )
         assert config.command == "claude"  # Defaults to claude
 
@@ -401,13 +415,14 @@ class TestAiCliDefinitions:
 
     def test_ai_clis_defined(self) -> None:
         """Test that AI CLIs are defined."""
-        assert len(AI_CLIS) >= 5
+        assert len(AI_CLIS) >= 6
         commands = [cli.command for cli in AI_CLIS]
         assert "agent" in commands
         assert "claude" in commands
         assert "codex" in commands
         assert "aider" in commands
         assert "amp" in commands
+        assert "kiro" in commands
 
     def test_agent_cli_definition(self) -> None:
         """Test Cursor Agent CLI definition."""
@@ -429,6 +444,13 @@ class TestAiCliDefinitions:
         assert codex.name == "Codex"
         assert codex.args == ["--approval-mode", "full-auto", "-q"]
         assert "openai" in codex.install_url.lower() or "codex" in codex.install_url.lower()
+
+    def test_kiro_cli_definition(self) -> None:
+        """Test Kiro CLI definition."""
+        kiro = next(cli for cli in AI_CLIS if cli.command == "kiro")
+        assert kiro.name == "Kiro"
+        assert kiro.args == ["--auto"]
+        assert "kiro" in kiro.install_url.lower()
 
     def test_all_clis_have_required_fields(self) -> None:
         """Test all CLIs have required fields."""
@@ -470,6 +492,17 @@ class TestDetectAvailableAiClis:
             available = detect_available_ai_clis()
             assert len(available) == 1
             assert available[0].command == "codex"
+
+    def test_kiro_available(self) -> None:
+        """Test when kiro is installed."""
+
+        def mock_exists(cmd: str) -> bool:
+            return cmd == "kiro"
+
+        with patch("afk.bootstrap._command_exists", side_effect=mock_exists):
+            available = detect_available_ai_clis()
+            assert len(available) == 1
+            assert available[0].command == "kiro"
 
     def test_multiple_clis_available(self) -> None:
         """Test when multiple CLIs are installed."""

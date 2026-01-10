@@ -176,6 +176,13 @@ AI_CLIS: list[AiCliInfo] = [
         description="Sourcegraph's agentic coding tool",
         install_url="https://sourcegraph.com/amp",
     ),
+    AiCliInfo(
+        command="kiro",
+        name="Kiro",
+        args=["--auto"],
+        description="Amazon's AI-powered development CLI for terminal-based coding",
+        install_url="https://kiro.dev",
+    ),
 ]
 
 
@@ -270,6 +277,7 @@ def _detect_tools() -> dict[str, bool]:
         "codex": _command_exists("codex"),
         "aider": _command_exists("aider"),
         "amp": _command_exists("amp"),
+        "kiro": _command_exists("kiro"),
     }
     return tools
 
@@ -277,7 +285,7 @@ def _detect_tools() -> dict[str, bool]:
 def _detect_ai_cli(tools: dict[str, bool]) -> AiCliConfig:
     """Detect the best available AI CLI tool.
 
-    Priority order: claude > agent > codex > aider > amp
+    Priority order: claude > agent > codex > kiro > aider > amp
     """
     if tools.get("claude"):
         return AiCliConfig(command="claude", args=["--dangerously-skip-permissions", "-p"])
@@ -285,6 +293,8 @@ def _detect_ai_cli(tools: dict[str, bool]) -> AiCliConfig:
         return AiCliConfig(command="agent", args=["--force", "-p"])
     if tools.get("codex"):
         return AiCliConfig(command="codex", args=["--approval-mode", "full-auto", "-q"])
+    if tools.get("kiro"):
+        return AiCliConfig(command="kiro", args=["--auto"])
     if tools.get("aider"):
         return AiCliConfig(command="aider", args=["--yes"])
     if tools.get("amp"):
