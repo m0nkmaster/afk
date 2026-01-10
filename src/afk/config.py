@@ -33,7 +33,7 @@ class LimitsConfig(BaseModel):
     """Configuration for iteration limits."""
 
     max_iterations: int = 20
-    max_task_failures: int = 3
+    max_task_failures: int = 20
     timeout_minutes: int = 30
 
 

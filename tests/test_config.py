@@ -92,7 +92,7 @@ class TestLimitsConfig:
         """Test default values."""
         config = LimitsConfig()
         assert config.max_iterations == 20
-        assert config.max_task_failures == 3
+        assert config.max_task_failures == 20
         assert config.timeout_minutes == 30
 
     def test_custom_values(self) -> None:
