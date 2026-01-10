@@ -259,6 +259,32 @@ class TestDoneCommand:
         assert "Task completed" in result.output
 
 
+class TestFailCommand:
+    """Tests for fail command."""
+
+    def test_fail_marks_failed(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test fail marks task as failed."""
+        result = cli_runner.invoke(main, ["fail", "task-1"])
+        assert result.exit_code == 0
+        assert "Task failed" in result.output
+        assert "task-1" in result.output
+
+    def test_fail_with_message(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test fail with custom message."""
+        result = cli_runner.invoke(main, ["fail", "task-1", "-m", "Build error"])
+        assert result.exit_code == 0
+        assert "Task failed" in result.output
+
+    def test_fail_shows_failure_count(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test fail shows failure count on repeated failures."""
+        cli_runner.invoke(main, ["fail", "task-1"])
+        result = cli_runner.invoke(main, ["fail", "task-1"])
+        assert result.exit_code == 0
+        assert "2" in result.output  # Second failure
+
+
 class TestRunCommand:
     """Tests for run command."""
 

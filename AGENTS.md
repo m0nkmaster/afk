@@ -39,6 +39,8 @@ pytest                       # Tests with coverage
 
 This project maintains **>80% test coverage**. Tests are required for all changes.
 
+Write tests first. Follow the red-green-refactor test driven development process (TDD).
+
 ### Running Tests
 
 ```bash

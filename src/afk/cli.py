@@ -285,6 +285,18 @@ def done(ctx: click.Context, task_id: str, message: str | None) -> None:
 
 
 @main.command()
+@click.argument("task_id")
+@click.option("--message", "-m", help="Failure reason")
+@click.pass_context
+def fail(ctx: click.Context, task_id: str, message: str | None) -> None:
+    """Mark a task as failed."""
+    from afk.progress import mark_failed
+
+    failure_count = mark_failed(task_id, message=message)
+    console.print(f"[red]Task failed:[/red] {task_id} (attempt {failure_count})")
+
+
+@main.command()
 @click.argument("iterations", type=int, default=5)
 @click.option("--until-complete", is_flag=True, help="Run until all tasks complete")
 @click.option("--timeout", type=int, help="Override timeout in minutes")
