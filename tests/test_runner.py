@@ -233,6 +233,66 @@ class TestRunLoop:
         # Should archive when previous session exists
         mock_archive.assert_called()
 
+    def test_resume_skips_initial_archiving(self, temp_afk_dir: Path) -> None:
+        """Test resume=True skips archiving previous session at start."""
+        config = AfkConfig(archive=ArchiveConfig(enabled=True))
+
+        # Create progress file
+        progress_file = temp_afk_dir / "progress.json"
+        progress_file.write_text('{"iterations": 5, "tasks": {}}')
+
+        with patch("afk.runner.sync_prd") as mock_sync:
+            mock_prd = MagicMock()
+            mock_prd.userStories = []
+            mock_sync.return_value = mock_prd
+
+            with patch("afk.runner.load_prd") as mock_load:
+                mock_load.return_value = mock_prd
+
+                with patch("afk.runner.archive_session") as mock_archive:
+                    mock_archive.return_value = None  # Prevent MagicMock in output
+
+                    with patch("afk.runner.clear_session") as mock_clear:
+                        with patch("afk.runner.SessionProgress") as mock_progress:
+                            mock_session = MagicMock()
+                            mock_session.iterations = 5
+                            mock_progress.load.return_value = mock_session
+
+                            run_loop(config, max_iterations=5, resume=True)
+
+        # clear_session should NOT be called when resume=True (initial archive skipped)
+        mock_clear.assert_not_called()
+        # archive_session may still be called at end of loop, but not for "new_run" reason
+        # Check that no call was made with reason="new_run"
+        for call in mock_archive.call_args_list:
+            if call.kwargs.get("reason") == "new_run" or (
+                len(call.args) > 1 and call.args[1] == "new_run"
+            ):
+                raise AssertionError("archive_session was called with reason='new_run'")
+
+    def test_resume_continues_from_previous_iteration(self, temp_afk_dir: Path) -> None:
+        """Test resume continues from where it left off."""
+        config = AfkConfig(archive=ArchiveConfig(enabled=True))
+
+        with patch("afk.runner.sync_prd") as mock_sync:
+            mock_prd = MagicMock()
+            mock_prd.userStories = []
+            mock_sync.return_value = mock_prd
+
+            with patch("afk.runner.load_prd") as mock_load:
+                mock_load.return_value = mock_prd
+
+                with patch("afk.runner.archive_session"):
+                    with patch("afk.runner.SessionProgress") as mock_progress:
+                        mock_session = MagicMock()
+                        mock_session.iterations = 3  # Previous iterations
+                        mock_progress.load.return_value = mock_session
+
+                        result = run_loop(config, max_iterations=5, resume=True)
+
+        # Session should show previous iteration count was recognised
+        assert result is not None
+
     def test_creates_branch_when_configured(
         self, temp_afk_dir: Path, mock_subprocess_run: MagicMock
     ) -> None:

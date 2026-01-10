@@ -93,7 +93,7 @@ class TestLimitsConfig:
         config = LimitsConfig()
         assert config.max_iterations == 20
         assert config.max_task_failures == 3
-        assert config.timeout_minutes == 120
+        assert config.timeout_minutes == 30
 
     def test_custom_values(self) -> None:
         """Test custom limit values."""
@@ -255,7 +255,7 @@ class TestGitConfig:
     def test_defaults(self) -> None:
         """Test default values."""
         config = GitConfig()
-        assert config.auto_commit is False
+        assert config.auto_commit is True  # Default changed for better DX
         assert config.auto_branch is False
         assert config.branch_prefix == "afk/"
         assert config.commit_message_template == "afk: {task_id} - {message}"

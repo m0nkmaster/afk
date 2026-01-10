@@ -458,6 +458,134 @@ def prd_parse(
     )
 
 
+@prd.command("sync")
+@click.option("--branch", "-b", help="Branch name for PRD")
+@click.pass_context
+def prd_sync(ctx: click.Context, branch: str | None) -> None:
+    """Sync PRD from all configured sources.
+
+    Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
+    .afk/prd.json file. The AI reads this file directly (Ralph pattern).
+
+    Existing completion status (passes: true) is preserved for matching IDs.
+
+    Example:
+
+        afk prd sync
+
+        afk prd sync --branch feature/new-thing
+    """
+    from afk.prd_store import sync_prd
+
+    config: AfkConfig = ctx.obj["config"]
+
+    if not config.sources:
+        console.print("[red]No sources configured.[/red] Run [cyan]afk source add[/cyan] first.")
+        return
+
+    console.print("[cyan]Syncing PRD from sources...[/cyan]")
+
+    prd = sync_prd(config, branch_name=branch)
+
+    pending = sum(1 for s in prd.userStories if not s.passes)
+    complete = sum(1 for s in prd.userStories if s.passes)
+
+    console.print()
+    console.print("[green]PRD synced:[/green] .afk/prd.json")
+    console.print(f"  Stories: {len(prd.userStories)} total")
+    console.print(f"  Pending: {pending}")
+    console.print(f"  Complete: {complete}")
+
+    if prd.branchName:
+        console.print(f"  Branch: {prd.branchName}")
+
+
+@prd.command("show")
+@click.option("--pending", "-p", is_flag=True, help="Show only pending stories")
+@click.pass_context
+def prd_show(ctx: click.Context, pending: bool) -> None:
+    """Show the current PRD state.
+
+    Displays user stories from .afk/prd.json with their completion status.
+    """
+    from afk.prd_store import load_prd
+
+    prd = load_prd()
+
+    if not prd.userStories:
+        console.print("[dim]No stories in PRD.[/dim] Run [cyan]afk prd sync[/cyan] first.")
+        return
+
+    table = Table(title=f"PRD: {prd.project or 'Untitled'}", show_header=True)
+    table.add_column("ID", style="cyan")
+    table.add_column("Pri", style="dim", width=3)
+    table.add_column("Title", style="white")
+    table.add_column("AC", style="dim", width=3)
+    table.add_column("Status", style="white")
+
+    for story in prd.userStories:
+        if pending and story.passes:
+            continue
+
+        status = "[green]✓ Pass[/green]" if story.passes else "[dim]Pending[/dim]"
+        ac_count = str(len(story.acceptanceCriteria))
+
+        table.add_row(
+            story.id,
+            str(story.priority),
+            story.title[:50] + ("..." if len(story.title) > 50 else ""),
+            ac_count,
+            status,
+        )
+
+    console.print(table)
+
+    if prd.branchName:
+        console.print(f"\n[dim]Branch: {prd.branchName}[/dim]")
+    if prd.lastSynced:
+        console.print(f"[dim]Last synced: {prd.lastSynced[:19]}[/dim]")
+
+
+@main.command()
+@click.option("--branch", "-b", help="Branch name for PRD")
+@click.pass_context
+def sync(ctx: click.Context, branch: str | None) -> None:
+    """Sync PRD from all configured sources.
+
+    Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
+    .afk/prd.json file that the AI reads directly (Ralph pattern).
+
+    Example:
+
+        afk sync
+
+        afk sync --branch feature/new-thing
+    """
+    from afk.prd_store import sync_prd
+
+    config: AfkConfig = ctx.obj["config"]
+
+    if not config.sources:
+        console.print("[red]No sources configured.[/red] Run [cyan]afk source add[/cyan] first.")
+        return
+
+    console.print("[cyan]Syncing PRD from sources...[/cyan]")
+
+    prd = sync_prd(config, branch_name=branch)
+
+    pending = sum(1 for s in prd.userStories if not s.passes)
+    complete = sum(1 for s in prd.userStories if s.passes)
+
+    console.print()
+    console.print("[green]PRD synced:[/green] .afk/prd.json")
+    console.print(f"  Stories: {len(prd.userStories)} total")
+    console.print(f"  Pending: {pending}")
+    console.print(f"  Complete: {complete}")
+
+    if prd.branchName:
+        console.print(f"  Branch: {prd.branchName}")
+
+
 @main.command()
 @click.option("--copy", "-c", "output_mode", flag_value="clipboard", help="Copy to clipboard")
 @click.option("--file", "-f", "output_mode", flag_value="file", help="Write to file")
@@ -723,6 +851,7 @@ def start(ctx: click.Context, iterations: int, branch: str | None, yes: bool) ->
 @click.option("--until-complete", "-u", is_flag=True, help="Run until all tasks complete")
 @click.option("--timeout", "-t", type=int, help="Override timeout in minutes")
 @click.option("--branch", "-b", help="Create/checkout feature branch")
+@click.option("--continue", "-c", "resume_session", is_flag=True, help="Continue from last session")
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -730,6 +859,7 @@ def run(
     until_complete: bool,
     timeout: int | None,
     branch: str | None,
+    resume_session: bool,
 ) -> None:
     """Run multiple iterations using configured AI CLI.
 
@@ -746,6 +876,8 @@ def run(
         afk run 5 --branch my-feature # Create branch first
 
         afk run --timeout 60          # 60 minute timeout
+
+        afk run --continue            # Resume from last session
     """
     from afk.runner import run_loop
 
@@ -766,6 +898,57 @@ def run(
         branch=branch,
         until_complete=until_complete,
         timeout_override=timeout,
+        resume=resume_session,
+    )
+
+
+@main.command()
+@click.argument("iterations", type=int, default=10)
+@click.option("--until-complete", "-u", is_flag=True, help="Run until all tasks complete")
+@click.option("--timeout", "-t", type=int, help="Override timeout in minutes")
+@click.pass_context
+def resume(
+    ctx: click.Context,
+    iterations: int,
+    until_complete: bool,
+    timeout: int | None,
+) -> None:
+    """Resume from last session without archiving.
+
+    Continues the loop from where it left off, preserving existing
+    progress and iteration count.
+
+    Examples:
+
+        afk resume                    # Continue with 10 more iterations
+
+        afk resume 20                 # Continue with 20 more iterations
+
+        afk resume --until-complete   # Continue until all tasks done
+    """
+    from afk.config import PROGRESS_FILE
+    from afk.runner import run_loop
+
+    config: AfkConfig = ctx.obj["config"]
+
+    if not AFK_DIR.exists():
+        console.print("[red]afk not initialized.[/red] Run [cyan]afk init[/cyan] first.")
+        return
+
+    if not config.sources:
+        console.print("[red]No sources configured.[/red] Run [cyan]afk source add[/cyan] first.")
+        return
+
+    if not PROGRESS_FILE.exists():
+        console.print("[yellow]No session to resume.[/yellow] Starting fresh.")
+
+    # Run the autonomous loop with resume flag
+    run_loop(
+        config=config,
+        max_iterations=iterations,
+        until_complete=until_complete,
+        timeout_override=timeout,
+        resume=True,
     )
 
 

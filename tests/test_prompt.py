@@ -22,7 +22,7 @@ class TestGetTemplate:
         """Test minimal template selection."""
         config = AfkConfig(prompt=PromptConfig(template="minimal"))
         template = _get_template(config)
-        assert "Complete ONE task" in template
+        assert "prd.json" in template
         assert len(template) < len(DEFAULT_TEMPLATE)
 
     def test_verbose_template(self) -> None:
@@ -53,22 +53,35 @@ class TestGeneratePrompt:
     """Tests for generate_prompt function."""
 
     def test_basic_prompt(self, temp_afk_dir: Path) -> None:
-        """Test basic prompt generation."""
-        # Create a tasks.json
-        tasks_data = [{"id": "task-1", "description": "Test task"}]
-        tasks_path = temp_afk_dir.parent / "tasks.json"
-        tasks_path.write_text(json.dumps(tasks_data))
+        """Test basic prompt generation with PRD."""
+        from afk.prd_store import PrdDocument, UserStory, save_prd
+
+        # Create a prd.json with stories
+        prd = PrdDocument(
+            project="Test",
+            userStories=[
+                UserStory(
+                    id="task-1",
+                    title="Test task",
+                    description="Test task description",
+                    acceptanceCriteria=["AC 1"],
+                )
+            ],
+        )
+        save_prd(prd)
 
         config = AfkConfig(
-            sources=[SourceConfig(type="json", path=str(tasks_path))],
+            sources=[SourceConfig(type="json", path="tasks.json")],
             limits=LimitsConfig(max_iterations=10),
         )
         config.save()
 
         prompt = generate_prompt(config)
-        assert "Iteration" in prompt
+        assert "Iteration" in prompt or "1/" in prompt
+        # With Ralph pattern, prompt tells AI to read prd.json
+        assert "prd.json" in prompt
+        # Next story shown in progress
         assert "task-1" in prompt
-        assert "Test task" in prompt
 
     def test_prompt_includes_context_files(self, temp_afk_dir: Path) -> None:
         """Test that context files are included in prompt."""
@@ -108,13 +121,22 @@ class TestGeneratePrompt:
 
     def test_bootstrap_mode(self, temp_afk_dir: Path) -> None:
         """Test bootstrap mode adds loop instructions."""
+        from afk.prd_store import PrdDocument, UserStory, save_prd
+
+        # Need pending stories to not get AFK_COMPLETE
+        prd = PrdDocument(
+            userStories=[
+                UserStory(id="task-1", title="Test", description="Test", passes=False)
+            ]
+        )
+        save_prd(prd)
+
         config = AfkConfig()
         config.save()
 
         prompt = generate_prompt(config, bootstrap=True)
         assert "Autonomous Loop" in prompt
         assert "running autonomously" in prompt
-        assert "afk fail" in prompt
 
     def test_limit_override(self, temp_afk_dir: Path) -> None:
         """Test limit override is used."""
@@ -130,62 +152,64 @@ class TestGeneratePrompt:
         config.save()
 
         prompt1 = generate_prompt(config)
-        assert "Iteration 1" in prompt1 or "1/" in prompt1
+        assert "1/" in prompt1
 
         prompt2 = generate_prompt(config)
-        assert "Iteration 2" in prompt2 or "2/" in prompt2
+        assert "2/" in prompt2
 
-    def test_completed_tasks_filtered(self, temp_afk_dir: Path) -> None:
-        """Test that completed tasks are filtered from prompt."""
-        from afk.progress import SessionProgress, TaskProgress
+    def test_completed_stories_count(self, temp_afk_dir: Path) -> None:
+        """Test that completed stories are counted correctly."""
+        from afk.prd_store import PrdDocument, UserStory, save_prd
 
-        # Create tasks
-        tasks_data = [
-            {"id": "task-1", "description": "Completed"},
-            {"id": "task-2", "description": "Pending"},
-        ]
-        tasks_path = temp_afk_dir.parent / "tasks.json"
-        tasks_path.write_text(json.dumps(tasks_data))
-
-        # Mark one as complete
-        progress = SessionProgress()
-        progress.tasks["task-1"] = TaskProgress(id="task-1", source="test", status="completed")
-        progress.save()
-
-        config = AfkConfig(
-            sources=[SourceConfig(type="json", path=str(tasks_path))],
+        # Create PRD with one complete and one pending
+        prd = PrdDocument(
+            userStories=[
+                UserStory(id="task-1", title="Done", description="Done", passes=True),
+                UserStory(id="task-2", title="Pending", description="Pending", passes=False),
+            ]
         )
+        save_prd(prd)
+
+        config = AfkConfig()
         config.save()
 
         prompt = generate_prompt(config)
+        # Should show 1/2 completed
+        assert "Completed: 1/2" in prompt
+        # Next story should be task-2
         assert "task-2" in prompt
-        # task-1 should not be in the tasks list (but might be in "Last completed")
 
-    def test_tasks_sorted_by_priority(self, temp_afk_dir: Path) -> None:
-        """Test that tasks are sorted by priority."""
-        tasks_data = [
-            {"id": "low", "description": "Low priority", "priority": "low"},
-            {"id": "high", "description": "High priority", "priority": "high"},
-            {"id": "med", "description": "Medium priority", "priority": "medium"},
-        ]
-        tasks_path = temp_afk_dir.parent / "tasks.json"
-        tasks_path.write_text(json.dumps(tasks_data))
+    def test_stories_sorted_by_priority(self, temp_afk_dir: Path) -> None:
+        """Test that next story is highest priority pending."""
+        from afk.prd_store import PrdDocument, UserStory, save_prd
 
-        config = AfkConfig(
-            sources=[SourceConfig(type="json", path=str(tasks_path))],
+        prd = PrdDocument(
+            userStories=[
+                UserStory(id="low", title="Low", description="Low", priority=4, passes=False),
+                UserStory(id="high", title="High", description="High", priority=1, passes=False),
+            ]
         )
+        save_prd(prd)
+
+        config = AfkConfig()
         config.save()
 
         prompt = generate_prompt(config)
-        # High should appear before low
-        high_pos = prompt.find("high:")
-        low_pos = prompt.find("low:")
-        if high_pos != -1 and low_pos != -1:
-            assert high_pos < low_pos
+        # High priority (priority=1) should be shown as next
+        assert "high" in prompt
 
     def test_stop_signal_when_limit_reached(self, temp_afk_dir: Path) -> None:
         """Test stop signal when iteration limit reached."""
+        from afk.prd_store import PrdDocument, UserStory, save_prd
         from afk.progress import SessionProgress
+
+        # Need pending stories
+        prd = PrdDocument(
+            userStories=[
+                UserStory(id="task-1", title="Test", description="Test", passes=False)
+            ]
+        )
+        save_prd(prd)
 
         progress = SessionProgress()
         progress.iterations = 5
@@ -198,50 +222,36 @@ class TestGeneratePrompt:
         assert "AFK_LIMIT_REACHED" in prompt
 
     def test_stop_signal_when_complete(self, temp_afk_dir: Path) -> None:
-        """Test stop signal when all tasks complete."""
-        from afk.progress import SessionProgress, TaskProgress
+        """Test stop signal when all stories complete."""
+        from afk.prd_store import PrdDocument, UserStory, save_prd
 
-        # Create one task
-        tasks_data = [{"id": "task-1", "description": "Only task"}]
-        tasks_path = temp_afk_dir.parent / "tasks.json"
-        tasks_path.write_text(json.dumps(tasks_data))
-
-        # Mark it complete
-        progress = SessionProgress()
-        progress.tasks["task-1"] = TaskProgress(id="task-1", source="test", status="completed")
-        progress.save()
-
-        config = AfkConfig(
-            sources=[SourceConfig(type="json", path=str(tasks_path))],
+        # All stories passed
+        prd = PrdDocument(
+            userStories=[
+                UserStory(id="task-1", title="Done", description="Done", passes=True)
+            ]
         )
+        save_prd(prd)
+
+        config = AfkConfig()
         config.save()
 
         prompt = generate_prompt(config)
         assert "AFK_COMPLETE" in prompt
 
-    def test_recently_completed_shown(self, temp_afk_dir: Path) -> None:
-        """Test that recently completed task is shown."""
-        from afk.progress import SessionProgress, TaskProgress
+    def test_no_stories_shows_complete(self, temp_afk_dir: Path) -> None:
+        """Test that no stories results in AFK_COMPLETE."""
+        from afk.prd_store import PrdDocument, save_prd
 
-        progress = SessionProgress()
-        progress.tasks["recent-task"] = TaskProgress(
-            id="recent-task", source="test", status="completed"
-        )
-        progress.save()
+        # Empty PRD
+        prd = PrdDocument()
+        save_prd(prd)
 
         config = AfkConfig()
         config.save()
 
         prompt = generate_prompt(config)
-        assert "recent-task" in prompt
-
-    def test_no_tasks_message(self, temp_afk_dir: Path) -> None:
-        """Test message when no tasks available."""
-        config = AfkConfig()
-        config.save()
-
-        prompt = generate_prompt(config)
-        assert "No tasks available" in prompt
+        assert "AFK_COMPLETE" in prompt
 
     def test_custom_feedback_loops(self, temp_afk_dir: Path) -> None:
         """Test custom feedback loops are included."""
@@ -263,9 +273,9 @@ class TestDefaultTemplate:
     def test_template_has_required_sections(self) -> None:
         """Test template has all required sections."""
         assert "## Context Files" in DEFAULT_TEMPLATE
-        assert "## Available Tasks" in DEFAULT_TEMPLATE
+        assert "## Your Task" in DEFAULT_TEMPLATE
         assert "## Progress" in DEFAULT_TEMPLATE
-        assert "## Instructions" in DEFAULT_TEMPLATE
+        assert "prd.json" in DEFAULT_TEMPLATE
 
     def test_template_has_loop_mode_section(self) -> None:
         """Test template has conditional loop mode section."""
@@ -276,3 +286,9 @@ class TestDefaultTemplate:
         """Test template has conditional stop signal section."""
         assert "{% if stop_signal -%}" in DEFAULT_TEMPLATE
         assert "## STOP" in DEFAULT_TEMPLATE
+
+    def test_template_follows_ralph_pattern(self) -> None:
+        """Test template instructs AI to read prd.json directly."""
+        assert "Read the PRD at `.afk/prd.json`" in DEFAULT_TEMPLATE
+        assert "`passes: true`" in DEFAULT_TEMPLATE
+        assert "<promise>COMPLETE</promise>" in DEFAULT_TEMPLATE

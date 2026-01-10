@@ -34,7 +34,7 @@ class LimitsConfig(BaseModel):
 
     max_iterations: int = 20
     max_task_failures: int = 3
-    timeout_minutes: int = 120
+    timeout_minutes: int = 30
 
 
 class OutputConfig(BaseModel):
@@ -63,7 +63,7 @@ class PromptConfig(BaseModel):
 class GitConfig(BaseModel):
     """Configuration for git integration."""
 
-    auto_commit: bool = False
+    auto_commit: bool = True
     auto_branch: bool = False
     branch_prefix: str = "afk/"
     commit_message_template: str = "afk: {task_id} - {message}"
@@ -120,4 +120,5 @@ CONFIG_FILE = AFK_DIR / "config.json"
 PROGRESS_FILE = AFK_DIR / "progress.json"
 LEARNINGS_FILE = AFK_DIR / "learnings.txt"
 PROMPT_FILE = AFK_DIR / "prompt.md"
+PRD_FILE = AFK_DIR / "prd.json"
 ARCHIVE_DIR = AFK_DIR / "archive"

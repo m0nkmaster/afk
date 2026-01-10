@@ -6,11 +6,24 @@ from jinja2 import BaseLoader, Environment
 
 from afk.config import AfkConfig
 from afk.learnings import get_recent_learnings
+from afk.prd_store import all_stories_complete, get_pending_stories, load_prd
 from afk.progress import SessionProgress, check_limits
-from afk.sources import aggregate_tasks
 
 DEFAULT_TEMPLATE = """\
-# afk Iteration {{ iteration }}
+# afk Autonomous Agent
+
+You are an autonomous coding agent working on a software project.
+
+## Your Task
+
+1. Read the PRD at `.afk/prd.json`
+2. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
+3. Pick the **highest priority** user story where `passes: false`
+4. Implement that single user story according to its `acceptanceCriteria`
+5. Run quality checks (see below)
+6. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
+7. Update `.afk/prd.json` to set `passes: true` for the completed story
+8. Record learnings (see below)
 
 ## Context Files
 {% for file in context_files -%}
@@ -25,70 +38,52 @@ Previous discoveries from this session (read carefully to avoid repeating mistak
 {{ learnings }}
 {% endif %}
 
-## Available Tasks
-{% if tasks -%}
-{% for task in tasks -%}
-{{ loop.index }}. [{{ task.priority | upper }}] {{ task.id }}: {{ task.description }}
-{% endfor %}
-{% else -%}
-No tasks available.
-{% endif %}
-
 ## Progress
 - Iteration: {{ iteration }}/{{ max_iterations }}
-- Completed: {{ completed_count }}/{{ total_count }} tasks
-{% if recently_completed -%}
-- Last completed: {{ recently_completed }}
+- Completed: {{ completed_count }}/{{ total_count }} stories
+{% if next_story -%}
+- Next story: {{ next_story.id }} (priority {{ next_story.priority }})
 {% endif %}
 
-## Instructions
-
-### 1. Select ONE Task
-Choose based on priority (HIGH → MEDIUM → LOW). Pick the first uncompleted task unless blocked.
-
-### 2. Implement Completely
-- Keep changes atomic and focused
-- Each task should complete in one context window
-- If task is too large, implement what you can and note limitations
-
-### 3. Run Quality Gates
+## Quality Gates
 {% if feedback_loops -%}
 Before marking complete, ALL must pass:
 {% for name, cmd in feedback_loops.items() -%}
-   - `{{ cmd }}`
+- `{{ cmd }}`
 {% endfor %}
 {% else -%}
-No feedback loops configured.
+Run whatever quality checks your project requires (typecheck, lint, test).
 {% endif %}
 
-### 4. Record Learnings
-After completing the task, append discoveries to `.afk/learnings.txt`:
-- Patterns discovered ("this codebase uses X for Y")
-- Gotchas encountered ("do not forget to update Z when changing W")
-- Useful context ("the settings panel is in component X")
+## Record Learnings
 
-Run: `afk learn "your learning here"`
+After completing a story, record useful discoveries:
 
-### 5. Update AGENTS.md
-If you discovered conventions, patterns, or gotchas that would help future sessions:
-- Add them to the relevant section of AGENTS.md
-- Keep entries concise and actionable
+1. **Append to `.afk/learnings.txt`**:
+   - Patterns discovered ("this codebase uses X for Y")
+   - Gotchas encountered ("don't forget to update Z when changing W")
+   - Useful context ("the settings panel is in component X")
 
-### 6. Complete Task
-```bash
-afk done <task-id> --message "brief description of what was done"
-git add -A && git commit -m "your commit message"
-```
+2. **Update AGENTS.md** if you discovered conventions, patterns, or gotchas that would help future sessions.
 
 {% for instruction in custom_instructions -%}
 - {{ instruction }}
 {% endfor %}
 
+## Stop Condition
+
+After completing a user story, check if ALL stories have `passes: true` in `.afk/prd.json`.
+
+If ALL stories are complete and passing, reply with:
+<promise>COMPLETE</promise>
+
+If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+
 {% if bootstrap -%}
 ## Autonomous Loop
 
-You are running autonomously. After completing this task, the loop will continue automatically.
-If you encounter an unrecoverable error, run `afk fail <task-id> -m "reason"`.
+You are running autonomously. Work on ONE story per iteration.
+After completing this task, the loop will continue automatically.
 {% endif %}
 
 {% if stop_signal -%}
@@ -107,27 +102,27 @@ def generate_prompt(
     # Load progress
     progress = SessionProgress.load()
 
-    # Aggregate tasks from all sources first (need count for limit check)
-    tasks = aggregate_tasks(config.sources)
+    # Load PRD (Ralph pattern - AI reads this file directly)
+    prd = load_prd()
+    pending_stories = get_pending_stories(prd)
+    total_stories = len(prd.userStories)
+    completed_count = total_stories - len(pending_stories)
 
     # Check limits
     max_iterations = limit_override or config.limits.max_iterations
     can_continue, stop_signal = check_limits(
         max_iterations=max_iterations,
         max_failures=config.limits.max_task_failures,
-        total_tasks=len(tasks),
+        total_tasks=total_stories,
     )
+
+    # Check if all stories are complete
+    if all_stories_complete(prd):
+        stop_signal = "AFK_COMPLETE - All stories have passes: true"
+        can_continue = False
 
     # Increment iteration (even if we're about to stop, for tracking)
     iteration = progress.increment_iteration()
-
-    # Filter out completed tasks
-    completed_ids = {t.id for t in progress.get_completed_tasks()}
-    pending_tasks = [t for t in tasks if t.id not in completed_ids]
-
-    # Sort by priority
-    priority_order = {"high": 0, "medium": 1, "low": 2}
-    pending_tasks.sort(key=lambda t: priority_order.get(t.priority, 1))
 
     # Build feedback loops dict (filter out None values)
     feedback_loops = {}
@@ -148,20 +143,18 @@ def generate_prompt(
     env = Environment(loader=BaseLoader())
     template = env.from_string(template_str)
 
-    # Find recently completed task
-    completed_tasks = progress.get_completed_tasks()
-    recently_completed = completed_tasks[-1].id if completed_tasks else None
-
     # Load recent learnings
     learnings = get_recent_learnings(max_chars=2000)
+
+    # Get next story for context
+    next_story = pending_stories[0] if pending_stories else None
 
     context = {
         "iteration": iteration,
         "max_iterations": max_iterations,
-        "tasks": pending_tasks,
-        "completed_count": len(completed_ids),
-        "total_count": len(tasks),
-        "recently_completed": recently_completed,
+        "completed_count": completed_count,
+        "total_count": total_stories,
+        "next_story": next_story,
         "context_files": config.prompt.context_files,
         "feedback_loops": feedback_loops,
         "custom_instructions": config.prompt.instructions,
@@ -202,11 +195,8 @@ _MINIMAL_TEMPLATE = """\
 {{ learnings }}
 
 {% endif -%}
-## Tasks
-{% for task in tasks -%}
-- {{ task.id }}: {{ task.description }}
-{% endfor %}
+Read `.afk/prd.json` → pick highest priority story where `passes: false` → implement according to `acceptanceCriteria` → run quality gates → set `passes: true` → commit.
 
-Complete ONE task → run quality gates → `afk learn "discovery"` → `afk done <id>` → commit.
+If all stories pass, reply with: <promise>COMPLETE</promise>
 {% endif %}
 """

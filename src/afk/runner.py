@@ -18,10 +18,10 @@ from rich.console import Console
 from rich.panel import Panel
 
 from afk.config import AfkConfig, FeedbackLoopsConfig
-from afk.git_ops import archive_session, auto_commit, clear_session, create_branch
+from afk.git_ops import archive_session, clear_session, create_branch
+from afk.prd_store import all_stories_complete, get_pending_stories, load_prd, sync_prd
 from afk.progress import SessionProgress, check_limits
 from afk.prompt import generate_prompt
-from afk.sources import aggregate_tasks
 
 console = Console()
 
@@ -140,6 +140,7 @@ def run_iteration(
     config: AfkConfig,
     iteration: int,
     on_output: Callable[[str], None] | None = None,
+    stream: bool = True,
 ) -> IterationResult:
     """Run a single iteration with fresh AI context.
 
@@ -150,6 +151,7 @@ def run_iteration(
         config: afk configuration
         iteration: Current iteration number
         on_output: Optional callback for streaming output
+        stream: If True, stream output in real-time (default True)
 
     Returns:
         IterationResult with success status and any output
@@ -174,6 +176,7 @@ def run_iteration(
 
     console.print(f"\n[cyan]━━━ Iteration {iteration} ━━━[/cyan]")
     console.print(f"[dim]Running: {' '.join(cmd)}[/dim]")
+    console.print()
 
     try:
         # Spawn fresh AI process with prompt on stdin
@@ -183,13 +186,44 @@ def run_iteration(
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            bufsize=1,  # Line buffered
         )
 
-        # Send prompt and get output
-        stdout, _ = process.communicate(input=prompt, timeout=config.limits.timeout_minutes * 60)
+        # Send prompt and close stdin
+        if process.stdin:
+            process.stdin.write(prompt)
+            process.stdin.close()
 
-        if on_output and stdout:
-            on_output(stdout)
+        if stream and process.stdout:
+            # Stream output in real-time
+            output_buffer: list[str] = []
+            for line in iter(process.stdout.readline, ""):
+                console.print(line, end="")
+                output_buffer.append(line)
+
+                # Check for completion signal
+                if _contains_completion_signal(line):
+                    console.print()
+                    console.print("[green]Completion signal detected![/green]")
+                    process.terminate()
+                    return IterationResult(
+                        success=True,
+                        output="".join(output_buffer),
+                    )
+
+                # Callback if provided
+                if on_output:
+                    on_output(line)
+
+            stdout = "".join(output_buffer)
+        else:
+            # Non-streaming fallback
+            stdout, _ = process.communicate(timeout=config.limits.timeout_minutes * 60)
+            if on_output and stdout:
+                on_output(stdout)
+
+        # Wait for process to complete
+        process.wait()
 
         if process.returncode != 0:
             return IterationResult(
@@ -228,6 +262,7 @@ def run_loop(
     until_complete: bool = False,
     timeout_override: int | None = None,
     on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
+    resume: bool = False,
 ) -> RunResult:
     """Run the autonomous afk loop.
 
@@ -241,6 +276,7 @@ def run_loop(
         until_complete: If True, ignore max_iterations and run until done
         timeout_override: Override timeout in minutes
         on_iteration_complete: Callback after each iteration
+        resume: If True, continue from last session without archiving
 
     Returns:
         RunResult with session statistics
@@ -256,14 +292,23 @@ def run_loop(
         console.print(f"[cyan]Creating/switching to branch:[/cyan] {full_branch}")
         create_branch(branch, config)
 
-    # Archive previous session if starting fresh
-    if config.archive.enabled:
+    # Archive previous session if starting fresh (skip if resuming)
+    if config.archive.enabled and not resume:
         progress = SessionProgress.load()
         if progress.iterations > 0:
             archive_path = archive_session(config, reason="new_run")
             if archive_path:
                 console.print(f"[dim]Archived previous session to: {archive_path}[/dim]")
             clear_session()
+    elif resume:
+        progress = SessionProgress.load()
+        if progress.iterations > 0:
+            console.print(f"[cyan]Resuming session from iteration {progress.iterations}[/cyan]")
+
+    # Sync PRD from sources before starting (Ralph pattern)
+    console.print("[dim]Syncing PRD from sources...[/dim]")
+    prd = sync_prd(config, branch_name=branch)
+    pending = get_pending_stories(prd)
 
     console.print(
         Panel.fit(
@@ -271,7 +316,7 @@ def run_loop(
             f"AI CLI: [cyan]{config.ai_cli.command}[/cyan]\n"
             f"Max iterations: [cyan]{max_iter if not until_complete else '∞'}[/cyan]\n"
             f"Timeout: [cyan]{timeout_minutes} minutes[/cyan]\n"
-            f"Tasks: [cyan]{len(aggregate_tasks(config.sources))}[/cyan]",
+            f"Stories: [cyan]{len(pending)}/{len(prd.userStories)} pending[/cyan]",
             title="afk run",
         )
     )
@@ -296,18 +341,24 @@ def run_loop(
                 console.print(f"\n[yellow]Max iterations reached ({max_iter})[/yellow]")
                 break
 
-            # Check if all tasks complete
-            tasks = aggregate_tasks(config.sources)
-            if not tasks:
+            # Check if all stories complete (Ralph pattern - read from prd.json)
+            prd = load_prd()
+            if all_stories_complete(prd):
+                stop_reason = StopReason.COMPLETE
+                console.print("\n[green]All stories have passes: true[/green]")
+                break
+
+            pending = get_pending_stories(prd)
+            if not pending:
                 stop_reason = StopReason.NO_TASKS
-                console.print("\n[yellow]No tasks available[/yellow]")
+                console.print("\n[yellow]No pending stories[/yellow]")
                 break
 
             progress = SessionProgress.load()
             can_continue, signal = check_limits(
                 max_iterations=max_iter if not until_complete else 999999,
                 max_failures=config.limits.max_task_failures,
-                total_tasks=len(tasks),
+                total_tasks=len(prd.userStories),
             )
 
             if not can_continue:
@@ -340,34 +391,30 @@ def run_loop(
 
             iterations_completed += 1
 
-            # Check for newly completed tasks
-            new_progress = SessionProgress.load()
-            newly_completed = [
-                t
-                for t in new_progress.get_completed_tasks()
-                if t.completed_at and t.completed_at > start_time.isoformat()
-            ]
+            # In Ralph pattern, AI modifies prd.json directly to mark stories complete
+            # Check how many stories are now complete
+            new_prd = load_prd()
+            new_completed = sum(1 for s in new_prd.userStories if s.passes)
+            old_completed = sum(1 for s in prd.userStories if s.passes)
 
-            for task in newly_completed:
-                # Run quality gates before committing
-                console.print(f"\n[cyan]Quality gates for {task.id}:[/cyan]")
+            if new_completed > old_completed:
+                newly_done = new_completed - old_completed
+                tasks_completed_this_session += newly_done
+                console.print(f"[green]✓ {newly_done} story/stories marked complete[/green]")
+
+                # Run quality gates as a check (AI should have run them too)
+                console.print("[cyan]Verifying quality gates...[/cyan]")
                 gate_result = run_quality_gates(config.feedback_loops)
 
                 if not gate_result.passed:
                     failed = ", ".join(gate_result.failed_gates)
                     console.print(f"[yellow]⚠ Quality gates failed: {failed}[/yellow]")
-                    console.print("[dim]Skipping auto-commit. Fix and commit manually.[/dim]")
+                    console.print("[dim]AI may need to fix issues in next iteration.[/dim]")
                 else:
-                    if config.git.auto_commit:
-                        success = auto_commit(
-                            task.id,
-                            task.message or "Task completed",
-                            config,
-                        )
-                        if success:
-                            console.print(f"[green]✓ Committed:[/green] {task.id}")
+                    console.print("[green]✓ All quality gates passed[/green]")
 
-                tasks_completed_this_session += 1
+            # Update prd reference for next iteration comparison
+            prd = new_prd
 
             # Brief pause between iterations
             time.sleep(1)
@@ -467,21 +514,38 @@ def run_prompt_only(
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
+                    bufsize=1,  # Line buffered for streaming
                 )
 
-                # Send prompt and get output
-                stdout, _ = process.communicate(input=prompt_content, timeout=timeout * 60)
+                # Send prompt and close stdin
+                if process.stdin:
+                    process.stdin.write(prompt_content)
+                    process.stdin.close()
 
-                # Print output
-                if stdout:
-                    console.print(stdout)
+                # Stream output in real-time
+                output_buffer: list[str] = []
+                completion_detected = False
 
-                # Check for completion signal
-                if _contains_completion_signal(stdout):
-                    console.print("\n[green]Completion signal detected![/green]")
+                if process.stdout:
+                    for line in iter(process.stdout.readline, ""):
+                        console.print(line, end="")
+                        output_buffer.append(line)
+
+                        # Check for completion signal
+                        if _contains_completion_signal(line):
+                            console.print()
+                            console.print("[green]Completion signal detected![/green]")
+                            completion_detected = True
+                            process.terminate()
+                            break
+
+                if completion_detected:
                     stop_reason = StopReason.COMPLETE
                     iterations_completed = iteration
                     break
+
+                # Wait for process to complete
+                process.wait()
 
                 if process.returncode != 0:
                     console.print(f"[red]AI CLI exited with code {process.returncode}[/red]")
