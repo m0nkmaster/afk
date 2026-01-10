@@ -236,3 +236,40 @@ class TestSyncPrd:
         # The old task should be gone (replaced by sync)
         task_ids = [s.id for s in result.userStories]
         assert "old-task" not in task_ids
+
+    def test_sync_preserves_prd_when_sources_return_empty(
+        self, temp_project: Path
+    ) -> None:
+        """Test that sync_prd doesn't wipe PRD when sources return nothing.
+
+        This protects against the case where user has a PRD but sources
+        (e.g., beads) are empty - we shouldn't lose their work.
+        """
+        from afk.config import SourceConfig
+
+        # Create PRD with stories
+        (temp_project / ".afk").mkdir(parents=True)
+        original_prd = PrdDocument(
+            project="my-project",
+            userStories=[
+                UserStory(
+                    id="important-task",
+                    title="Important",
+                    description="Important task",
+                    priority=1,
+                )
+            ],
+        )
+        save_prd(original_prd)
+
+        # Create an empty TODO.md source (no tasks)
+        (temp_project / "TODO.md").write_text("# Nothing here\n\nNo tasks.\n")
+
+        # Sync with empty source
+        config = AfkConfig(sources=[SourceConfig(type="markdown", path="TODO.md")])
+        result = sync_prd(config)
+
+        # Should preserve the existing PRD, not wipe it
+        assert len(result.userStories) == 1
+        assert result.userStories[0].id == "important-task"
+        assert result.project == "my-project"

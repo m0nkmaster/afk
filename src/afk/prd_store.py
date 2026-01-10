@@ -114,6 +114,11 @@ def sync_prd(config: AfkConfig, branch_name: str | None = None) -> PrdDocument:
         source_stories = _load_from_source(source)
         stories.extend(source_stories)
 
+    # Safety check: don't wipe a populated PRD with an empty sync
+    # This protects against sources returning nothing (e.g., empty beads)
+    if not stories and existing_prd.userStories:
+        return existing_prd
+
     # Preserve completion status from previous sync
     for story in stories:
         if story.id in existing_status:
