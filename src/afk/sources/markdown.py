@@ -71,8 +71,8 @@ def _parse_task_line(text: str) -> tuple[str, str, str]:
     priority = "medium"
     description = text
 
-    # Check for priority tag: [HIGH], [LOW], etc.
-    priority_match = re.match(r"^\[([A-Z]+)\]\s*(.+)$", text)
+    # Check for priority tag: [HIGH], [LOW], [P0], etc.
+    priority_match = re.match(r"^\[([A-Z0-9]+)\]\s*(.+)$", text)
     if priority_match:
         tag = priority_match.group(1).upper()
         description = priority_match.group(2).strip()

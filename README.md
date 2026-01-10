@@ -36,11 +36,13 @@ pip install -e .
 # Initialize afk (auto-detects project settings)
 afk init
 
-# Add a task source (if not auto-detected)
-afk source add json prd.json      # JSON PRD file
-afk source add markdown tasks.md  # Markdown checklist
-afk source add beads              # Use beads (bd) for issues
-afk source add github             # GitHub issues
+# Manage task sources
+afk source add json prd.json      # Add JSON PRD file
+afk source add markdown tasks.md  # Add markdown checklist
+afk source add beads              # Add beads (bd) for issues
+afk source add github             # Add GitHub issues
+afk source list                   # List configured sources
+afk source remove 1               # Remove source by index
 
 # Check status
 afk status
@@ -49,6 +51,7 @@ afk status
 afk next              # Print to stdout
 afk next --copy       # Copy to clipboard
 afk next --file       # Write to .afk/prompt.md
+afk next --limit 10   # Override max iterations
 
 # After AI completes work
 afk done <task-id>

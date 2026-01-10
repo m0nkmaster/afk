@@ -32,8 +32,45 @@ Before committing, run:
 ruff check .                 # Linting
 ruff format .                # Formatting  
 mypy src/afk                 # Type checking
-pytest                       # Tests (when added)
+pytest                       # Tests with coverage
 ```
+
+## Testing
+
+This project maintains **>80% test coverage**. Tests are required for all changes.
+
+### Running Tests
+
+```bash
+pytest                       # Run all tests with coverage
+pytest -v                    # Verbose output
+pytest tests/test_config.py  # Run specific test file
+pytest -k "test_load"        # Run tests matching pattern
+```
+
+### Test Structure
+
+Tests are organised by module:
+- `tests/test_config.py` - Configuration models
+- `tests/test_progress.py` - Session and task progress
+- `tests/test_bootstrap.py` - Project analysis
+- `tests/test_prompt.py` - Prompt generation
+- `tests/test_output.py` - Output handlers
+- `tests/test_cli.py` - CLI commands
+- `tests/test_sources*.py` - Task source adapters
+
+### Writing Tests
+
+1. **Use fixtures** from `tests/conftest.py` for common setup (temp directories, sample data)
+2. **Mock external calls** - subprocess, clipboard, file I/O where appropriate
+3. **Test edge cases** - empty inputs, missing files, error conditions
+4. **Keep tests focused** - one behaviour per test
+
+### Coverage Requirements
+
+- Minimum 80% coverage enforced by pytest-cov
+- Coverage report generated as HTML in `htmlcov/`
+- New code must include corresponding tests
 
 ## Architecture
 
@@ -66,21 +103,28 @@ src/afk/
 3. Add to `SourceConfig.type` literal in `config.py`
 4. Add case to `_load_from_source()` in `sources/__init__.py`
 
-## Session Completion
+## Landing the Plane (Session Completion)
 
-When ending a work session, you MUST:
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
 
-1. **File issues for remaining work** - Use `bd new` for follow-up items
-2. **Run quality gates** - `ruff check . && mypy src/afk`
-3. **Update issue status** - `bd close <id>` for finished work
-4. **Commit and push**:
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
-   git add -A
-   git commit -m "descriptive message"
    git pull --rebase
    bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
 
-**CRITICAL:** Work is NOT complete until `git push` succeeds. Never stop before pushing.
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds
