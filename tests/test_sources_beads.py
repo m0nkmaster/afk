@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from afk.sources.beads import (
     _map_beads_priority,
     _parse_beads_text_output,
+    close_beads_issue,
     load_beads_tasks,
 )
 
@@ -222,3 +223,41 @@ class TestParseBeadsTextOutput:
             )
             tasks = _parse_beads_text_output()
             assert tasks[0].priority == "medium"
+
+
+class TestCloseBeadsIssue:
+    """Tests for close_beads_issue function."""
+
+    def test_close_success(self) -> None:
+        """Test successful close returns True."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            result = close_beads_issue("issue-123")
+            assert result is True
+            mock_run.assert_called_once_with(
+                ["bd", "close", "issue-123"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+    def test_close_failure(self) -> None:
+        """Test failed close returns False."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1)
+            result = close_beads_issue("issue-123")
+            assert result is False
+
+    def test_close_bd_not_installed(self) -> None:
+        """Test close when bd not installed returns False."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = FileNotFoundError()
+            result = close_beads_issue("issue-123")
+            assert result is False
+
+    def test_close_timeout(self) -> None:
+        """Test close on timeout returns False."""
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired("bd", 30)
+            result = close_beads_issue("issue-123")
+            assert result is False

@@ -273,3 +273,90 @@ class TestSyncPrd:
         assert len(result.userStories) == 1
         assert result.userStories[0].id == "important-task"
         assert result.project == "my-project"
+
+
+class TestMarkStoryComplete:
+    """Tests for mark_story_complete function."""
+
+    def test_marks_story_complete(self, temp_project: Path) -> None:
+        """Test marking a story as complete."""
+        from afk.prd_store import mark_story_complete
+
+        (temp_project / ".afk").mkdir(parents=True)
+        prd = PrdDocument(
+            userStories=[
+                UserStory(id="task-1", title="Task", description="Do thing", passes=False)
+            ]
+        )
+        save_prd(prd)
+
+        result = mark_story_complete("task-1")
+
+        assert result is True
+        reloaded = load_prd()
+        assert reloaded.userStories[0].passes is True
+
+    def test_returns_false_for_unknown_story(self, temp_project: Path) -> None:
+        """Test returns False when story not found."""
+        from afk.prd_store import mark_story_complete
+
+        (temp_project / ".afk").mkdir(parents=True)
+        prd = PrdDocument(userStories=[])
+        save_prd(prd)
+
+        result = mark_story_complete("nonexistent")
+
+        assert result is False
+
+    def test_closes_beads_issue_when_source_is_beads(self, temp_project: Path) -> None:
+        """Test that beads issues are closed when story is from beads."""
+        from unittest.mock import patch
+
+        from afk.prd_store import mark_story_complete
+
+        (temp_project / ".afk").mkdir(parents=True)
+        prd = PrdDocument(
+            userStories=[
+                UserStory(
+                    id="beads-123",
+                    title="Beads Task",
+                    description="From beads",
+                    source="beads",
+                    passes=False,
+                )
+            ]
+        )
+        save_prd(prd)
+
+        with patch("afk.sources.beads.close_beads_issue") as mock_close:
+            mock_close.return_value = True
+            result = mark_story_complete("beads-123")
+
+            assert result is True
+            mock_close.assert_called_once_with("beads-123")
+
+    def test_does_not_close_beads_for_other_sources(self, temp_project: Path) -> None:
+        """Test that non-beads sources don't trigger beads close."""
+        from unittest.mock import patch
+
+        from afk.prd_store import mark_story_complete
+
+        (temp_project / ".afk").mkdir(parents=True)
+        prd = PrdDocument(
+            userStories=[
+                UserStory(
+                    id="json-task",
+                    title="JSON Task",
+                    description="From JSON",
+                    source="json:prd.json",
+                    passes=False,
+                )
+            ]
+        )
+        save_prd(prd)
+
+        with patch("afk.sources.beads.close_beads_issue") as mock_close:
+            result = mark_story_complete("json-task")
+
+            assert result is True
+            mock_close.assert_not_called()

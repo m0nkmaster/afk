@@ -109,15 +109,24 @@ class SessionProgress(BaseModel):
 
 
 def mark_complete(task_id: str, message: str | None = None) -> bool:
-    """Mark a task as complete."""
+    """Mark a task as complete.
+
+    Updates both progress.json and prd.json. If the task came from beads,
+    it will also be closed in beads.
+    """
+    from afk.prd_store import mark_story_complete
+
     progress = SessionProgress.load()
 
     if task_id not in progress.tasks:
         # Create it if it doesn't exist (task might come from source directly)
         progress.set_task_status(task_id, "completed", message=message)
-        return True
+    else:
+        progress.set_task_status(task_id, "completed", message=message)
 
-    progress.set_task_status(task_id, "completed", message=message)
+    # Also mark complete in PRD (which handles beads sync-back)
+    mark_story_complete(task_id)
+
     return True
 
 

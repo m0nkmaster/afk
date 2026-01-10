@@ -124,3 +124,24 @@ def _map_beads_priority(priority: str | int | None) -> str:
         return "low"
     else:
         return "medium"
+
+
+def close_beads_issue(issue_id: str) -> bool:
+    """Close a beads issue by ID.
+
+    Args:
+        issue_id: The beads issue ID to close
+
+    Returns:
+        True if successfully closed, False otherwise
+    """
+    try:
+        result = subprocess.run(
+            ["bd", "close", issue_id],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False

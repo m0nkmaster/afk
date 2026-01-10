@@ -551,6 +551,8 @@ def mark_story_complete(story_id: str) -> bool:
 
     Note: In Ralph pattern, the AI modifies prd.json directly.
     This function is for programmatic use or fallback.
+
+    If the story came from beads, it will also be closed in beads.
     """
     prd = load_prd()
 
@@ -558,6 +560,13 @@ def mark_story_complete(story_id: str) -> bool:
         if story.id == story_id:
             story.passes = True
             save_prd(prd)
+
+            # Sync completion back to source
+            if story.source == "beads":
+                from afk.sources.beads import close_beads_issue
+
+                close_beads_issue(story_id)
+
             return True
 
     return False
