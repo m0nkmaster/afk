@@ -1,0 +1,102 @@
+"""Configuration models for afk."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class SourceConfig(BaseModel):
+    """Configuration for a task source."""
+
+    type: Literal["beads", "json", "markdown", "github"]
+    path: str | None = None
+    # GitHub-specific options
+    repo: str | None = None
+    labels: list[str] = Field(default_factory=list)
+
+
+class FeedbackLoopsConfig(BaseModel):
+    """Configuration for feedback loop commands."""
+
+    types: str | None = None
+    lint: str | None = None
+    test: str | None = None
+    build: str | None = None
+    custom: dict[str, str] = Field(default_factory=dict)
+
+
+class LimitsConfig(BaseModel):
+    """Configuration for iteration limits."""
+
+    max_iterations: int = 20
+    max_task_failures: int = 3
+    timeout_minutes: int = 120
+
+
+class OutputConfig(BaseModel):
+    """Configuration for output modes."""
+
+    default: Literal["clipboard", "file", "stdout"] = "stdout"
+    file_path: str = ".afk/prompt.md"
+
+
+class AiCliConfig(BaseModel):
+    """Configuration for AI CLI integration."""
+
+    command: str = "claude"
+    args: list[str] = Field(default_factory=lambda: ["-p"])
+
+
+class PromptConfig(BaseModel):
+    """Configuration for prompt generation."""
+
+    template: str = "default"
+    custom_path: str | None = None
+    context_files: list[str] = Field(default_factory=list)
+    instructions: list[str] = Field(default_factory=list)
+
+
+class AfkConfig(BaseModel):
+    """Main configuration for afk."""
+
+    sources: list[SourceConfig] = Field(default_factory=list)
+    feedback_loops: FeedbackLoopsConfig = Field(default_factory=FeedbackLoopsConfig)
+    limits: LimitsConfig = Field(default_factory=LimitsConfig)
+    output: OutputConfig = Field(default_factory=OutputConfig)
+    ai_cli: AiCliConfig = Field(default_factory=AiCliConfig)
+    prompt: PromptConfig = Field(default_factory=PromptConfig)
+
+    @classmethod
+    def load(cls, path: Path | None = None) -> AfkConfig:
+        """Load configuration from file or return defaults."""
+        if path is None:
+            path = Path(".afk/config.json")
+
+        if not path.exists():
+            return cls()
+
+        with open(path) as f:
+            data = json.load(f)
+
+        return cls.model_validate(data)
+
+    def save(self, path: Path | None = None) -> None:
+        """Save configuration to file."""
+        if path is None:
+            path = Path(".afk/config.json")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(path, "w") as f:
+            json.dump(self.model_dump(exclude_none=True), f, indent=2)
+
+
+# Default config directory
+AFK_DIR = Path(".afk")
+CONFIG_FILE = AFK_DIR / "config.json"
+PROGRESS_FILE = AFK_DIR / "progress.json"
+PROMPT_FILE = AFK_DIR / "prompt.md"
