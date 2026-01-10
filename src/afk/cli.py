@@ -129,10 +129,22 @@ def _run_zero_config(
             # Check for prompt file (ralf.sh mode)
             prompt_file = detect_prompt_file()
             if prompt_file:
-                console.print(f"[cyan]Prompt-only mode:[/cyan] Using {prompt_file.name}")
-                # TODO: Implement prompt-only mode in runner
-                console.print("[yellow]Prompt-only mode not yet implemented.[/yellow]")
-                ctx.exit(0)
+                from afk.runner import run_prompt_only
+
+                if dry_run:
+                    console.print(Panel.fit("[bold]Dry Run (Prompt-only)[/bold]", title="afk"))
+                    console.print()
+                    console.print(f"  [cyan]Prompt file:[/cyan] {prompt_file.name}")
+                    console.print(f"  [cyan]Iterations:[/cyan] {iterations}")
+                    console.print(f"  [cyan]AI CLI:[/cyan] {config.ai_cli.command}")
+                    return
+
+                run_prompt_only(
+                    prompt_file=prompt_file,
+                    config=config,
+                    max_iterations=iterations,
+                )
+                return
             else:
                 console.print("[red]No task sources found.[/red]")
                 console.print()

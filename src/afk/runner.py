@@ -25,6 +25,13 @@ from afk.sources import aggregate_tasks
 
 console = Console()
 
+# Completion signals to detect in AI output (ralf.sh style)
+COMPLETION_SIGNALS = [
+    "<promise>COMPLETE</promise>",
+    "AFK_COMPLETE",
+    "AFK_STOP",
+]
+
 
 @dataclass
 class QualityGateResult:
@@ -395,3 +402,139 @@ def run_loop(
         duration_seconds=duration,
         archived_to=archived_to,
     )
+
+
+def run_prompt_only(
+    prompt_file: Path,
+    config: AfkConfig,
+    max_iterations: int = 10,
+    timeout_minutes: int | None = None,
+) -> RunResult:
+    """Run in prompt-only mode (ralf.sh style).
+
+    This is a simpler mode that just pipes a static prompt to the AI CLI
+    each iteration, checking for completion signals in the output.
+    No task management, no progress tracking - just a simple loop.
+
+    Args:
+        prompt_file: Path to the prompt file (e.g., prompt.md)
+        config: afk configuration
+        max_iterations: Maximum number of iterations
+        timeout_minutes: Override timeout in minutes
+
+    Returns:
+        RunResult with session statistics
+    """
+    start_time = datetime.now()
+    timeout = timeout_minutes or config.limits.timeout_minutes
+    timeout_delta = timedelta(minutes=timeout)
+
+    # Read the prompt content
+    prompt_content = prompt_file.read_text()
+
+    console.print(
+        Panel.fit(
+            f"[bold]Prompt-only mode[/bold]\n\n"
+            f"Prompt: [cyan]{prompt_file.name}[/cyan]\n"
+            f"AI CLI: [cyan]{config.ai_cli.command}[/cyan]\n"
+            f"Max iterations: [cyan]{max_iterations}[/cyan]",
+            title="afk",
+        )
+    )
+
+    iterations_completed = 0
+    stop_reason = StopReason.COMPLETE
+
+    try:
+        for iteration in range(1, max_iterations + 1):
+            # Check timeout
+            elapsed = datetime.now() - start_time
+            if elapsed > timeout_delta:
+                stop_reason = StopReason.TIMEOUT
+                console.print(f"\n[yellow]Timeout reached ({timeout} minutes)[/yellow]")
+                break
+
+            console.print(f"\n[cyan]━━━ Iteration {iteration}/{max_iterations} ━━━[/cyan]")
+
+            # Build command
+            cmd = [config.ai_cli.command] + config.ai_cli.args
+
+            try:
+                # Spawn AI process with prompt on stdin
+                process = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                )
+
+                # Send prompt and get output
+                stdout, _ = process.communicate(input=prompt_content, timeout=timeout * 60)
+
+                # Print output
+                if stdout:
+                    console.print(stdout)
+
+                # Check for completion signal
+                if _contains_completion_signal(stdout):
+                    console.print("\n[green]Completion signal detected![/green]")
+                    stop_reason = StopReason.COMPLETE
+                    iterations_completed = iteration
+                    break
+
+                if process.returncode != 0:
+                    console.print(f"[red]AI CLI exited with code {process.returncode}[/red]")
+                    stop_reason = StopReason.AI_ERROR
+                    break
+
+                iterations_completed = iteration
+
+            except subprocess.TimeoutExpired:
+                process.kill()
+                console.print("[red]Iteration timed out[/red]")
+                stop_reason = StopReason.TIMEOUT
+                break
+            except FileNotFoundError:
+                console.print(f"[red]AI CLI not found: {config.ai_cli.command}[/red]")
+                stop_reason = StopReason.AI_ERROR
+                break
+
+            # Brief pause between iterations
+            time.sleep(1)
+
+        else:
+            # Completed all iterations without break
+            stop_reason = StopReason.MAX_ITERATIONS
+            console.print(f"\n[yellow]Max iterations reached ({max_iterations})[/yellow]")
+
+    except KeyboardInterrupt:
+        stop_reason = StopReason.USER_INTERRUPT
+        console.print("\n[yellow]Interrupted by user[/yellow]")
+
+    duration = (datetime.now() - start_time).total_seconds()
+
+    console.print(
+        Panel.fit(
+            f"[bold]Session Complete[/bold]\n\n"
+            f"Iterations: [cyan]{iterations_completed}[/cyan]\n"
+            f"Duration: [cyan]{duration:.1f}s[/cyan]\n"
+            f"Reason: [cyan]{stop_reason.value}[/cyan]",
+            title="afk",
+        )
+    )
+
+    return RunResult(
+        iterations_completed=iterations_completed,
+        tasks_completed=0,  # No task tracking in prompt-only mode
+        stop_reason=stop_reason,
+        duration_seconds=duration,
+        archived_to=None,
+    )
+
+
+def _contains_completion_signal(output: str | None) -> bool:
+    """Check if output contains any completion signal."""
+    if not output:
+        return False
+    return any(signal in output for signal in COMPLETION_SIGNALS)

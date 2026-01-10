@@ -239,6 +239,7 @@ class TestDetectTools:
         assert "claude" in tools
         assert "cursor" in tools
         assert "aider" in tools
+        assert "amp" in tools
 
 
 class TestDetectAiCli:
@@ -248,13 +249,25 @@ class TestDetectAiCli:
         """Test when claude is available."""
         config = _detect_ai_cli({"claude": True, "aider": False})
         assert config.command == "claude"
-        assert config.args == ["-p"]
+        assert config.args == ["--dangerously-skip-permissions", "-p"]
 
     def test_aider_fallback(self) -> None:
         """Test falling back to aider."""
         config = _detect_ai_cli({"claude": False, "aider": True})
         assert config.command == "aider"
-        assert config.args == ["--message"]
+        assert config.args == ["--yes"]
+
+    def test_cursor_fallback(self) -> None:
+        """Test falling back to cursor when claude unavailable."""
+        config = _detect_ai_cli({"claude": False, "cursor": True, "aider": True})
+        assert config.command == "cursor"
+        assert config.args == ["--background"]
+
+    def test_amp_fallback(self) -> None:
+        """Test falling back to amp."""
+        config = _detect_ai_cli({"claude": False, "cursor": False, "aider": False, "amp": True})
+        assert config.command == "amp"
+        assert config.args == ["--dangerously-allow-all"]
 
     def test_default(self) -> None:
         """Test default when nothing available."""
@@ -375,18 +388,26 @@ class TestAiCliDefinitions:
 
     def test_ai_clis_defined(self) -> None:
         """Test that AI CLIs are defined."""
-        assert len(AI_CLIS) >= 3
+        assert len(AI_CLIS) >= 4
         commands = [cli.command for cli in AI_CLIS]
         assert "claude" in commands
+        assert "cursor" in commands
         assert "aider" in commands
         assert "amp" in commands
 
     def test_claude_cli_definition(self) -> None:
-        """Test Claude CLI definition."""
+        """Test Claude Code CLI definition."""
         claude = next(cli for cli in AI_CLIS if cli.command == "claude")
-        assert claude.name == "Claude CLI"
-        assert claude.args == ["-p"]
+        assert claude.name == "Claude Code"
+        assert claude.args == ["--dangerously-skip-permissions", "-p"]
         assert "anthropic" in claude.install_url.lower()
+
+    def test_cursor_cli_definition(self) -> None:
+        """Test Cursor CLI definition."""
+        cursor = next(cli for cli in AI_CLIS if cli.command == "cursor")
+        assert cursor.name == "Cursor"
+        assert cursor.args == ["--background"]
+        assert "cursor" in cursor.install_url.lower()
 
     def test_all_clis_have_required_fields(self) -> None:
         """Test all CLIs have required fields."""

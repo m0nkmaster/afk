@@ -7,7 +7,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from afk.config import AfkConfig, AiCliConfig, ArchiveConfig, GitConfig, LimitsConfig
-from afk.runner import IterationResult, RunResult, StopReason, run_iteration, run_loop
+from afk.runner import (
+    COMPLETION_SIGNALS,
+    IterationResult,
+    RunResult,
+    StopReason,
+    _contains_completion_signal,
+    run_iteration,
+    run_loop,
+    run_prompt_only,
+)
 
 
 class TestStopReason:
@@ -311,3 +320,130 @@ class TestRunLoopIntegration:
 
         assert result.stop_reason == StopReason.COMPLETE
         assert result.iterations_completed == 1
+
+
+class TestCompletionSignals:
+    """Tests for completion signal detection."""
+
+    def test_completion_signals_defined(self) -> None:
+        """Test that completion signals are defined."""
+        assert "<promise>COMPLETE</promise>" in COMPLETION_SIGNALS
+        assert "AFK_COMPLETE" in COMPLETION_SIGNALS
+        assert "AFK_STOP" in COMPLETION_SIGNALS
+
+    def test_contains_completion_signal_empty(self) -> None:
+        """Test with empty output."""
+        assert _contains_completion_signal(None) is False
+        assert _contains_completion_signal("") is False
+
+    def test_contains_completion_signal_ralf_style(self) -> None:
+        """Test detecting ralf.sh style signal."""
+        output = "Done with task\n<promise>COMPLETE</promise>\n"
+        assert _contains_completion_signal(output) is True
+
+    def test_contains_completion_signal_afk_style(self) -> None:
+        """Test detecting AFK style signal."""
+        assert _contains_completion_signal("All done AFK_COMPLETE") is True
+        assert _contains_completion_signal("AFK_STOP now") is True
+
+    def test_contains_no_signal(self) -> None:
+        """Test with no completion signal."""
+        assert _contains_completion_signal("Just some output") is False
+
+
+class TestRunPromptOnly:
+    """Tests for run_prompt_only function."""
+
+    def test_prompt_only_basic(self, temp_project: Path) -> None:
+        """Test basic prompt-only execution."""
+        prompt_file = temp_project / "prompt.md"
+        prompt_file.write_text("Do the thing\n")
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=["test"]),
+        )
+
+        with patch("subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.communicate.return_value = ("output", None)
+            mock_process.returncode = 0
+            mock_popen.return_value = mock_process
+
+            result = run_prompt_only(
+                prompt_file=prompt_file,
+                config=config,
+                max_iterations=2,
+            )
+
+        assert result.iterations_completed == 2
+        assert result.stop_reason == StopReason.MAX_ITERATIONS
+
+    def test_prompt_only_completion_signal(self, temp_project: Path) -> None:
+        """Test prompt-only stops on completion signal."""
+        prompt_file = temp_project / "prompt.md"
+        prompt_file.write_text("Do the thing\n")
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+        )
+
+        with patch("subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.communicate.return_value = (
+                "Done!\n<promise>COMPLETE</promise>",
+                None,
+            )
+            mock_process.returncode = 0
+            mock_popen.return_value = mock_process
+
+            result = run_prompt_only(
+                prompt_file=prompt_file,
+                config=config,
+                max_iterations=10,
+            )
+
+        assert result.iterations_completed == 1
+        assert result.stop_reason == StopReason.COMPLETE
+
+    def test_prompt_only_ai_error(self, temp_project: Path) -> None:
+        """Test prompt-only handles AI CLI errors."""
+        prompt_file = temp_project / "prompt.md"
+        prompt_file.write_text("Do the thing\n")
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+        )
+
+        with patch("subprocess.Popen") as mock_popen:
+            mock_process = MagicMock()
+            mock_process.communicate.return_value = ("error", None)
+            mock_process.returncode = 1
+            mock_popen.return_value = mock_process
+
+            result = run_prompt_only(
+                prompt_file=prompt_file,
+                config=config,
+                max_iterations=5,
+            )
+
+        assert result.stop_reason == StopReason.AI_ERROR
+
+    def test_prompt_only_cli_not_found(self, temp_project: Path) -> None:
+        """Test prompt-only handles missing CLI."""
+        prompt_file = temp_project / "prompt.md"
+        prompt_file.write_text("Do the thing\n")
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="nonexistent-cli", args=[]),
+        )
+
+        with patch("subprocess.Popen") as mock_popen:
+            mock_popen.side_effect = FileNotFoundError()
+
+            result = run_prompt_only(
+                prompt_file=prompt_file,
+                config=config,
+                max_iterations=5,
+            )
+
+        assert result.stop_reason == StopReason.AI_ERROR

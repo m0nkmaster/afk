@@ -138,18 +138,27 @@ PROMPT_FILES = [
 ]
 
 # Known AI CLI tools with metadata
+# Args are configured for autonomous (non-interactive) operation where the prompt
+# is passed via stdin and the tool runs without user confirmation prompts.
 AI_CLIS: list[AiCliInfo] = [
     AiCliInfo(
         command="claude",
-        name="Claude CLI",
-        args=["-p"],
-        description="Anthropic's Claude CLI for terminal-based AI coding",
-        install_url="https://docs.anthropic.com/en/docs/claude-cli",
+        name="Claude Code",
+        args=["--dangerously-skip-permissions", "-p"],
+        description="Anthropic's Claude CLI for autonomous terminal-based AI coding",
+        install_url="https://docs.anthropic.com/en/docs/claude-code",
+    ),
+    AiCliInfo(
+        command="cursor",
+        name="Cursor",
+        args=["--background"],
+        description="Cursor IDE's background agent mode",
+        install_url="https://cursor.com",
     ),
     AiCliInfo(
         command="aider",
         name="Aider",
-        args=["--message"],
+        args=["--yes"],
         description="AI pair programming in your terminal",
         install_url="https://aider.chat",
     ),
@@ -252,18 +261,26 @@ def _detect_tools() -> dict[str, bool]:
         "claude": _command_exists("claude"),
         "cursor": _command_exists("cursor"),
         "aider": _command_exists("aider"),
+        "amp": _command_exists("amp"),
     }
     return tools
 
 
 def _detect_ai_cli(tools: dict[str, bool]) -> AiCliConfig:
-    """Detect the best available AI CLI tool."""
+    """Detect the best available AI CLI tool.
+
+    Priority order: claude > cursor > aider > amp
+    """
     if tools.get("claude"):
-        return AiCliConfig(command="claude", args=["-p"])
+        return AiCliConfig(command="claude", args=["--dangerously-skip-permissions", "-p"])
+    if tools.get("cursor"):
+        return AiCliConfig(command="cursor", args=["--background"])
     if tools.get("aider"):
-        return AiCliConfig(command="aider", args=["--message"])
-    # Default
-    return AiCliConfig(command="claude", args=["-p"])
+        return AiCliConfig(command="aider", args=["--yes"])
+    if tools.get("amp"):
+        return AiCliConfig(command="amp", args=["--dangerously-allow-all"])
+    # Default - user will need to install one
+    return AiCliConfig(command="claude", args=["--dangerously-skip-permissions", "-p"])
 
 
 def detect_available_ai_clis() -> list[AiCliInfo]:
