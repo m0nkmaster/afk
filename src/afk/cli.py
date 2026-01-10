@@ -125,12 +125,25 @@ def _run_zero_config(
         config.sources = [source]
 
     # Infer sources if none configured
+    # But if .afk/prd.json exists with stories, use it directly - it's the source of truth
+    # (created by afk prd parse or placed there manually)
     if not config.sources:
-        inferred = infer_sources()
-        if inferred:
-            config.sources = inferred
-        else:
-            # Check for prompt file (ralf.sh mode)
+        from afk.prd_store import load_prd
+
+        existing_prd = load_prd()
+        if not existing_prd.userStories:
+            # No PRD exists, try to infer sources
+            inferred = infer_sources()
+            if inferred:
+                config.sources = inferred
+
+    # Check if we have work to do (either sources or existing PRD)
+    if not config.sources:
+        from afk.prd_store import load_prd
+
+        existing_prd = load_prd()
+        if not existing_prd.userStories:
+            # No sources AND no PRD - check for prompt file (ralf.sh mode)
             prompt_file = detect_prompt_file()
             if prompt_file:
                 from afk.runner import run_prompt_only

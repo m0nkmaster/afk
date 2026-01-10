@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from afk.config import AfkConfig
 from afk.prd import generate_prd_prompt, load_prd_file
+from afk.prd_store import PrdDocument, UserStory, load_prd, save_prd, sync_prd
 
 
 class TestGeneratePrdPrompt:
@@ -137,3 +140,99 @@ class TestLoadPrdFile:
 
         assert "Café" in content
         assert "日本語" in content
+
+
+class TestSyncPrd:
+    """Tests for sync_prd function in prd_store module."""
+
+    def test_sync_uses_existing_prd_when_no_sources(self, temp_project: Path) -> None:
+        """Test that sync_prd returns existing PRD when no sources configured.
+
+        This is the key behaviour: if .afk/prd.json exists with stories and
+        no sources are configured, use the PRD directly without overwriting.
+        """
+        # Create PRD with stories
+        (temp_project / ".afk").mkdir(parents=True)
+        prd = PrdDocument(
+            project="test",
+            userStories=[
+                UserStory(
+                    id="task-1",
+                    title="Test task",
+                    description="A test task",
+                    acceptanceCriteria=["It works"],
+                    priority=1,
+                )
+            ],
+        )
+        save_prd(prd)
+
+        # Config with no sources
+        config = AfkConfig(sources=[])
+
+        result = sync_prd(config)
+
+        # Should return the existing PRD, not an empty one
+        assert len(result.userStories) == 1
+        assert result.userStories[0].id == "task-1"
+        assert result.project == "test"
+
+    def test_sync_does_not_overwrite_existing_prd(self, temp_project: Path) -> None:
+        """Test that sync_prd doesn't overwrite PRD when no sources configured."""
+        # Create PRD with stories
+        (temp_project / ".afk").mkdir(parents=True)
+        original_prd = PrdDocument(
+            project="my-project",
+            description="Original description",
+            userStories=[
+                UserStory(
+                    id="original-task",
+                    title="Original",
+                    description="Original task",
+                    priority=1,
+                )
+            ],
+        )
+        save_prd(original_prd)
+
+        # Sync with no sources
+        config = AfkConfig(sources=[])
+        sync_prd(config)
+
+        # Reload and check it wasn't modified
+        reloaded = load_prd()
+        assert len(reloaded.userStories) == 1
+        assert reloaded.userStories[0].id == "original-task"
+        assert reloaded.project == "my-project"
+
+    def test_sync_overwrites_when_sources_configured(self, temp_project: Path) -> None:
+        """Test that sync_prd does sync when sources are configured."""
+        from afk.config import SourceConfig
+
+        # Create PRD with stories
+        (temp_project / ".afk").mkdir(parents=True)
+        original_prd = PrdDocument(
+            project="old-project",
+            userStories=[
+                UserStory(
+                    id="old-task",
+                    title="Old",
+                    description="Old task",
+                    priority=1,
+                )
+            ],
+        )
+        save_prd(original_prd)
+
+        # Create a TODO.md source
+        (temp_project / "TODO.md").write_text("- [ ] New task from markdown\n")
+
+        # Sync with markdown source
+        config = AfkConfig(sources=[SourceConfig(type="markdown", path="TODO.md")])
+        result = sync_prd(config)
+
+        # Should have synced from markdown, not the old PRD
+        assert len(result.userStories) >= 1
+        # The old task should be gone (replaced by sync)
+        task_ids = [s.id for s in result.userStories]
+        assert "old-task" not in task_ids

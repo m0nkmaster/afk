@@ -92,9 +92,20 @@ def sync_prd(config: AfkConfig, branch_name: str | None = None) -> PrdDocument:
 
     This aggregates tasks from all sources and writes them to prd.json.
     Existing completion status (passes: true) is preserved for matching IDs.
+
+    If no sources are configured but .afk/prd.json exists with stories,
+    it's used directly as the source of truth (created by afk prd parse
+    or manually placed there).
     """
-    # Load existing PRD to preserve completion status
+    # Load existing PRD
     existing_prd = load_prd()
+
+    # If no sources configured but PRD exists with stories, use it directly
+    # This handles the case where user created .afk/prd.json via afk prd parse
+    # or placed it there manually - we don't want to overwrite it
+    if not config.sources and existing_prd.userStories:
+        return existing_prd
+
     existing_status = {story.id: story.passes for story in existing_prd.userStories}
 
     # Aggregate from all sources

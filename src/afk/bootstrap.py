@@ -200,17 +200,17 @@ def _detect_stack(root: Path) -> ProjectStack | None:
 
 
 def _detect_sources(root: Path, available_tools: dict[str, bool]) -> list[SourceConfig]:
-    """Detect available task sources."""
+    """Detect available task sources.
+
+    Note: .afk/prd.json is NOT detected as a source here. It's the working file
+    that gets populated by sync. If it exists with tasks and no sources are
+    configured, sync_prd() will use it directly.
+    """
     sources: list[SourceConfig] = []
 
     # Check for beads
     if (root / ".beads").is_dir() and available_tools.get("bd"):
         sources.append(SourceConfig(type="beads"))
-
-    # Check for .afk/prd.json first (created by afk prd parse)
-    afk_prd = root / ".afk" / "prd.json"
-    if afk_prd.exists():
-        sources.append(SourceConfig(type="json", path=".afk/prd.json"))
 
     # Check for task files in project root
     for filename, source_type in TASK_FILES.items():

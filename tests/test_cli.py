@@ -785,3 +785,38 @@ class TestGoCommand:
         result = cli_runner.invoke(main, ["go", "--dry-run"])
         assert result.exit_code == 0
         assert "markdown" in result.output
+
+    def test_go_uses_existing_prd(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test go uses existing .afk/prd.json when no sources configured.
+
+        This is the case where user runs afk prd parse first or places a
+        prd.json manually - we should use it directly without overwriting.
+        """
+        import json
+
+        (temp_project / ".afk").mkdir()
+        # Create a PRD with stories but NO sources configured
+        prd_data = {
+            "project": "test",
+            "userStories": [
+                {
+                    "id": "task-1",
+                    "title": "Test task",
+                    "description": "A test task",
+                    "acceptanceCriteria": ["It works"],
+                    "priority": 1,
+                    "passes": False,
+                }
+            ],
+        }
+        (temp_project / ".afk" / "prd.json").write_text(json.dumps(prd_data))
+        # Config with NO sources
+        (temp_project / ".afk" / "config.json").write_text(
+            '{"sources": [], "ai_cli": {"command": "echo", "args": []}}'
+        )
+
+        result = cli_runner.invoke(main, ["go", "--dry-run"])
+        # Should NOT fail with "no sources" - should use the PRD
+        assert "No task sources found" not in result.output
+        # Should show dry run output
+        assert result.exit_code == 0

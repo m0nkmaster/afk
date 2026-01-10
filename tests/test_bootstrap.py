@@ -205,14 +205,17 @@ class TestDetectSources:
         sources = _detect_sources(temp_project, {"bd": True})
         assert len(sources) == 3
 
-    def test_afk_prd_json(self, temp_project: Path) -> None:
-        """Test detecting .afk/prd.json created by afk prd parse."""
+    def test_afk_prd_not_detected_as_source(self, temp_project: Path) -> None:
+        """Test that .afk/prd.json is NOT detected as a source.
+
+        The .afk/prd.json is a working file, not a source.
+        If it exists with stories and no sources are configured,
+        sync_prd() will use it directly.
+        """
         (temp_project / ".afk").mkdir()
         (temp_project / ".afk" / "prd.json").write_text('{"tasks": []}')
         sources = _detect_sources(temp_project, {})
-        assert len(sources) == 1
-        assert sources[0].type == "json"
-        assert sources[0].path == ".afk/prd.json"
+        assert len(sources) == 0
 
 
 class TestDetectContextFiles:
