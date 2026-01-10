@@ -129,6 +129,12 @@ class TestAiCliConfig:
         """Test default values."""
         config = AiCliConfig()
         assert config.command == "claude"
+        assert config.args == ["--dangerously-skip-permissions", "-p"]
+
+    def test_claude_config(self) -> None:
+        """Test Claude CLI configuration."""
+        config = AiCliConfig(command="claude", args=["-p"])
+        assert config.command == "claude"
         assert config.args == ["-p"]
 
     def test_aider_config(self) -> None:

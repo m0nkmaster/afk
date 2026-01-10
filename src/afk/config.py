@@ -48,7 +48,7 @@ class AiCliConfig(BaseModel):
     """Configuration for AI CLI integration."""
 
     command: str = "claude"
-    args: list[str] = Field(default_factory=lambda: ["-p"])
+    args: list[str] = Field(default_factory=lambda: ["--dangerously-skip-permissions", "-p"])
 
 
 class PromptConfig(BaseModel):

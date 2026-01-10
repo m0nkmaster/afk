@@ -181,8 +181,8 @@ All config lives in `.afk/config.json`:
     "timeout_minutes": 120
   },
   "ai_cli": {
-    "command": "claude",
-    "args": ["-p"]
+    "command": "agent",
+    "args": []
   },
   "git": {
     "auto_commit": true,
@@ -284,13 +284,18 @@ Uses `gh issue list`. Requires GitHub CLI.
 
 ## AI CLI Support
 
-afk works with any CLI that accepts prompts:
+afk works with any CLI that accepts prompts via stdin:
 
 | CLI | Config |
 |-----|--------|
-| Claude CLI | `{"command": "claude", "args": ["-p"]}` |
-| Aider | `{"command": "aider", "args": ["--message"]}` |
+| Cursor Agent (default) | `{"command": "agent", "args": ["--force", "-p"]}` |
+| Claude CLI | `{"command": "claude", "args": ["--dangerously-skip-permissions", "-p"]}` |
+| Codex | `{"command": "codex", "args": ["--approval-mode", "full-auto", "-q"]}` |
+| Aider | `{"command": "aider", "args": ["--yes"]}` |
+| Amp | `{"command": "amp", "args": ["--dangerously-allow-all"]}` |
 | Custom | `{"command": "your-cli", "args": [...]}` |
+
+When you run `afk go` for the first time, it will auto-detect installed AI CLIs and prompt you to select one.
 
 ## Limits & Safety
 

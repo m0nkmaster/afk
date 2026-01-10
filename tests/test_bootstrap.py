@@ -236,8 +236,9 @@ class TestDetectTools:
         assert isinstance(tools, dict)
         assert "bd" in tools
         assert "gh" in tools
+        assert "agent" in tools
         assert "claude" in tools
-        assert "cursor" in tools
+        assert "codex" in tools
         assert "aider" in tools
         assert "amp" in tools
 
@@ -246,33 +247,45 @@ class TestDetectAiCli:
     """Tests for _detect_ai_cli function."""
 
     def test_claude_available(self) -> None:
-        """Test when claude is available."""
-        config = _detect_ai_cli({"claude": True, "aider": False})
+        """Test when claude is available (highest priority)."""
+        config = _detect_ai_cli({"claude": True, "agent": True, "aider": False})
         assert config.command == "claude"
         assert config.args == ["--dangerously-skip-permissions", "-p"]
 
+    def test_agent_fallback(self) -> None:
+        """Test falling back to agent when claude unavailable."""
+        config = _detect_ai_cli({"claude": False, "agent": True, "aider": False})
+        assert config.command == "agent"
+        assert config.args == ["--force", "-p"]
+
+    def test_codex_fallback(self) -> None:
+        """Test falling back to codex when claude and agent unavailable."""
+        config = _detect_ai_cli({"claude": False, "agent": False, "codex": True, "aider": True})
+        assert config.command == "codex"
+        assert config.args == ["--approval-mode", "full-auto", "-q"]
+
     def test_aider_fallback(self) -> None:
         """Test falling back to aider."""
-        config = _detect_ai_cli({"claude": False, "aider": True})
+        config = _detect_ai_cli(
+            {"claude": False, "agent": False, "codex": False, "aider": True}
+        )
         assert config.command == "aider"
         assert config.args == ["--yes"]
 
-    def test_cursor_fallback(self) -> None:
-        """Test falling back to cursor when claude unavailable."""
-        config = _detect_ai_cli({"claude": False, "cursor": True, "aider": True})
-        assert config.command == "cursor"
-        assert config.args == ["--background"]
-
     def test_amp_fallback(self) -> None:
         """Test falling back to amp."""
-        config = _detect_ai_cli({"claude": False, "cursor": False, "aider": False, "amp": True})
+        config = _detect_ai_cli(
+            {"claude": False, "agent": False, "codex": False, "aider": False, "amp": True}
+        )
         assert config.command == "amp"
         assert config.args == ["--dangerously-allow-all"]
 
     def test_default(self) -> None:
         """Test default when nothing available."""
-        config = _detect_ai_cli({"claude": False, "aider": False})
-        assert config.command == "claude"  # Still defaults to claude
+        config = _detect_ai_cli(
+            {"claude": False, "agent": False, "codex": False, "aider": False}
+        )
+        assert config.command == "claude"  # Defaults to claude
 
 
 class TestIsGithubRepo:
@@ -388,12 +401,20 @@ class TestAiCliDefinitions:
 
     def test_ai_clis_defined(self) -> None:
         """Test that AI CLIs are defined."""
-        assert len(AI_CLIS) >= 4
+        assert len(AI_CLIS) >= 5
         commands = [cli.command for cli in AI_CLIS]
+        assert "agent" in commands
         assert "claude" in commands
-        assert "cursor" in commands
+        assert "codex" in commands
         assert "aider" in commands
         assert "amp" in commands
+
+    def test_agent_cli_definition(self) -> None:
+        """Test Cursor Agent CLI definition."""
+        agent = next(cli for cli in AI_CLIS if cli.command == "agent")
+        assert agent.name == "Cursor Agent"
+        assert agent.args == ["--force", "-p"]
+        assert "cursor" in agent.install_url.lower()
 
     def test_claude_cli_definition(self) -> None:
         """Test Claude Code CLI definition."""
@@ -402,12 +423,12 @@ class TestAiCliDefinitions:
         assert claude.args == ["--dangerously-skip-permissions", "-p"]
         assert "anthropic" in claude.install_url.lower()
 
-    def test_cursor_cli_definition(self) -> None:
-        """Test Cursor CLI definition."""
-        cursor = next(cli for cli in AI_CLIS if cli.command == "cursor")
-        assert cursor.name == "Cursor"
-        assert cursor.args == ["--background"]
-        assert "cursor" in cursor.install_url.lower()
+    def test_codex_cli_definition(self) -> None:
+        """Test Codex CLI definition."""
+        codex = next(cli for cli in AI_CLIS if cli.command == "codex")
+        assert codex.name == "Codex"
+        assert codex.args == ["--approval-mode", "full-auto", "-q"]
+        assert "openai" in codex.install_url.lower() or "codex" in codex.install_url.lower()
 
     def test_all_clis_have_required_fields(self) -> None:
         """Test all CLIs have required fields."""
@@ -439,17 +460,29 @@ class TestDetectAvailableAiClis:
             assert len(available) == 1
             assert available[0].command == "claude"
 
+    def test_codex_available(self) -> None:
+        """Test when codex is installed."""
+
+        def mock_exists(cmd: str) -> bool:
+            return cmd == "codex"
+
+        with patch("afk.bootstrap._command_exists", side_effect=mock_exists):
+            available = detect_available_ai_clis()
+            assert len(available) == 1
+            assert available[0].command == "codex"
+
     def test_multiple_clis_available(self) -> None:
         """Test when multiple CLIs are installed."""
 
         def mock_exists(cmd: str) -> bool:
-            return cmd in ("claude", "aider")
+            return cmd in ("claude", "codex", "aider")
 
         with patch("afk.bootstrap._command_exists", side_effect=mock_exists):
             available = detect_available_ai_clis()
-            assert len(available) == 2
+            assert len(available) == 3
             commands = [cli.command for cli in available]
             assert "claude" in commands
+            assert "codex" in commands
             assert "aider" in commands
 
 
