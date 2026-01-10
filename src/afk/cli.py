@@ -233,6 +233,61 @@ def source_remove(ctx: click.Context, index: int) -> None:
     console.print(f"[green]Removed source:[/green] {removed.type}")
 
 
+@main.group()
+def prd() -> None:
+    """Manage product requirements documents."""
+    pass
+
+
+@prd.command("parse")
+@click.argument("input_file", type=click.Path(exists=True))
+@click.option("--output", "-o", default=".afk/prd.json", help="Output JSON path")
+@click.option("--copy", "-c", "output_mode", flag_value="clipboard", help="Copy to clipboard")
+@click.option("--file", "-f", "output_mode", flag_value="file", help="Write prompt to file")
+@click.option("--stdout", "-s", "output_mode", flag_value="stdout", help="Print prompt to stdout")
+@click.pass_context
+def prd_parse(
+    ctx: click.Context,
+    input_file: str,
+    output: str,
+    output_mode: str | None,
+) -> None:
+    """Parse a PRD into a structured JSON feature list.
+
+    Takes a product requirements document (markdown, text, etc.) and generates
+    an AI prompt to convert it into the Anthropic-style JSON format.
+
+    Example:
+
+        afk prd parse requirements.md --copy
+
+        afk prd parse PRD.md -o tasks.json
+    """
+    config: AfkConfig = ctx.obj["config"]
+
+    from afk.output import output_prompt
+    from afk.prd import generate_prd_prompt, load_prd_file
+
+    try:
+        prd_content = load_prd_file(input_file)
+    except FileNotFoundError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        return
+
+    prompt = generate_prd_prompt(prd_content, output_path=output)
+
+    # Default to stdout if not specified
+    output_mode = output_mode or config.output.default
+
+    output_prompt(prompt, mode=output_mode, config=config)  # type: ignore[arg-type]
+
+    console.print()
+    console.print(
+        f"[dim]Run the prompt with your AI tool, then add the source:[/dim]\n"
+        f"  [cyan]afk source add json {output}[/cyan]"
+    )
+
+
 @main.command()
 @click.option("--copy", "-c", "output_mode", flag_value="clipboard", help="Copy to clipboard")
 @click.option("--file", "-f", "output_mode", flag_value="file", help="Write to file")

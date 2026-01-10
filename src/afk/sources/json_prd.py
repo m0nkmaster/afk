@@ -15,10 +15,17 @@ def load_json_tasks(path: str | None) -> list[Task]:
 
     Supports two formats:
 
-    1. Anthropic style:
+    1. Full Anthropic style (from afk prd parse):
     {
         "tasks": [
-            {"id": "...", "description": "...", "passes": false}
+            {
+                "id": "feature-id",
+                "category": "functional",
+                "description": "Feature description",
+                "priority": 1,
+                "steps": ["Step 1", "Step 2"],
+                "passes": false
+            }
         ]
     }
 
@@ -26,6 +33,8 @@ def load_json_tasks(path: str | None) -> list[Task]:
     [
         {"id": "...", "description": "..."}
     ]
+
+    The full task data (including category, steps) is preserved in metadata.
     """
     from afk.sources import Task
 

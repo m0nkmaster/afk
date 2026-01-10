@@ -36,6 +36,10 @@ pip install -e .
 # Initialize afk (auto-detects project settings)
 afk init
 
+# Parse a PRD into structured JSON (Anthropic harness pattern)
+afk prd parse requirements.md     # Generates AI prompt to create prd.json
+afk prd parse PRD.md --copy       # Copy prompt to clipboard
+
 # Manage task sources
 afk source add json prd.json      # Add JSON PRD file
 afk source add markdown tasks.md  # Add markdown checklist

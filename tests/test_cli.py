@@ -299,3 +299,103 @@ class TestRunCommand:
         result = cli_runner.invoke(main, ["run", "10"])
         assert result.exit_code == 0
         assert "10 iterations" in result.output
+
+
+class TestPrdCommands:
+    """Tests for prd subcommands."""
+
+    def test_prd_help(self, cli_runner: CliRunner) -> None:
+        """Test prd --help."""
+        result = cli_runner.invoke(main, ["prd", "--help"])
+        assert result.exit_code == 0
+        assert "product requirements" in result.output.lower()
+
+    def test_prd_parse_help(self, cli_runner: CliRunner) -> None:
+        """Test prd parse --help."""
+        result = cli_runner.invoke(main, ["prd", "parse", "--help"])
+        assert result.exit_code == 0
+        assert "INPUT_FILE" in result.output
+        assert "--output" in result.output
+
+    def test_prd_parse_stdout(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test prd parse with stdout output."""
+        prd_file = initialized_project / "requirements.md"
+        prd_file.write_text("# My App\n\nUsers can log in.")
+
+        result = cli_runner.invoke(main, ["prd", "parse", str(prd_file), "--stdout"])
+        assert result.exit_code == 0
+        assert "Users can log in" in result.output
+        assert "tasks" in result.output
+        assert "passes" in result.output
+
+    def test_prd_parse_custom_output(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test prd parse with custom output path."""
+        prd_file = initialized_project / "prd.md"
+        prd_file.write_text("Build a thing.")
+
+        result = cli_runner.invoke(
+            main, ["prd", "parse", str(prd_file), "-o", "custom.json", "--stdout"]
+        )
+        assert result.exit_code == 0
+        assert "custom.json" in result.output
+
+    def test_prd_parse_shows_next_step(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test prd parse shows next step instructions."""
+        prd_file = initialized_project / "spec.md"
+        prd_file.write_text("Requirements here.")
+
+        result = cli_runner.invoke(main, ["prd", "parse", str(prd_file), "--stdout"])
+        assert result.exit_code == 0
+        assert "afk source add json" in result.output
+
+    def test_prd_parse_file_not_found(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test prd parse with non-existent file."""
+        result = cli_runner.invoke(main, ["prd", "parse", "nonexistent.md"])
+        # Click's Path(exists=True) will catch this
+        assert result.exit_code != 0
+
+    def test_prd_parse_clipboard(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test prd parse with clipboard output."""
+        prd_file = initialized_project / "prd.md"
+        prd_file.write_text("Feature requirements.")
+
+        with patch("pyperclip.copy"):
+            result = cli_runner.invoke(main, ["prd", "parse", str(prd_file), "--copy"])
+            assert result.exit_code == 0
+
+    def test_prd_parse_file_output(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test prd parse with file output."""
+        prd_file = initialized_project / "prd.md"
+        prd_file.write_text("Requirements.")
+
+        result = cli_runner.invoke(main, ["prd", "parse", str(prd_file), "--file"])
+        assert result.exit_code == 0
+        assert "Prompt written to" in result.output
+
+    def test_prd_parse_preserves_multiline(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test prd parse preserves multiline PRD content."""
+        prd_content = """# Application Requirements
+
+## Authentication
+- Users can sign up
+- Users can log in
+- Password reset via email
+
+## Dashboard
+- Show user stats
+- Recent activity feed
+"""
+        prd_file = initialized_project / "full-prd.md"
+        prd_file.write_text(prd_content)
+
+        result = cli_runner.invoke(main, ["prd", "parse", str(prd_file), "--stdout"])
+        assert result.exit_code == 0
+        assert "Authentication" in result.output
+        assert "Dashboard" in result.output
+        assert "Password reset" in result.output
