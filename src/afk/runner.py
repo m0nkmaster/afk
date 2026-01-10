@@ -17,13 +17,84 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
-from afk.config import AfkConfig
+from afk.config import AfkConfig, FeedbackLoopsConfig
 from afk.git_ops import archive_session, auto_commit, clear_session, create_branch
 from afk.progress import SessionProgress, check_limits
 from afk.prompt import generate_prompt
 from afk.sources import aggregate_tasks
 
 console = Console()
+
+
+@dataclass
+class QualityGateResult:
+    """Result of running quality gates."""
+
+    passed: bool
+    failed_gates: list[str]
+    output: dict[str, str]
+
+
+def run_quality_gates(feedback_loops: FeedbackLoopsConfig) -> QualityGateResult:
+    """Run all configured quality gates.
+
+    Args:
+        feedback_loops: Feedback loop configuration
+
+    Returns:
+        QualityGateResult with pass/fail status and outputs
+    """
+    gates: dict[str, str] = {}
+
+    # Collect all configured gates
+    if feedback_loops.types:
+        gates["types"] = feedback_loops.types
+    if feedback_loops.lint:
+        gates["lint"] = feedback_loops.lint
+    if feedback_loops.test:
+        gates["test"] = feedback_loops.test
+    if feedback_loops.build:
+        gates["build"] = feedback_loops.build
+    gates.update(feedback_loops.custom)
+
+    if not gates:
+        return QualityGateResult(passed=True, failed_gates=[], output={})
+
+    failed_gates: list[str] = []
+    outputs: dict[str, str] = {}
+
+    for name, cmd in gates.items():
+        console.print(f"  [dim]Running {name}...[/dim]", end=" ")
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout per gate
+            )
+            outputs[name] = result.stdout + result.stderr
+
+            if result.returncode != 0:
+                failed_gates.append(name)
+                console.print("[red]✗[/red]")
+            else:
+                console.print("[green]✓[/green]")
+
+        except subprocess.TimeoutExpired:
+            failed_gates.append(name)
+            outputs[name] = "Timed out after 5 minutes"
+            console.print("[red]timeout[/red]")
+        except Exception as e:
+            failed_gates.append(name)
+            outputs[name] = str(e)
+            console.print("[red]error[/red]")
+
+    return QualityGateResult(
+        passed=len(failed_gates) == 0,
+        failed_gates=failed_gates,
+        output=outputs,
+    )
 
 
 class StopReason(Enum):
@@ -262,7 +333,7 @@ def run_loop(
 
             iterations_completed += 1
 
-            # Check for newly completed tasks and auto-commit
+            # Check for newly completed tasks
             new_progress = SessionProgress.load()
             newly_completed = [
                 t
@@ -271,14 +342,24 @@ def run_loop(
             ]
 
             for task in newly_completed:
-                if config.git.auto_commit:
-                    success = auto_commit(
-                        task.id,
-                        task.message or "Task completed",
-                        config,
-                    )
-                    if success:
-                        console.print(f"[green]✓ Committed:[/green] {task.id}")
+                # Run quality gates before committing
+                console.print(f"\n[cyan]Quality gates for {task.id}:[/cyan]")
+                gate_result = run_quality_gates(config.feedback_loops)
+
+                if not gate_result.passed:
+                    failed = ", ".join(gate_result.failed_gates)
+                    console.print(f"[yellow]⚠ Quality gates failed: {failed}[/yellow]")
+                    console.print("[dim]Skipping auto-commit. Fix and commit manually.[/dim]")
+                else:
+                    if config.git.auto_commit:
+                        success = auto_commit(
+                            task.id,
+                            task.message or "Task completed",
+                            config,
+                        )
+                        if success:
+                            console.print(f"[green]✓ Committed:[/green] {task.id}")
+
                 tasks_completed_this_session += 1
 
             # Brief pause between iterations

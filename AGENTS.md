@@ -14,7 +14,7 @@ pip install -e ".[dev]"
 
 ## Issue Tracking
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started. Always use `beads create` to track tasks.
 
 ```bash
 bd ready              # Find available work
@@ -85,6 +85,7 @@ src/afk/
 ├── config.py        # Pydantic models for .afk/config.json
 ├── bootstrap.py     # Project analysis and auto-configuration
 ├── progress.py      # Session and task progress tracking
+├── learnings.py     # Append-only learnings file management
 ├── prompt.py        # Jinja2 prompt generation
 ├── output.py        # Output handlers (clipboard, file, stdout)
 ├── prd.py           # PRD parsing prompt generation
@@ -101,11 +102,26 @@ src/afk/
 
 - **Config**: All settings in `.afk/config.json`, loaded via Pydantic models
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations and task status
+- **Learnings**: Append-only discoveries in `.afk/learnings.txt`, survives session clears
 - **Sources**: Pluggable adapters that return `List[Task]`
 - **Prompts**: Jinja2 templates, customizable via config
 - **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
-- **Fresh Context**: Each iteration gets clean context; memory persists via git + progress file
+- **Fresh Context**: Each iteration gets clean context; memory persists via git + progress + learnings
+- **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
 - **Archiving**: Sessions archived on completion, branch change, or manually
+
+## Key Commands
+
+```bash
+afk start              # Init if needed + run loop
+afk run N              # Run N iterations
+afk explain            # Debug current loop state
+afk learn "discovery"  # Record a learning
+afk done <task-id>     # Mark task complete
+afk fail <task-id>     # Mark task failed
+afk reset <task-id>    # Reset stuck task
+afk next               # Preview next prompt
+```
 
 ## Adding a New Task Source
 

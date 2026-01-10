@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from afk import __version__
-from afk.config import AFK_DIR, CONFIG_FILE, AfkConfig
+from afk.config import AFK_DIR, CONFIG_FILE, LEARNINGS_FILE, AfkConfig
 
 console = Console()
 
@@ -375,6 +375,203 @@ def fail(ctx: click.Context, task_id: str, message: str | None) -> None:
 
     failure_count = mark_failed(task_id, message=message)
     console.print(f"[red]Task failed:[/red] {task_id} (attempt {failure_count})")
+
+
+@main.command()
+@click.argument("content")
+@click.option("--task", "-t", help="Associate learning with a task ID")
+def learn(content: str, task: str | None) -> None:
+    """Record a learning for future iterations.
+
+    Learnings persist across sessions and are included in every prompt.
+    Use this to record patterns, gotchas, and discoveries.
+
+    Examples:
+
+        afk learn "This codebase uses factory pattern for services"
+
+        afk learn "Must run migrations before tests" --task db-setup
+    """
+    from afk.learnings import append_learning
+
+    append_learning(content, task_id=task)
+    console.print("[green]Learning recorded.[/green]")
+
+    if LEARNINGS_FILE.exists():
+        line_count = len(LEARNINGS_FILE.read_text().strip().split("\n"))
+        console.print(f"[dim]Total learnings: {line_count} lines[/dim]")
+
+
+@main.command()
+@click.argument("task_id")
+@click.pass_context
+def reset(ctx: click.Context, task_id: str) -> None:
+    """Reset a stuck task to pending state.
+
+    Clears failure count and sets status back to pending.
+    Useful when a task repeatedly fails due to transient issues.
+
+    Example:
+
+        afk reset auth-login
+    """
+    from afk.progress import SessionProgress
+
+    progress = SessionProgress.load()
+
+    if task_id not in progress.tasks:
+        console.print(f"[red]Task not found:[/red] {task_id}")
+        return
+
+    task = progress.tasks[task_id]
+    old_status = task.status
+    old_failures = task.failure_count
+
+    task.status = "pending"
+    task.failure_count = 0
+    task.started_at = None
+    task.completed_at = None
+    progress.save()
+
+    console.print(f"[green]Task reset:[/green] {task_id}")
+    console.print(f"[dim]Was: {old_status} with {old_failures} failures[/dim]")
+
+
+@main.command()
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
+@click.pass_context
+def explain(ctx: click.Context, verbose: bool) -> None:
+    """Explain current loop state for debugging.
+
+    Shows what task would be selected next, why, and session statistics.
+    """
+    from afk.learnings import load_learnings
+    from afk.progress import SessionProgress
+    from afk.sources import aggregate_tasks
+
+    config: AfkConfig = ctx.obj["config"]
+
+    if not AFK_DIR.exists():
+        console.print("[red]afk not initialized.[/red] Run [cyan]afk init[/cyan] first.")
+        return
+
+    progress = SessionProgress.load()
+    tasks = aggregate_tasks(config.sources) if config.sources else []
+
+    # Session info
+    console.print(Panel.fit("[bold]Session State[/bold]", title="afk explain"))
+    console.print()
+    console.print(f"  [cyan]Iterations:[/cyan] {progress.iterations}")
+    started = progress.started_at[:19] if progress.started_at else "N/A"
+    console.print(f"  [cyan]Started:[/cyan] {started}")
+    console.print()
+
+    # Task breakdown
+    completed_ids = {t.id for t in progress.get_completed_tasks()}
+    failed_tasks = [t for t in progress.tasks.values() if t.status == "failed"]
+    skipped_tasks = [t for t in progress.tasks.values() if t.status == "skipped"]
+    pending_tasks = [t for t in tasks if t.id not in completed_ids]
+
+    console.print("  [cyan]Tasks:[/cyan]")
+    console.print(f"    Total: {len(tasks)}")
+    console.print(f"    Completed: [green]{len(completed_ids)}[/green]")
+    console.print(f"    Pending: {len(pending_tasks)}")
+    if failed_tasks:
+        console.print(f"    Failed: [red]{len(failed_tasks)}[/red]")
+    if skipped_tasks:
+        console.print(f"    Skipped: [yellow]{len(skipped_tasks)}[/yellow]")
+    console.print()
+
+    # Next task
+    if pending_tasks:
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        pending_tasks.sort(key=lambda t: priority_order.get(t.priority, 1))
+        next_task = pending_tasks[0]
+        console.print("  [cyan]Next task:[/cyan]")
+        console.print(f"    ID: [bold]{next_task.id}[/bold]")
+        console.print(f"    Priority: {next_task.priority.upper()}")
+        console.print(f"    Description: {next_task.description[:80]}...")
+    else:
+        console.print("  [green]All tasks complete![/green]")
+
+    # Learnings
+    learnings = load_learnings()
+    if learnings:
+        console.print()
+        console.print(f"  [cyan]Learnings:[/cyan] {len(learnings)} chars")
+        if verbose:
+            console.print()
+            recent = learnings[-500:] if len(learnings) > 500 else learnings
+            console.print(Panel(recent, title="Recent Learnings"))
+
+    # Failed tasks detail
+    if verbose and failed_tasks:
+        console.print()
+        console.print("  [cyan]Failed tasks:[/cyan]")
+        for task in failed_tasks:
+            console.print(f"    - {task.id}: {task.failure_count} failures")
+            if task.message:
+                console.print(f"      [dim]{task.message}[/dim]")
+
+
+@main.command()
+@click.argument("iterations", type=int, default=10)
+@click.option("--branch", "-b", help="Create/checkout feature branch")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompts")
+@click.pass_context
+def start(ctx: click.Context, iterations: int, branch: str | None, yes: bool) -> None:
+    """Quick start: init if needed, then run the loop.
+
+    Convenience command that combines init and run with sensible defaults.
+
+    Examples:
+
+        afk start                    # Init if needed, run 10 iterations
+
+        afk start 20 -b my-feature   # Create branch, run 20 iterations
+
+        afk start -y                 # Skip prompts, accept defaults
+    """
+    from afk.bootstrap import analyse_project, generate_config
+    from afk.runner import run_loop
+
+    config: AfkConfig = ctx.obj["config"]
+
+    # Init if needed
+    if not AFK_DIR.exists():
+        console.print("[cyan]Initializing afk...[/cyan]")
+        result = analyse_project()
+        config = generate_config(result)
+        AFK_DIR.mkdir(parents=True, exist_ok=True)
+        config.save()
+        console.print(f"[green]✓[/green] Configuration saved to {CONFIG_FILE}")
+
+    # Check for sources
+    if not config.sources:
+        console.print()
+        console.print("[yellow]No task sources configured.[/yellow]")
+        console.print("Add sources with:")
+        console.print("  [cyan]afk source add beads[/cyan]      # Use beads issue tracker")
+        console.print("  [cyan]afk source add json prd.json[/cyan]  # Use JSON PRD file")
+        console.print("  [cyan]afk source add markdown TODO.md[/cyan]  # Use markdown checklist")
+        return
+
+    # Confirm and run
+    if not yes:
+        console.print()
+        console.print(f"Ready to run [cyan]{iterations}[/cyan] iterations")
+        if branch:
+            console.print(f"Branch: [cyan]{config.git.branch_prefix}{branch}[/cyan]")
+        console.print()
+        if not click.confirm("Start the loop?", default=True):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    run_loop(
+        config=config,
+        max_iterations=iterations,
+        branch=branch,
+    )
 
 
 @main.command()

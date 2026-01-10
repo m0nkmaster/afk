@@ -69,6 +69,28 @@ Create a JSON file at `{{ output_path }}` with the following structure:
 5. **Order by dependency**: If feature B requires feature A, A should have higher priority
 6. **Include edge cases**: Error handling, validation, and edge cases as separate tasks
 
+## Task Size (CRITICAL)
+
+Each task MUST complete in a single AI context window. Tasks that are too large cause:
+- Context overflow mid-implementation
+- Incomplete features
+- Poor code quality
+
+**Right-sized tasks (single session):**
+- Add a database column and migration
+- Add a UI component to an existing page
+- Update a server action with new logic
+- Add a filter dropdown to a list
+- Add a new API endpoint
+- Write tests for a module
+
+**Too large (SPLIT THESE):**
+- "Build the entire dashboard" → Split into: layout, navigation, each widget
+- "Add authentication" → Split into: login form, session handling, protected routes
+- "Refactor the API" → Split into: each endpoint or module separately
+
+When in doubt, split into smaller tasks. 5 small tasks are better than 1 large task.
+
 ## Output
 
 Write the complete JSON to `{{ output_path }}` and confirm the number of tasks extracted.

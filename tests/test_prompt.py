@@ -112,8 +112,9 @@ class TestGeneratePrompt:
         config.save()
 
         prompt = generate_prompt(config, bootstrap=True)
-        assert "Loop Mode" in prompt
-        assert "AFK_COMPLETE" in prompt
+        assert "Autonomous Loop" in prompt
+        assert "running autonomously" in prompt
+        assert "afk fail" in prompt
 
     def test_limit_override(self, temp_afk_dir: Path) -> None:
         """Test limit override is used."""
@@ -269,7 +270,7 @@ class TestDefaultTemplate:
     def test_template_has_loop_mode_section(self) -> None:
         """Test template has conditional loop mode section."""
         assert "{% if bootstrap -%}" in DEFAULT_TEMPLATE
-        assert "Loop Mode" in DEFAULT_TEMPLATE
+        assert "Autonomous Loop" in DEFAULT_TEMPLATE
 
     def test_template_has_stop_signal_section(self) -> None:
         """Test template has conditional stop signal section."""

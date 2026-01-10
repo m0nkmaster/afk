@@ -228,7 +228,7 @@ class TestNextCommand:
         """Test next with --bootstrap flag."""
         result = cli_runner.invoke(main, ["next", "--stdout", "--bootstrap"])
         assert result.exit_code == 0
-        assert "Loop Mode" in result.output
+        assert "Autonomous Loop" in result.output
 
     def test_next_limit_override(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test next with --limit override."""
@@ -489,3 +489,112 @@ class TestArchiveCommands:
         result = cli_runner.invoke(main, ["archive", "clear"])
         assert result.exit_code == 0
         assert "No active session" in result.output
+
+
+class TestLearnCommand:
+    """Tests for learn command."""
+
+    def test_learn_records_learning(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test learn records a learning."""
+        result = cli_runner.invoke(main, ["learn", "This is a discovery"])
+        assert result.exit_code == 0
+        assert "Learning recorded" in result.output
+
+        # Verify it was saved
+        learnings_file = initialized_project / ".afk" / "learnings.txt"
+        assert learnings_file.exists()
+        assert "This is a discovery" in learnings_file.read_text()
+
+    def test_learn_with_task_id(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test learn with associated task ID."""
+        result = cli_runner.invoke(main, ["learn", "Gotcha found", "--task", "auth-login"])
+        assert result.exit_code == 0
+
+        learnings_file = initialized_project / ".afk" / "learnings.txt"
+        content = learnings_file.read_text()
+        assert "[auth-login]" in content
+        assert "Gotcha found" in content
+
+
+class TestResetCommand:
+    """Tests for reset command."""
+
+    def test_reset_clears_failures(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test reset clears failure count and status."""
+        # First, fail a task a few times
+        cli_runner.invoke(main, ["fail", "task-1"])
+        cli_runner.invoke(main, ["fail", "task-1"])
+
+        result = cli_runner.invoke(main, ["reset", "task-1"])
+        assert result.exit_code == 0
+        assert "Task reset" in result.output
+        assert "2 failures" in result.output
+
+    def test_reset_task_not_found(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test reset with non-existent task."""
+        result = cli_runner.invoke(main, ["reset", "nonexistent-task"])
+        assert result.exit_code == 0
+        assert "Task not found" in result.output
+
+
+class TestExplainCommand:
+    """Tests for explain command."""
+
+    def test_explain_shows_state(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test explain shows session state."""
+        result = cli_runner.invoke(main, ["explain"])
+        assert result.exit_code == 0
+        assert "Session State" in result.output
+        assert "Iterations" in result.output
+        assert "Tasks" in result.output
+
+    def test_explain_not_initialized(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test explain when not initialized."""
+        result = cli_runner.invoke(main, ["explain"])
+        assert result.exit_code == 0
+        assert "not initialized" in result.output
+
+    def test_explain_shows_next_task(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test explain shows next task to work on."""
+        result = cli_runner.invoke(main, ["explain"])
+        assert result.exit_code == 0
+        assert "Next task" in result.output
+        assert "task-1" in result.output
+
+    def test_explain_verbose(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test explain with --verbose flag."""
+        # Add a learning first
+        cli_runner.invoke(main, ["learn", "Test learning"])
+
+        result = cli_runner.invoke(main, ["explain", "-v"])
+        assert result.exit_code == 0
+        assert "Learnings" in result.output
+
+
+class TestStartCommand:
+    """Tests for start command."""
+
+    def test_start_inits_if_needed(self, cli_runner: CliRunner, python_project: Path) -> None:
+        """Test start initializes project if needed."""
+        result = cli_runner.invoke(main, ["start", "-y"])
+        assert result.exit_code == 0
+        assert "Initializing" in result.output or "Configuration saved" in result.output
+        assert (python_project / ".afk" / "config.json").exists()
+
+    def test_start_warns_no_sources(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test start warns when no sources configured."""
+        # Create minimal afk setup
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "config.json").write_text('{"sources": []}')
+
+        result = cli_runner.invoke(main, ["start"])
+        assert result.exit_code == 0
+        assert "No task sources configured" in result.output
+
+    def test_start_runs_loop(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test start runs the loop when sources exist."""
+        result = cli_runner.invoke(main, ["start", "-y"])
+        assert result.exit_code == 0
+        assert "Session Complete" in result.output

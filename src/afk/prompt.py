@@ -5,6 +5,7 @@ from __future__ import annotations
 from jinja2 import BaseLoader, Environment
 
 from afk.config import AfkConfig
+from afk.learnings import get_recent_learnings
 from afk.progress import SessionProgress, check_limits
 from afk.sources import aggregate_tasks
 
@@ -15,6 +16,14 @@ DEFAULT_TEMPLATE = """\
 {% for file in context_files -%}
 @{{ file }}
 {% endfor %}
+{% if learnings %}
+
+## Session Learnings
+
+Previous discoveries from this session (read carefully to avoid repeating mistakes):
+
+{{ learnings }}
+{% endif %}
 
 ## Available Tasks
 {% if tasks -%}
@@ -33,35 +42,53 @@ No tasks available.
 {% endif %}
 
 ## Instructions
-1. Choose ONE task based on priority:
-   - Architectural decisions and core abstractions first
-   - Integration points between modules
-   - Standard features and implementation
-   - Polish and cleanup last
 
-2. Implement the task completely
+### 1. Select ONE Task
+Choose based on priority (HIGH → MEDIUM → LOW). Pick the first uncompleted task unless blocked.
 
-3. Run feedback loops:
+### 2. Implement Completely
+- Keep changes atomic and focused
+- Each task should complete in one context window
+- If task is too large, implement what you can and note limitations
+
+### 3. Run Quality Gates
+{% if feedback_loops -%}
+Before marking complete, ALL must pass:
 {% for name, cmd in feedback_loops.items() -%}
-   - {{ name }}: `{{ cmd }}`
+   - `{{ cmd }}`
 {% endfor %}
+{% else -%}
+No feedback loops configured.
+{% endif %}
 
-4. Mark complete: `afk done <task-id>`
+### 4. Record Learnings
+After completing the task, append discoveries to `.afk/learnings.txt`:
+- Patterns discovered ("this codebase uses X for Y")
+- Gotchas encountered ("do not forget to update Z when changing W")
+- Useful context ("the settings panel is in component X")
 
-5. Commit your changes with a descriptive message
+Run: `afk learn "your learning here"`
+
+### 5. Update AGENTS.md
+If you discovered conventions, patterns, or gotchas that would help future sessions:
+- Add them to the relevant section of AGENTS.md
+- Keep entries concise and actionable
+
+### 6. Complete Task
+```bash
+afk done <task-id> --message "brief description of what was done"
+git add -A && git commit -m "your commit message"
+```
 
 {% for instruction in custom_instructions -%}
 - {{ instruction }}
 {% endfor %}
 
 {% if bootstrap -%}
-## Loop Mode (Bootstrap)
-You are running in autonomous loop mode. After completing this task:
-1. Run `afk done <task-id>` to mark it complete
-2. Run `afk next --bootstrap` to get the next task
-3. Repeat until you see AFK_COMPLETE or AFK_LIMIT_REACHED
+## Autonomous Loop
 
-If you encounter an error, run `afk fail <task-id>` and move to the next task.
+You are running autonomously. After completing this task, the loop will continue automatically.
+If you encounter an unrecoverable error, run `afk fail <task-id> -m "reason"`.
 {% endif %}
 
 {% if stop_signal -%}
@@ -125,6 +152,9 @@ def generate_prompt(
     completed_tasks = progress.get_completed_tasks()
     recently_completed = completed_tasks[-1].id if completed_tasks else None
 
+    # Load recent learnings
+    learnings = get_recent_learnings(max_chars=2000)
+
     context = {
         "iteration": iteration,
         "max_iterations": max_iterations,
@@ -137,6 +167,7 @@ def generate_prompt(
         "custom_instructions": config.prompt.instructions,
         "bootstrap": bootstrap,
         "stop_signal": stop_signal if not can_continue else None,
+        "learnings": learnings,
     }
 
     return template.render(**context)
@@ -166,11 +197,16 @@ _MINIMAL_TEMPLATE = """\
 {% if stop_signal -%}
 {{ stop_signal }}
 {% else -%}
+{% if learnings -%}
+## Learnings
+{{ learnings }}
+
+{% endif -%}
 ## Tasks
 {% for task in tasks -%}
 - {{ task.id }}: {{ task.description }}
 {% endfor %}
 
-Complete ONE task, run `afk done <id>`, commit.
+Complete ONE task → run quality gates → `afk learn "discovery"` → `afk done <id>` → commit.
 {% endif %}
 """
