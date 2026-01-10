@@ -207,7 +207,12 @@ def _detect_sources(root: Path, available_tools: dict[str, bool]) -> list[Source
     if (root / ".beads").is_dir() and available_tools.get("bd"):
         sources.append(SourceConfig(type="beads"))
 
-    # Check for task files
+    # Check for .afk/prd.json first (created by afk prd parse)
+    afk_prd = root / ".afk" / "prd.json"
+    if afk_prd.exists():
+        sources.append(SourceConfig(type="json", path=".afk/prd.json"))
+
+    # Check for task files in project root
     for filename, source_type in TASK_FILES.items():
         if (root / filename).exists():
             sources.append(SourceConfig(type=source_type, path=filename))  # type: ignore[arg-type]

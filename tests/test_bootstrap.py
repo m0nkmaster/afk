@@ -205,6 +205,15 @@ class TestDetectSources:
         sources = _detect_sources(temp_project, {"bd": True})
         assert len(sources) == 3
 
+    def test_afk_prd_json(self, temp_project: Path) -> None:
+        """Test detecting .afk/prd.json created by afk prd parse."""
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "prd.json").write_text('{"tasks": []}')
+        sources = _detect_sources(temp_project, {})
+        assert len(sources) == 1
+        assert sources[0].type == "json"
+        assert sources[0].path == ".afk/prd.json"
+
 
 class TestDetectContextFiles:
     """Tests for _detect_context_files function."""

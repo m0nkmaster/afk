@@ -152,11 +152,17 @@ def _run_zero_config(
             else:
                 console.print("[red]No task sources found.[/red]")
                 console.print()
-                console.print("Create one of:")
-                console.print("  • [cyan]TODO.md[/cyan] - Markdown task list")
-                console.print("  • [cyan]tasks.json[/cyan] - JSON task file")
-                console.print("  • [cyan]prompt.md[/cyan] - Single prompt (ralf.sh style)")
-                console.print("  • [cyan].beads/[/cyan] - Beads issue tracker")
+                console.print("To get started, either:")
+                console.print()
+                console.print("  [bold]Parse a PRD:[/bold]")
+                console.print("    [cyan]afk prd parse requirements.md[/cyan]")
+                console.print("    [dim]Creates .afk/prd.json from your requirements doc[/dim]")
+                console.print()
+                console.print("  [bold]Or create a task file:[/bold]")
+                console.print("    • [cyan]TODO.md[/cyan] - Markdown checklist")
+                console.print("    • [cyan]tasks.json[/cyan] - JSON task file")
+                console.print("    • [cyan]prompt.md[/cyan] - Single prompt (ralf.sh style)")
+                console.print("    • [cyan].beads/[/cyan] - Beads issue tracker")
                 ctx.exit(1)
 
     if dry_run:
