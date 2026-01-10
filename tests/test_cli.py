@@ -288,17 +288,33 @@ class TestFailCommand:
 class TestRunCommand:
     """Tests for run command."""
 
-    def test_run_coming_soon(self, cli_runner: CliRunner, initialized_project: Path) -> None:
-        """Test run shows coming soon message."""
+    def test_run_starts_loop(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test run starts the loop."""
         result = cli_runner.invoke(main, ["run"])
         assert result.exit_code == 0
-        assert "coming soon" in result.output
+        assert "Starting afk loop" in result.output
+        assert "Session Complete" in result.output
 
     def test_run_with_iterations(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test run with custom iteration count."""
         result = cli_runner.invoke(main, ["run", "10"])
         assert result.exit_code == 0
-        assert "10 iterations" in result.output
+        assert "Max iterations: 10" in result.output
+
+    def test_run_not_initialized(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test run fails when not initialized."""
+        result = cli_runner.invoke(main, ["run"])
+        assert "not initialized" in result.output
+
+    def test_run_no_sources(self, cli_runner: CliRunner, temp_afk_dir: Path) -> None:
+        """Test run fails when no sources configured."""
+        # Create empty config
+        from afk.config import AfkConfig
+
+        AfkConfig().save()
+
+        result = cli_runner.invoke(main, ["run"])
+        assert "No sources configured" in result.output
 
 
 class TestPrdCommands:
@@ -399,3 +415,77 @@ class TestPrdCommands:
         assert "Authentication" in result.output
         assert "Dashboard" in result.output
         assert "Password reset" in result.output
+
+
+class TestArchiveCommands:
+    """Tests for archive subcommands."""
+
+    def test_archive_help(self, cli_runner: CliRunner) -> None:
+        """Test archive --help."""
+        result = cli_runner.invoke(main, ["archive", "--help"])
+        assert result.exit_code == 0
+        assert "archive" in result.output.lower()
+
+    def test_archive_create(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test archive create."""
+        # Create progress file
+        progress_file = initialized_project / ".afk" / "progress.json"
+        progress_file.write_text('{"iterations": 3, "tasks": {}}')
+
+        result = cli_runner.invoke(main, ["archive", "create"])
+        assert result.exit_code == 0
+        assert "archived" in result.output.lower()
+
+    def test_archive_create_with_reason(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test archive create with custom reason."""
+        progress_file = initialized_project / ".afk" / "progress.json"
+        progress_file.write_text('{"iterations": 3, "tasks": {}}')
+
+        result = cli_runner.invoke(main, ["archive", "create", "-r", "testing"])
+        assert result.exit_code == 0
+        assert "testing" in result.output
+
+    def test_archive_list_empty(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test archive list with no archives."""
+        result = cli_runner.invoke(main, ["archive", "list"])
+        assert result.exit_code == 0
+        assert "No archives found" in result.output
+
+    def test_archive_list_with_archives(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test archive list with existing archives."""
+        # Create some archives
+        archive_dir = initialized_project / ".afk" / "archive"
+        archive_dir.mkdir(parents=True)
+
+        test_archive = archive_dir / "2026-01-10_12-00-00_main_test"
+        test_archive.mkdir()
+        (test_archive / "metadata.json").write_text(
+            '{"archived_at": "2026-01-10T12:00:00", "reason": "test"}'
+        )
+
+        result = cli_runner.invoke(main, ["archive", "list"])
+        assert result.exit_code == 0
+        assert "2026-01-10" in result.output
+        assert "test" in result.output
+
+    def test_archive_clear(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test archive clear."""
+        progress_file = initialized_project / ".afk" / "progress.json"
+        progress_file.write_text('{"iterations": 3, "tasks": {}}')
+
+        result = cli_runner.invoke(main, ["archive", "clear", "-y"])
+        assert result.exit_code == 0
+        assert "cleared" in result.output.lower()
+        assert not progress_file.exists()
+
+    def test_archive_clear_no_session(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test archive clear with no active session."""
+        result = cli_runner.invoke(main, ["archive", "clear"])
+        assert result.exit_code == 0
+        assert "No active session" in result.output

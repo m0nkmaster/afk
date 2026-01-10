@@ -60,6 +60,23 @@ class PromptConfig(BaseModel):
     instructions: list[str] = Field(default_factory=list)
 
 
+class GitConfig(BaseModel):
+    """Configuration for git integration."""
+
+    auto_commit: bool = False
+    auto_branch: bool = False
+    branch_prefix: str = "afk/"
+    commit_message_template: str = "afk: {task_id} - {message}"
+
+
+class ArchiveConfig(BaseModel):
+    """Configuration for session archiving."""
+
+    enabled: bool = True
+    directory: str = ".afk/archive"
+    on_branch_change: bool = True
+
+
 class AfkConfig(BaseModel):
     """Main configuration for afk."""
 
@@ -69,6 +86,8 @@ class AfkConfig(BaseModel):
     output: OutputConfig = Field(default_factory=OutputConfig)
     ai_cli: AiCliConfig = Field(default_factory=AiCliConfig)
     prompt: PromptConfig = Field(default_factory=PromptConfig)
+    git: GitConfig = Field(default_factory=GitConfig)
+    archive: ArchiveConfig = Field(default_factory=ArchiveConfig)
 
     @classmethod
     def load(cls, path: Path | None = None) -> AfkConfig:
@@ -100,3 +119,4 @@ AFK_DIR = Path(".afk")
 CONFIG_FILE = AFK_DIR / "config.json"
 PROGRESS_FILE = AFK_DIR / "progress.json"
 PROMPT_FILE = AFK_DIR / "prompt.md"
+ARCHIVE_DIR = AFK_DIR / "archive"

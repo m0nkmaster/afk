@@ -9,10 +9,13 @@ import pytest
 
 from afk.config import (
     AFK_DIR,
+    ARCHIVE_DIR,
     CONFIG_FILE,
     AfkConfig,
     AiCliConfig,
+    ArchiveConfig,
     FeedbackLoopsConfig,
+    GitConfig,
     LimitsConfig,
     OutputConfig,
     PromptConfig,
@@ -172,6 +175,8 @@ class TestAfkConfig:
         assert isinstance(config.output, OutputConfig)
         assert isinstance(config.ai_cli, AiCliConfig)
         assert isinstance(config.prompt, PromptConfig)
+        assert isinstance(config.git, GitConfig)
+        assert isinstance(config.archive, ArchiveConfig)
 
     def test_load_missing_file(self, temp_project: Path) -> None:
         """Test loading returns defaults when file doesn't exist."""
@@ -244,6 +249,53 @@ class TestAfkConfig:
         assert loaded.limits.max_iterations == 15
 
 
+class TestGitConfig:
+    """Tests for GitConfig model."""
+
+    def test_defaults(self) -> None:
+        """Test default values."""
+        config = GitConfig()
+        assert config.auto_commit is False
+        assert config.auto_branch is False
+        assert config.branch_prefix == "afk/"
+        assert config.commit_message_template == "afk: {task_id} - {message}"
+
+    def test_enabled_config(self) -> None:
+        """Test git config with features enabled."""
+        config = GitConfig(
+            auto_commit=True,
+            auto_branch=True,
+            branch_prefix="feature/",
+            commit_message_template="[{task_id}] {message}",
+        )
+        assert config.auto_commit is True
+        assert config.auto_branch is True
+        assert config.branch_prefix == "feature/"
+        assert config.commit_message_template == "[{task_id}] {message}"
+
+
+class TestArchiveConfig:
+    """Tests for ArchiveConfig model."""
+
+    def test_defaults(self) -> None:
+        """Test default values."""
+        config = ArchiveConfig()
+        assert config.enabled is True
+        assert config.directory == ".afk/archive"
+        assert config.on_branch_change is True
+
+    def test_disabled_config(self) -> None:
+        """Test archive config with archiving disabled."""
+        config = ArchiveConfig(
+            enabled=False,
+            directory=".archive",
+            on_branch_change=False,
+        )
+        assert config.enabled is False
+        assert config.directory == ".archive"
+        assert config.on_branch_change is False
+
+
 class TestModulePaths:
     """Tests for module-level path constants."""
 
@@ -254,3 +306,7 @@ class TestModulePaths:
     def test_config_file(self) -> None:
         """Test CONFIG_FILE constant."""
         assert CONFIG_FILE == Path(".afk/config.json")
+
+    def test_archive_dir(self) -> None:
+        """Test ARCHIVE_DIR constant."""
+        assert ARCHIVE_DIR == Path(".afk/archive")

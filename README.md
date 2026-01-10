@@ -116,6 +116,17 @@ Configuration lives in `.afk/config.json`:
       "Follow the coding style in AGENTS.md",
       "Always run tests before marking done"
     ]
+  },
+  "git": {
+    "auto_commit": true,
+    "auto_branch": true,
+    "branch_prefix": "afk/",
+    "commit_message_template": "afk: {task_id} - {message}"
+  },
+  "archive": {
+    "enabled": true,
+    "directory": ".afk/archive",
+    "on_branch_change": true
   }
 }
 ```
@@ -171,10 +182,53 @@ Generates a prompt that teaches the AI to call `afk` commands itself, creating a
 ### Wrapper (afk run)
 
 ```bash
-afk run 5
+afk run 5                        # Run 5 iterations
+afk run 10 --branch my-feature   # Create feature branch first
+afk run --until-complete         # Run until all tasks done
+afk run --timeout 60             # 60 minute timeout
 ```
 
-afk spawns your configured AI CLI directly and manages the loop.
+afk spawns your configured AI CLI directly and manages the loop. Each iteration gets **fresh context** — memory persists only via git history, `progress.json`, and task sources. This is essential to the Ralph Wiggum pattern.
+
+## Git Integration
+
+Enable automatic git operations in config:
+
+```json
+{
+  "git": {
+    "auto_commit": true,
+    "auto_branch": true,
+    "branch_prefix": "afk/",
+    "commit_message_template": "afk: {task_id} - {message}"
+  }
+}
+```
+
+- **auto_commit**: Automatically commit after each task completion
+- **auto_branch**: Create feature branches with `--branch` flag
+- **branch_prefix**: Prefix for auto-created branches (default: `afk/`)
+
+## Session Archiving
+
+afk archives sessions for later reference:
+
+```bash
+afk archive create              # Manually archive current session
+afk archive create -r "done"    # Archive with custom reason
+afk archive list                # List all archives
+afk archive clear               # Archive and clear current session
+```
+
+Archives are stored in `.afk/archive/` with timestamps and include:
+- `progress.json` - Task completion state
+- `prompt.md` - Last generated prompt
+- `metadata.json` - Archive context (branch, reason, timestamp)
+
+Archiving happens automatically:
+- When starting a new `afk run` with existing progress
+- On branch changes (if `on_branch_change: true`)
+- When session completes
 
 ## Limits & Safety
 
@@ -188,7 +242,9 @@ When limits are reached, `afk next` returns `AFK_LIMIT_REACHED` or `AFK_COMPLETE
 
 - [Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum) by Matt Pocock
 - [ghuntley.com/ralph](https://ghuntley.com/ralph/)
+- [snarktank/ralph](https://github.com/snarktank/ralph) - Ryan Carson's Ralph implementation
 - [Beads](https://github.com/steveyegge/beads)
+- [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) by Anthropic
 
 ## License
 

@@ -170,6 +170,32 @@ def status(ctx: click.Context) -> None:
     limits_table.add_row("Timeout", f"{config.limits.timeout_minutes} minutes")
 
     console.print(limits_table)
+    console.print()
+
+    # Git config
+    git_table = Table(title="Git Integration", show_header=True)
+    git_table.add_column("Setting", style="cyan")
+    git_table.add_column("Value", style="white")
+    commit_icon = "[green]✓[/green]" if config.git.auto_commit else "[dim]✗[/dim]"
+    branch_icon = "[green]✓[/green]" if config.git.auto_branch else "[dim]✗[/dim]"
+    git_table.add_row("Auto-commit", commit_icon)
+    git_table.add_row("Auto-branch", branch_icon)
+    git_table.add_row("Branch prefix", config.git.branch_prefix)
+
+    console.print(git_table)
+    console.print()
+
+    # Archive config
+    archive_table = Table(title="Archiving", show_header=True)
+    archive_table.add_column("Setting", style="cyan")
+    archive_table.add_column("Value", style="white")
+    enabled_icon = "[green]✓[/green]" if config.archive.enabled else "[dim]✗[/dim]"
+    on_change_icon = "[green]✓[/green]" if config.archive.on_branch_change else "[dim]✗[/dim]"
+    archive_table.add_row("Enabled", enabled_icon)
+    archive_table.add_row("Directory", config.archive.directory)
+    archive_table.add_row("On branch change", on_change_icon)
+
+    console.print(archive_table)
 
 
 @main.group()
@@ -353,22 +379,153 @@ def fail(ctx: click.Context, task_id: str, message: str | None) -> None:
 
 @main.command()
 @click.argument("iterations", type=int, default=5)
-@click.option("--until-complete", is_flag=True, help="Run until all tasks complete")
-@click.option("--timeout", type=int, help="Override timeout in minutes")
+@click.option("--until-complete", "-u", is_flag=True, help="Run until all tasks complete")
+@click.option("--timeout", "-t", type=int, help="Override timeout in minutes")
+@click.option("--branch", "-b", help="Create/checkout feature branch")
 @click.pass_context
 def run(
     ctx: click.Context,
     iterations: int,
     until_complete: bool,
     timeout: int | None,
+    branch: str | None,
 ) -> None:
-    """Run multiple iterations using configured AI CLI."""
+    """Run multiple iterations using configured AI CLI.
+
+    Implements the Ralph Wiggum pattern: each iteration spawns a fresh
+    AI CLI instance with clean context. Memory persists via git history,
+    progress.json, and task sources.
+
+    Examples:
+
+        afk run 10                    # Run up to 10 iterations
+
+        afk run --until-complete      # Run until all tasks done
+
+        afk run 5 --branch my-feature # Create branch first
+
+        afk run --timeout 60          # 60 minute timeout
+    """
+    from afk.runner import run_loop
+
     config: AfkConfig = ctx.obj["config"]
 
-    console.print(
-        f"[yellow]Running {iterations} iterations with {config.ai_cli.command}...[/yellow]"
+    if not AFK_DIR.exists():
+        console.print("[red]afk not initialized.[/red] Run [cyan]afk init[/cyan] first.")
+        return
+
+    if not config.sources:
+        console.print("[red]No sources configured.[/red] Run [cyan]afk source add[/cyan] first.")
+        return
+
+    # Run the autonomous loop
+    run_loop(
+        config=config,
+        max_iterations=iterations,
+        branch=branch,
+        until_complete=until_complete,
+        timeout_override=timeout,
     )
-    console.print("[dim]This feature is coming soon.[/dim]")
+
+
+@main.group()
+def archive() -> None:
+    """Manage session archives."""
+    pass
+
+
+@archive.command("create")
+@click.option("--reason", "-r", default="manual", help="Reason for archiving")
+@click.pass_context
+def archive_create(ctx: click.Context, reason: str) -> None:
+    """Archive current session.
+
+    Saves progress.json and prompt.md to a timestamped directory
+    for later reference or recovery.
+    """
+    from afk.git_ops import archive_session
+
+    config: AfkConfig = ctx.obj["config"]
+
+    archive_path = archive_session(config, reason=reason)
+
+    if archive_path:
+        console.print(f"[green]Session archived to:[/green] {archive_path}")
+    else:
+        console.print("[yellow]Archiving disabled in config.[/yellow]")
+
+
+@archive.command("list")
+@click.pass_context
+def archive_list(ctx: click.Context) -> None:
+    """List archived sessions."""
+
+    config: AfkConfig = ctx.obj["config"]
+    archive_dir = Path(config.archive.directory)
+
+    if not archive_dir.exists():
+        console.print("[dim]No archives found.[/dim]")
+        return
+
+    archives = sorted(archive_dir.iterdir(), reverse=True)
+
+    if not archives:
+        console.print("[dim]No archives found.[/dim]")
+        return
+
+    table = Table(title="Session Archives", show_header=True)
+    table.add_column("Archive", style="cyan")
+    table.add_column("Date", style="white")
+    table.add_column("Reason", style="dim")
+
+    for archive_path in archives[:20]:  # Show last 20
+        if archive_path.is_dir():
+            metadata_file = archive_path / "metadata.json"
+            if metadata_file.exists():
+                import json
+
+                with open(metadata_file) as f:
+                    metadata = json.load(f)
+                table.add_row(
+                    archive_path.name,
+                    metadata.get("archived_at", "?")[:19],
+                    metadata.get("reason", "?"),
+                )
+            else:
+                table.add_row(archive_path.name, "?", "?")
+
+    console.print(table)
+
+
+@archive.command("clear")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation")
+@click.pass_context
+def archive_clear(ctx: click.Context, yes: bool) -> None:
+    """Clear current session progress.
+
+    Removes progress.json to start fresh. Optionally archives first.
+    """
+    from afk.config import PROGRESS_FILE
+    from afk.git_ops import archive_session, clear_session
+
+    config: AfkConfig = ctx.obj["config"]
+
+    if not PROGRESS_FILE.exists():
+        console.print("[dim]No active session.[/dim]")
+        return
+
+    if not yes:
+        if not click.confirm("Archive and clear current session?", default=True):
+            console.print("[dim]Cancelled.[/dim]")
+            return
+
+    # Archive first
+    archive_path = archive_session(config, reason="cleared")
+    if archive_path:
+        console.print(f"[dim]Archived to: {archive_path}[/dim]")
+
+    clear_session()
+    console.print("[green]Session cleared.[/green]")
 
 
 if __name__ == "__main__":

@@ -59,6 +59,9 @@ Tests are organised by module:
 - `tests/test_prompt.py` - Prompt generation
 - `tests/test_output.py` - Output handlers
 - `tests/test_cli.py` - CLI commands
+- `tests/test_git_ops.py` - Git operations
+- `tests/test_runner.py` - Autonomous loop runner
+- `tests/test_prd.py` - PRD parsing
 - `tests/test_sources*.py` - Task source adapters
 
 ### Writing Tests
@@ -84,6 +87,9 @@ src/afk/
 ├── progress.py      # Session and task progress tracking
 ├── prompt.py        # Jinja2 prompt generation
 ├── output.py        # Output handlers (clipboard, file, stdout)
+├── prd.py           # PRD parsing prompt generation
+├── runner.py        # Autonomous loop runner (Ralph pattern)
+├── git_ops.py       # Git operations (branch, commit, archive)
 └── sources/         # Task source adapters
     ├── beads.py     # Beads (bd) integration
     ├── json_prd.py  # JSON PRD files
@@ -97,6 +103,9 @@ src/afk/
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations and task status
 - **Sources**: Pluggable adapters that return `List[Task]`
 - **Prompts**: Jinja2 templates, customizable via config
+- **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
+- **Fresh Context**: Each iteration gets clean context; memory persists via git + progress file
+- **Archiving**: Sessions archived on completion, branch change, or manually
 
 ## Adding a New Task Source
 
