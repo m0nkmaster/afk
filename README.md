@@ -74,14 +74,25 @@ A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs yo
 ## Quick Start
 
 ```bash
-# Easiest: one command to start
-afk start
+# Zero-config: parse a PRD and go
+afk prd parse requirements.md    # Creates .afk/prd.json
+afk go                           # Runs the loop (auto-detects everything)
 
-# Or step by step:
-afk init                      # Auto-detect project settings
-afk source add beads          # Add task source
-afk run 10                    # Run 10 iterations
+# Or with explicit sources:
+afk init                         # Auto-detect project settings
+afk source add beads             # Add task source
+afk run 10                       # Run 10 iterations
 ```
+
+### How `afk go` Works
+
+`afk go` is the zero-config entry point:
+
+1. **If `.afk/prd.json` exists with tasks** → uses it directly as the source of truth
+2. **If no PRD but sources detected** (TODO.md, beads, etc.) → syncs from those
+3. **If nothing found** → shows helpful error with next steps
+
+This means you can just drop a `prd.json` in `.afk/` and run `afk go` — no configuration needed.
 
 ## Installation
 
@@ -102,6 +113,11 @@ pip install -e ".[dev]"
 ### Core Loop
 
 ```bash
+afk go                     # Zero-config: auto-detect and run 10 iterations
+afk go 20                  # Run 20 iterations
+afk go -u                  # Run until all tasks complete
+afk go TODO.md 5           # Use specific source, run 5 iterations
+
 afk start [N]              # Init if needed + run N iterations (default: 10)
 afk run [N]                # Run N iterations with configured AI CLI
 afk run --until-complete   # Run until all tasks done
@@ -146,11 +162,15 @@ afk source remove 1
 
 ### PRD Parsing
 
+Convert a requirements document into structured tasks:
+
 ```bash
-afk prd parse requirements.md        # Generate parsing prompt
-afk prd parse PRD.md --copy          # Copy to clipboard
+afk prd parse requirements.md        # Generate prompt, creates .afk/prd.json
+afk prd parse PRD.md --copy          # Copy prompt to clipboard
 afk prd parse PRD.md -o tasks.json   # Custom output path
 ```
+
+After parsing, `.afk/prd.json` becomes the source of truth. Run `afk go` to start working through the tasks.
 
 ### Session Management
 

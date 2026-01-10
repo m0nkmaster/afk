@@ -89,6 +89,7 @@ src/afk/
 ├── prompt.py        # Jinja2 prompt generation
 ├── output.py        # Output handlers (clipboard, file, stdout)
 ├── prd.py           # PRD parsing prompt generation
+├── prd_store.py     # PRD storage, sync, and task aggregation
 ├── runner.py        # Autonomous loop runner (Ralph pattern)
 ├── git_ops.py       # Git operations (branch, commit, archive)
 └── sources/         # Task source adapters
@@ -101,9 +102,10 @@ src/afk/
 ## Key Patterns
 
 - **Config**: All settings in `.afk/config.json`, loaded via Pydantic models
+- **PRD File**: `.afk/prd.json` is the working task list; used directly if no sources configured
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations and task status
 - **Learnings**: Append-only discoveries in `.afk/learnings.txt`, survives session clears
-- **Sources**: Pluggable adapters that return `List[Task]`
+- **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into prd.json
 - **Prompts**: Jinja2 templates, customizable via config
 - **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress + learnings
@@ -113,6 +115,8 @@ src/afk/
 ## Key Commands
 
 ```bash
+afk go                 # Zero-config: auto-detect PRD/sources and run
+afk go 20              # Run 20 iterations
 afk start              # Init if needed + run loop
 afk run N              # Run N iterations
 afk explain            # Debug current loop state
@@ -122,6 +126,17 @@ afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task
 afk next               # Preview next prompt
 ```
+
+## PRD Workflow
+
+The recommended workflow for new projects:
+
+```bash
+afk prd parse requirements.md   # Creates .afk/prd.json
+afk go                          # Starts working through tasks
+```
+
+When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` uses it directly as the source of truth — no configuration required.
 
 ## Adding a New Task Source
 
