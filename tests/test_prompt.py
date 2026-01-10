@@ -198,8 +198,13 @@ class TestGeneratePrompt:
         # High priority (priority=1) should be shown as next
         assert "high" in prompt
 
-    def test_stop_signal_when_limit_reached(self, temp_afk_dir: Path) -> None:
-        """Test stop signal when iteration limit reached."""
+    def test_no_stop_signal_for_limits(self, temp_afk_dir: Path) -> None:
+        """Test that prompt does NOT include limit signals.
+        
+        Limit checking is handled by the loop controller, not the prompt.
+        This follows the Ralph pattern where the harness controls iterations
+        and the AI only knows about task completion.
+        """
         from afk.prd_store import PrdDocument, UserStory, save_prd
         from afk.progress import SessionProgress
 
@@ -211,15 +216,19 @@ class TestGeneratePrompt:
         )
         save_prd(prd)
 
+        # Even with iterations >= max_iterations, prompt should NOT include limit signal
         progress = SessionProgress()
-        progress.iterations = 5
+        progress.iterations = 100  # Way over any limit
         progress.save()
 
         config = AfkConfig(limits=LimitsConfig(max_iterations=5))
         config.save()
 
         prompt = generate_prompt(config)
-        assert "AFK_LIMIT_REACHED" in prompt
+        # No limit signal - that's the harness's job
+        assert "AFK_LIMIT_REACHED" not in prompt
+        # Should still show iteration count for display
+        assert "Iteration:" in prompt
 
     def test_stop_signal_when_complete(self, temp_afk_dir: Path) -> None:
         """Test stop signal when all stories complete."""

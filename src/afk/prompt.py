@@ -7,7 +7,7 @@ from jinja2 import BaseLoader, Environment
 from afk.config import AfkConfig
 from afk.learnings import get_recent_learnings
 from afk.prd_store import all_stories_complete, get_pending_stories, load_prd
-from afk.progress import SessionProgress, check_limits
+from afk.progress import SessionProgress
 
 DEFAULT_TEMPLATE = """\
 # afk Autonomous Agent
@@ -98,7 +98,11 @@ def generate_prompt(
     bootstrap: bool = False,
     limit_override: int | None = None,
 ) -> str:
-    """Generate the prompt for the next iteration."""
+    """Generate the prompt for the next iteration.
+    
+    Note: Limit checking is handled by the loop controller, not here.
+    This function only checks for story completion to include the stop signal.
+    """
     # Load progress
     progress = SessionProgress.load()
 
@@ -108,20 +112,15 @@ def generate_prompt(
     total_stories = len(prd.userStories)
     completed_count = total_stories - len(pending_stories)
 
-    # Check limits
+    # Max iterations for display only (limit enforcement is in loop controller)
     max_iterations = limit_override or config.limits.max_iterations
-    can_continue, stop_signal = check_limits(
-        max_iterations=max_iterations,
-        max_failures=config.limits.max_task_failures,
-        total_tasks=total_stories,
-    )
-
-    # Check if all stories are complete
+    
+    # Check if all stories are complete (this is the only stop condition here)
+    stop_signal = None
     if all_stories_complete(prd):
         stop_signal = "AFK_COMPLETE - All stories have passes: true"
-        can_continue = False
 
-    # Increment iteration (even if we're about to stop, for tracking)
+    # Increment iteration for tracking
     iteration = progress.increment_iteration()
 
     # Build feedback loops dict (filter out None values)
@@ -159,7 +158,7 @@ def generate_prompt(
         "feedback_loops": feedback_loops,
         "custom_instructions": config.prompt.instructions,
         "bootstrap": bootstrap,
-        "stop_signal": stop_signal if not can_continue else None,
+        "stop_signal": stop_signal,
         "learnings": learnings,
     }
 
