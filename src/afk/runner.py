@@ -556,6 +556,11 @@ class LoopController:
                 if should_break:
                     break
 
+                # Mark current task as in_progress in progress.json
+                pending = get_pending_stories(prd)
+                if pending:
+                    self._mark_task_in_progress(pending[0])
+
                 # Run iteration
                 iteration_num = iterations_completed + 1
                 result = self.iteration_runner.run(iteration_num)
@@ -570,7 +575,7 @@ class LoopController:
 
                 iterations_completed += 1
 
-                # Check for newly completed stories
+                # Check for newly completed stories and update progress.json
                 tasks_completed_this_session += self._check_story_completion(prd)
                 prd = load_prd()
 
@@ -673,15 +678,37 @@ class LoopController:
 
         return StopReason.COMPLETE, False
 
+    def _mark_task_in_progress(self, story: object) -> None:
+        """Mark a task as in_progress in progress.json."""
+        progress = SessionProgress.load()
+        progress.set_task_status(
+            task_id=story.id,
+            status="in_progress",
+            source=story.source,
+        )
+
     def _check_story_completion(self, old_prd: object) -> int:
         """Check for newly completed stories and run quality gates."""
         new_prd = load_prd()
-        new_completed = sum(1 for s in new_prd.userStories if s.passes)
-        old_completed = sum(1 for s in old_prd.userStories if s.passes)
 
-        if new_completed > old_completed:
-            newly_done = new_completed - old_completed
-            self.output.success(f"✓ {newly_done} story/stories marked complete")
+        # Find stories that newly passed
+        old_passed_ids = {s.id for s in old_prd.userStories if s.passes}
+        newly_completed = [
+            s for s in new_prd.userStories
+            if s.passes and s.id not in old_passed_ids
+        ]
+
+        if newly_completed:
+            self.output.success(f"✓ {len(newly_completed)} story/stories marked complete")
+
+            # Update progress.json with completed tasks
+            progress = SessionProgress.load()
+            for story in newly_completed:
+                progress.set_task_status(
+                    task_id=story.id,
+                    status="completed",
+                    source=story.source,
+                )
 
             self.output.info("Verifying quality gates...")
             gate_result = run_quality_gates(self.config.feedback_loops)
@@ -693,7 +720,7 @@ class LoopController:
             else:
                 self.output.success("✓ All quality gates passed")
 
-            return newly_done
+            return len(newly_completed)
 
         return 0
 

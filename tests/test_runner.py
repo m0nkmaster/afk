@@ -11,6 +11,7 @@ from afk.runner import (
     COMPLETION_SIGNALS,
     IterationResult,
     IterationRunner,
+    QualityGateResult,
     RunResult,
     StopReason,
     _contains_completion_signal,
@@ -356,6 +357,107 @@ class TestRunLoop:
 
         # Empty PRD means all complete
         assert result.stop_reason == StopReason.COMPLETE
+
+
+class TestTaskProgressTracking:
+    """Tests for task progress tracking in the runner."""
+
+    def test_marks_task_in_progress_before_iteration(self, temp_afk_dir: Path) -> None:
+        """Test that current task is marked in_progress before running."""
+        from afk.prd_store import PrdDocument, UserStory
+        from afk.progress import SessionProgress
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+            archive=ArchiveConfig(enabled=False),
+        )
+
+        mock_prd = PrdDocument(
+            userStories=[
+                UserStory(
+                    id="story-1",
+                    title="Test Story",
+                    description="Test",
+                    passes=False,
+                    source="test",
+                )
+            ]
+        )
+
+        with patch("afk.runner.sync_prd", return_value=mock_prd):
+            with patch("afk.runner.load_prd", return_value=mock_prd):
+                with patch("afk.runner.all_stories_complete", return_value=False):
+                    with patch("afk.runner.get_pending_stories", return_value=mock_prd.userStories):
+                        with patch("afk.runner.check_limits") as mock_limits:
+                            # Stop after first iteration
+                            mock_limits.side_effect = [
+                                (True, None),
+                                (False, "AFK_COMPLETE"),
+                            ]
+                            with patch.object(IterationRunner, "run") as mock_run:
+                                mock_run.return_value = IterationResult(success=True)
+
+                                run_loop(config, max_iterations=1)
+
+        # Verify task was marked in_progress
+        progress = SessionProgress.load(temp_afk_dir / "progress.json")
+        assert "story-1" in progress.tasks
+        assert progress.tasks["story-1"].status == "in_progress"
+        assert progress.tasks["story-1"].source == "test"
+
+    def test_marks_task_completed_when_story_passes(self, temp_afk_dir: Path) -> None:
+        """Test that _check_story_completion marks tasks as completed."""
+        from afk.prd_store import PrdDocument, UserStory
+        from afk.progress import SessionProgress
+        from afk.runner import LoopController
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+            archive=ArchiveConfig(enabled=False),
+        )
+
+        # Initial PRD with pending story
+        old_prd = PrdDocument(
+            userStories=[
+                UserStory(
+                    id="story-1",
+                    title="Test Story",
+                    description="Test",
+                    passes=False,
+                    source="json:test.json",
+                )
+            ]
+        )
+
+        # PRD after AI marks it complete
+        new_prd = PrdDocument(
+            userStories=[
+                UserStory(
+                    id="story-1",
+                    title="Test Story",
+                    description="Test",
+                    passes=True,
+                    source="json:test.json",
+                )
+            ]
+        )
+
+        controller = LoopController(config)
+
+        with patch("afk.runner.load_prd", return_value=new_prd):
+            with patch("afk.runner.run_quality_gates") as mock_gates:
+                mock_gates.return_value = QualityGateResult(
+                    passed=True, failed_gates=[], output={}
+                )
+                completed_count = controller._check_story_completion(old_prd)
+
+        assert completed_count == 1
+
+        # Verify task was marked completed in progress.json
+        progress = SessionProgress.load(temp_afk_dir / "progress.json")
+        assert "story-1" in progress.tasks
+        assert progress.tasks["story-1"].status == "completed"
+        assert progress.tasks["story-1"].completed_at is not None
 
 
 class TestRunLoopIntegration:
