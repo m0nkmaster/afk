@@ -10,6 +10,7 @@ from afk.config import AfkConfig, AiCliConfig, ArchiveConfig, GitConfig, LimitsC
 from afk.runner import (
     COMPLETION_SIGNALS,
     IterationResult,
+    IterationRunner,
     RunResult,
     StopReason,
     _contains_completion_signal,
@@ -112,13 +113,15 @@ class TestRunIteration:
             with patch("subprocess.Popen") as mock_popen:
                 mock_process = MagicMock()
                 mock_process.returncode = 0
-                mock_process.communicate.return_value = ("Output", None)
+                # Mock streaming readline - returns lines then empty string to stop
+                mock_process.stdout.readline.side_effect = ["Output\n", ""]
+                mock_process.stdin = MagicMock()
                 mock_popen.return_value = mock_process
 
                 result = run_iteration(config, iteration=1)
 
         assert result.success is True
-        assert result.output == "Output"
+        assert "Output" in result.output
         mock_popen.assert_called_once()
 
     def test_handles_ai_cli_not_found(self, temp_afk_dir: Path) -> None:
@@ -139,7 +142,7 @@ class TestRunIteration:
         assert "not found" in result.error
 
     def test_handles_timeout(self, temp_afk_dir: Path) -> None:
-        """Test handles iteration timeout."""
+        """Test handles iteration timeout (non-streaming mode)."""
         config = AfkConfig(
             ai_cli=AiCliConfig(command="sleep", args=["100"]),
             limits=LimitsConfig(timeout_minutes=1),
@@ -150,13 +153,15 @@ class TestRunIteration:
 
             with patch("subprocess.Popen") as mock_popen:
                 mock_process = MagicMock()
+                mock_process.stdout = None  # Disable streaming to use communicate()
+                mock_process.stdin = MagicMock()
                 mock_process.communicate.side_effect = subprocess.TimeoutExpired(
                     cmd="sleep", timeout=60
                 )
                 mock_process.kill = MagicMock()
                 mock_popen.return_value = mock_process
 
-                result = run_iteration(config, iteration=1)
+                result = run_iteration(config, iteration=1, stream=False)
 
         assert result.success is False
         assert "timed out" in result.error
@@ -166,20 +171,25 @@ class TestRunLoop:
     """Tests for run_loop function."""
 
     def test_stops_when_no_tasks(self, temp_afk_dir: Path) -> None:
-        """Test stops immediately when no tasks available."""
+        """Test stops immediately when no pending stories."""
+        from afk.prd_store import PrdDocument
+
         config = AfkConfig()
 
-        with patch("afk.runner.aggregate_tasks") as mock_tasks:
-            mock_tasks.return_value = []
+        # Empty PRD = all complete
+        empty_prd = PrdDocument(userStories=[])
 
+        with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.archive_session"):
                 result = run_loop(config, max_iterations=5)
 
-        assert result.stop_reason == StopReason.NO_TASKS
+        assert result.stop_reason == StopReason.COMPLETE
         assert result.iterations_completed == 0
 
     def test_respects_max_iterations(self, temp_afk_dir: Path) -> None:
         """Test respects max_iterations limit."""
+        from afk.prd_store import PrdDocument, UserStory
+
         config = AfkConfig(
             ai_cli=AiCliConfig(command="echo", args=[]),
             archive=ArchiveConfig(enabled=False),
@@ -193,34 +203,39 @@ class TestRunLoop:
                 return IterationResult(success=True, error="AFK_COMPLETE")
             return IterationResult(success=True)
 
-        with patch("afk.runner.aggregate_tasks") as mock_tasks:
-            mock_tasks.return_value = [MagicMock(id="task-1")]
+        mock_prd = PrdDocument(
+            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
+        )
 
-            with patch("afk.runner.check_limits") as mock_limits:
-                # Allow first 2 iterations, then signal complete
-                mock_limits.side_effect = [
-                    (True, None),
-                    (True, None),
-                    (False, "AFK_COMPLETE: All tasks finished"),
-                ]
+        with patch("afk.runner.sync_prd", return_value=mock_prd):
+            with patch("afk.runner.load_prd", return_value=mock_prd):
+                with patch("afk.runner.check_limits") as mock_limits:
+                    # Allow first 2 iterations, then signal complete
+                    mock_limits.side_effect = [
+                        (True, None),
+                        (True, None),
+                        (False, "AFK_COMPLETE: All tasks finished"),
+                    ]
 
-                with patch("afk.runner.run_iteration", side_effect=mock_run_iteration):
-                    with patch("afk.runner.SessionProgress"):
-                        result = run_loop(config, max_iterations=10)
+                    with patch.object(IterationRunner, "run", side_effect=mock_run_iteration):
+                        with patch("afk.runner.SessionProgress"):
+                            result = run_loop(config, max_iterations=10)
 
         assert result.stop_reason == StopReason.COMPLETE
 
     def test_archives_previous_session(self, temp_afk_dir: Path) -> None:
         """Test archives previous session before starting."""
+        from afk.prd_store import PrdDocument
+
         config = AfkConfig(archive=ArchiveConfig(enabled=True))
 
         # Create progress file
         progress_file = temp_afk_dir / "progress.json"
         progress_file.write_text('{"iterations": 5, "tasks": {}}')
 
-        with patch("afk.runner.aggregate_tasks") as mock_tasks:
-            mock_tasks.return_value = []
+        empty_prd = PrdDocument(userStories=[])
 
+        with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.archive_session") as mock_archive:
                 mock_archive.return_value = Path(".afk/archive/test")
 
@@ -297,14 +312,16 @@ class TestRunLoop:
         self, temp_afk_dir: Path, mock_subprocess_run: MagicMock
     ) -> None:
         """Test creates feature branch when specified."""
+        from afk.prd_store import PrdDocument
+
         config = AfkConfig(
             git=GitConfig(auto_branch=True, branch_prefix="afk/"),
             archive=ArchiveConfig(enabled=False),
         )
 
-        with patch("afk.runner.aggregate_tasks") as mock_tasks:
-            mock_tasks.return_value = []
+        empty_prd = PrdDocument(userStories=[])
 
+        with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.create_branch") as mock_branch:
                 with patch("afk.runner.SessionProgress") as mock_progress:
                     mock_progress.load.return_value = MagicMock(iterations=0)
@@ -313,17 +330,19 @@ class TestRunLoop:
 
         mock_branch.assert_called_once_with("my-feature", config)
 
-    def test_auto_commits_on_task_completion(self, temp_afk_dir: Path) -> None:
-        """Test auto-commits when task is completed."""
+    def test_completes_when_all_stories_pass(self, temp_afk_dir: Path) -> None:
+        """Test loop completes when all stories have passes: true."""
+        from afk.prd_store import PrdDocument
+
         config = AfkConfig(
             git=GitConfig(auto_commit=True),
             archive=ArchiveConfig(enabled=False),
             ai_cli=AiCliConfig(command="echo", args=[]),
         )
 
-        with patch("afk.runner.aggregate_tasks") as mock_tasks:
-            mock_tasks.return_value = [MagicMock(id="task-1")]
+        empty_prd = PrdDocument(userStories=[])
 
+        with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.check_limits") as mock_limits:
                 mock_limits.return_value = (False, "AFK_COMPLETE")
 
@@ -333,11 +352,10 @@ class TestRunLoop:
                     mock_session.get_completed_tasks.return_value = []
                     mock_progress.load.return_value = mock_session
 
-                    with patch("afk.runner.auto_commit"):
-                        run_loop(config, max_iterations=5)
+                    result = run_loop(config, max_iterations=5)
 
-        # auto_commit is only called when there are newly completed tasks
-        # In this case there are none, so it shouldn't be called
+        # Empty PRD means all complete
+        assert result.stop_reason == StopReason.COMPLETE
 
 
 class TestRunLoopIntegration:
@@ -345,15 +363,13 @@ class TestRunLoopIntegration:
 
     def test_full_loop_with_mocked_ai(self, temp_afk_dir: Path) -> None:
         """Test a full loop with mocked AI responses."""
+        from afk.prd_store import PrdDocument, UserStory
+
         config = AfkConfig(
             ai_cli=AiCliConfig(command="echo", args=[]),
             archive=ArchiveConfig(enabled=False),
             limits=LimitsConfig(max_iterations=3),
         )
-
-        # Create a simple task source
-        tasks_file = temp_afk_dir.parent / "tasks.json"
-        tasks_file.write_text('{"tasks": [{"id": "task-1", "description": "Test task"}]}')
 
         call_count = [0]
 
@@ -363,20 +379,25 @@ class TestRunLoopIntegration:
                 return (False, "AFK_COMPLETE: All tasks finished")
             return (True, None)
 
-        with patch("afk.runner.aggregate_tasks") as mock_tasks:
-            mock_tasks.return_value = [MagicMock(id="task-1")]
+        mock_prd = PrdDocument(
+            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
+        )
 
-            with patch("afk.runner.check_limits", side_effect=mock_check_limits):
-                with patch("afk.runner.run_iteration") as mock_iteration:
-                    mock_iteration.return_value = IterationResult(success=True)
+        with patch("afk.runner.sync_prd", return_value=mock_prd):
+            with patch("afk.runner.load_prd", return_value=mock_prd):
+                with patch("afk.runner.all_stories_complete", return_value=False):
+                    with patch("afk.runner.get_pending_stories", return_value=mock_prd.userStories):
+                        with patch("afk.runner.check_limits", side_effect=mock_check_limits):
+                            with patch.object(IterationRunner, "run") as mock_iteration:
+                                mock_iteration.return_value = IterationResult(success=True)
 
-                    with patch("afk.runner.SessionProgress") as mock_progress:
-                        mock_session = MagicMock()
-                        mock_session.iterations = 0
-                        mock_session.get_completed_tasks.return_value = []
-                        mock_progress.load.return_value = mock_session
+                                with patch("afk.runner.SessionProgress") as mock_progress:
+                                    mock_session = MagicMock()
+                                    mock_session.iterations = 0
+                                    mock_session.get_completed_tasks.return_value = []
+                                    mock_progress.load.return_value = mock_session
 
-                        result = run_loop(config, max_iterations=3)
+                                    result = run_loop(config, max_iterations=3)
 
         assert result.stop_reason == StopReason.COMPLETE
         assert result.iterations_completed == 1
@@ -425,7 +446,9 @@ class TestRunPromptOnly:
 
         with patch("subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
-            mock_process.communicate.return_value = ("output", None)
+            mock_process.stdin = MagicMock()
+            # Streaming mock - return line then empty to end
+            mock_process.stdout.readline.side_effect = ["output\n", ""]
             mock_process.returncode = 0
             mock_popen.return_value = mock_process
 
@@ -449,10 +472,13 @@ class TestRunPromptOnly:
 
         with patch("subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
-            mock_process.communicate.return_value = (
-                "Done!\n<promise>COMPLETE</promise>",
-                None,
-            )
+            mock_process.stdin = MagicMock()
+            # Return completion signal in output
+            mock_process.stdout.readline.side_effect = [
+                "Done!\n",
+                "<promise>COMPLETE</promise>\n",
+                "",
+            ]
             mock_process.returncode = 0
             mock_popen.return_value = mock_process
 
@@ -476,7 +502,8 @@ class TestRunPromptOnly:
 
         with patch("subprocess.Popen") as mock_popen:
             mock_process = MagicMock()
-            mock_process.communicate.return_value = ("error", None)
+            mock_process.stdin = MagicMock()
+            mock_process.stdout.readline.side_effect = ["error\n", ""]
             mock_process.returncode = 1
             mock_popen.return_value = mock_process
 
