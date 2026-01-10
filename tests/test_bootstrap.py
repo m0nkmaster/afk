@@ -7,9 +7,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from afk.bootstrap import (
+    AI_CLIS,
     CONTEXT_FILES,
     STACKS,
     TASK_FILES,
+    AiCliInfo,
     BootstrapResult,
     ProjectStack,
     _command_exists,
@@ -20,9 +22,12 @@ from afk.bootstrap import (
     _detect_tools,
     _is_github_repo,
     analyse_project,
+    detect_available_ai_clis,
+    ensure_ai_cli_configured,
     generate_config,
+    prompt_ai_cli_selection,
 )
-from afk.config import FeedbackLoopsConfig
+from afk.config import AiCliConfig, FeedbackLoopsConfig
 
 
 class TestProjectStack:
@@ -340,3 +345,239 @@ class TestGenerateConfig:
 
         assert len(config.sources) == 1
         assert config.sources[0].type == "markdown"
+
+
+class TestAiCliInfo:
+    """Tests for AiCliInfo dataclass."""
+
+    def test_creation(self) -> None:
+        """Test creating an AiCliInfo."""
+        info = AiCliInfo(
+            command="test",
+            name="Test CLI",
+            args=["--flag"],
+            description="A test CLI",
+            install_url="https://test.com",
+        )
+        assert info.command == "test"
+        assert info.name == "Test CLI"
+        assert info.args == ["--flag"]
+        assert info.description == "A test CLI"
+        assert info.install_url == "https://test.com"
+
+
+class TestAiCliDefinitions:
+    """Tests for AI CLI definitions."""
+
+    def test_ai_clis_defined(self) -> None:
+        """Test that AI CLIs are defined."""
+        assert len(AI_CLIS) >= 3
+        commands = [cli.command for cli in AI_CLIS]
+        assert "claude" in commands
+        assert "aider" in commands
+        assert "amp" in commands
+
+    def test_claude_cli_definition(self) -> None:
+        """Test Claude CLI definition."""
+        claude = next(cli for cli in AI_CLIS if cli.command == "claude")
+        assert claude.name == "Claude CLI"
+        assert claude.args == ["-p"]
+        assert "anthropic" in claude.install_url.lower()
+
+    def test_all_clis_have_required_fields(self) -> None:
+        """Test all CLIs have required fields."""
+        for cli in AI_CLIS:
+            assert cli.command
+            assert cli.name
+            assert isinstance(cli.args, list)
+            assert cli.description
+            assert cli.install_url
+
+
+class TestDetectAvailableAiClis:
+    """Tests for detect_available_ai_clis function."""
+
+    def test_no_clis_available(self) -> None:
+        """Test when no AI CLIs are installed."""
+        with patch("afk.bootstrap._command_exists", return_value=False):
+            available = detect_available_ai_clis()
+            assert available == []
+
+    def test_claude_available(self) -> None:
+        """Test when claude is installed."""
+
+        def mock_exists(cmd: str) -> bool:
+            return cmd == "claude"
+
+        with patch("afk.bootstrap._command_exists", side_effect=mock_exists):
+            available = detect_available_ai_clis()
+            assert len(available) == 1
+            assert available[0].command == "claude"
+
+    def test_multiple_clis_available(self) -> None:
+        """Test when multiple CLIs are installed."""
+
+        def mock_exists(cmd: str) -> bool:
+            return cmd in ("claude", "aider")
+
+        with patch("afk.bootstrap._command_exists", side_effect=mock_exists):
+            available = detect_available_ai_clis()
+            assert len(available) == 2
+            commands = [cli.command for cli in available]
+            assert "claude" in commands
+            assert "aider" in commands
+
+
+class TestPromptAiCliSelection:
+    """Tests for prompt_ai_cli_selection function."""
+
+    def test_no_clis_available(self) -> None:
+        """Test prompt with no CLIs available."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True)
+
+        result = prompt_ai_cli_selection([], console)
+
+        assert result is None
+        output_text = output.getvalue()
+        assert "No AI CLI tools found" in output_text
+
+    def test_single_cli_selection(self) -> None:
+        """Test selecting when one CLI available."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True)
+
+        available = [
+            AiCliInfo(
+                command="claude",
+                name="Claude CLI",
+                args=["-p"],
+                description="Test",
+                install_url="https://test.com",
+            )
+        ]
+
+        with patch("click.prompt", return_value=1):
+            result = prompt_ai_cli_selection(available, console)
+
+        assert result is not None
+        assert result.command == "claude"
+        assert result.args == ["-p"]
+
+    def test_multi_cli_selection(self) -> None:
+        """Test selecting from multiple CLIs."""
+        from io import StringIO
+
+        from rich.console import Console
+
+        output = StringIO()
+        console = Console(file=output, force_terminal=True)
+
+        available = [
+            AiCliInfo("claude", "Claude", ["-p"], "desc1", "url1"),
+            AiCliInfo("aider", "Aider", ["--message"], "desc2", "url2"),
+        ]
+
+        with patch("click.prompt", return_value=2):
+            result = prompt_ai_cli_selection(available, console)
+
+        assert result is not None
+        assert result.command == "aider"
+        assert result.args == ["--message"]
+
+
+class TestEnsureAiCliConfigured:
+    """Tests for ensure_ai_cli_configured function."""
+
+    def test_config_exists(self, temp_project: Path) -> None:
+        """Test when config already exists."""
+        import os
+
+        from afk.config import AfkConfig
+
+        # Save current directory and change to temp
+        old_cwd = os.getcwd()
+        os.chdir(temp_project)
+
+        try:
+            # Create config
+            (temp_project / ".afk").mkdir()
+            config = AfkConfig()
+            config.ai_cli = AiCliConfig(command="test", args=["--test"])
+            config.save(temp_project / ".afk" / "config.json")
+
+            # Patch CONFIG_FILE to point to our temp location
+            with patch("afk.bootstrap.CONFIG_FILE", temp_project / ".afk" / "config.json"):
+                result = ensure_ai_cli_configured(config)
+
+            assert result.command == "test"
+            assert result.args == ["--test"]
+        finally:
+            os.chdir(old_cwd)
+
+    def test_first_run_prompts(self, temp_project: Path) -> None:
+        """Test that first run prompts for CLI selection."""
+        import os
+        from io import StringIO
+
+        from rich.console import Console
+
+        old_cwd = os.getcwd()
+        os.chdir(temp_project)
+
+        try:
+            output = StringIO()
+            console = Console(file=output, force_terminal=True)
+
+            # Mock available CLIs and user selection
+            with (
+                patch("afk.bootstrap.CONFIG_FILE", temp_project / ".afk" / "config.json"),
+                patch("afk.bootstrap.AFK_DIR", temp_project / ".afk"),
+                patch("afk.bootstrap.detect_available_ai_clis") as mock_detect,
+                patch("afk.bootstrap.prompt_ai_cli_selection") as mock_prompt,
+            ):
+                mock_detect.return_value = [AiCliInfo("claude", "Claude", ["-p"], "desc", "url")]
+                mock_prompt.return_value = AiCliConfig(command="claude", args=["-p"])
+
+                result = ensure_ai_cli_configured(console=console)
+
+            assert result.command == "claude"
+            # Config should be saved
+            assert (temp_project / ".afk" / "config.json").exists()
+        finally:
+            os.chdir(old_cwd)
+
+    def test_first_run_no_clis_exits(self, temp_project: Path) -> None:
+        """Test that first run with no CLIs exits."""
+        import os
+        from io import StringIO
+
+        import pytest
+        from rich.console import Console
+
+        old_cwd = os.getcwd()
+        os.chdir(temp_project)
+
+        try:
+            output = StringIO()
+            console = Console(file=output, force_terminal=True)
+
+            with (
+                patch("afk.bootstrap.CONFIG_FILE", temp_project / ".afk" / "config.json"),
+                patch("afk.bootstrap.detect_available_ai_clis", return_value=[]),
+                patch("afk.bootstrap.prompt_ai_cli_selection", return_value=None),
+                pytest.raises(SystemExit) as exc_info,
+            ):
+                ensure_ai_cli_configured(console=console)
+
+            assert exc_info.value.code == 1
+        finally:
+            os.chdir(old_cwd)

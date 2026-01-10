@@ -6,8 +6,14 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rich.console import Console
 
 from afk.config import (
+    AFK_DIR,
+    CONFIG_FILE,
     AfkConfig,
     AiCliConfig,
     FeedbackLoopsConfig,
@@ -15,6 +21,17 @@ from afk.config import (
     PromptConfig,
     SourceConfig,
 )
+
+
+@dataclass
+class AiCliInfo:
+    """Information about an AI CLI tool."""
+
+    command: str
+    name: str
+    args: list[str]
+    description: str
+    install_url: str
 
 
 @dataclass
@@ -113,6 +130,31 @@ TASK_FILES = {
     "tasks.md": "markdown",
 }
 
+# Known AI CLI tools with metadata
+AI_CLIS: list[AiCliInfo] = [
+    AiCliInfo(
+        command="claude",
+        name="Claude CLI",
+        args=["-p"],
+        description="Anthropic's Claude CLI for terminal-based AI coding",
+        install_url="https://docs.anthropic.com/en/docs/claude-cli",
+    ),
+    AiCliInfo(
+        command="aider",
+        name="Aider",
+        args=["--message"],
+        description="AI pair programming in your terminal",
+        install_url="https://aider.chat",
+    ),
+    AiCliInfo(
+        command="amp",
+        name="Amp",
+        args=["--dangerously-allow-all"],
+        description="Sourcegraph's agentic coding tool",
+        install_url="https://sourcegraph.com/amp",
+    ),
+]
+
 
 def _command_exists(cmd: str) -> bool:
     """Check if a command is available on PATH."""
@@ -176,6 +218,128 @@ def _detect_ai_cli(tools: dict[str, bool]) -> AiCliConfig:
         return AiCliConfig(command="aider", args=["--message"])
     # Default
     return AiCliConfig(command="claude", args=["-p"])
+
+
+def detect_available_ai_clis() -> list[AiCliInfo]:
+    """Detect which AI CLI tools are installed.
+
+    Returns:
+        List of AiCliInfo for each installed AI CLI tool.
+    """
+    available = []
+    for cli in AI_CLIS:
+        if _command_exists(cli.command):
+            available.append(cli)
+    return available
+
+
+def prompt_ai_cli_selection(
+    available: list[AiCliInfo],
+    console: Console | None = None,
+) -> AiCliConfig | None:
+    """Interactively prompt user to select an AI CLI.
+
+    Args:
+        available: List of available AI CLI tools
+        console: Optional Rich console for output
+
+    Returns:
+        Selected AiCliConfig, or None if user cancels
+    """
+    if console is None:
+        from rich.console import Console
+
+        console = Console()
+
+    if not available:
+        console.print()
+        console.print("[red]No AI CLI tools found.[/red]")
+        console.print()
+        console.print("Install one of the following:")
+        for cli in AI_CLIS:
+            console.print(f"  • [cyan]{cli.name}[/cyan]: {cli.install_url}")
+        console.print()
+        return None
+
+    console.print()
+    console.print("[bold]Welcome to afk![/bold]")
+    console.print()
+    console.print("Detected AI tools:")
+    for i, cli in enumerate(available, 1):
+        console.print(f"  [cyan]{i}[/cyan]. {cli.name} [dim]({cli.description})[/dim]")
+    console.print()
+
+    # Prompt for selection
+    import click
+
+    default = 1
+    choice = click.prompt(
+        "Which AI CLI should afk use?",
+        type=click.IntRange(1, len(available)),
+        default=default,
+        show_default=True,
+    )
+
+    selected = available[choice - 1]
+    return AiCliConfig(command=selected.command, args=selected.args)
+
+
+def ensure_ai_cli_configured(
+    config: AfkConfig | None = None,
+    console: Console | None = None,
+) -> AiCliConfig:
+    """Ensure AI CLI is configured, prompting user if needed.
+
+    This is the main entry point for the first-run experience.
+    If config exists with ai_cli set, returns it.
+    Otherwise, detects available CLIs and prompts user to choose.
+
+    Args:
+        config: Existing config (or None to load from file)
+        console: Optional Rich console for output
+
+    Returns:
+        AiCliConfig (either from config or user selection)
+
+    Raises:
+        SystemExit: If no AI CLI available and user cannot select one
+    """
+    import sys
+
+    if console is None:
+        from rich.console import Console
+
+        console = Console()
+
+    # Load config if not provided
+    if config is None:
+        config = AfkConfig.load()
+
+    # Check if AI CLI is already configured (non-default)
+    # We check if config file exists AND has explicit ai_cli
+    if CONFIG_FILE.exists():
+        # Config exists, use what's there
+        return config.ai_cli
+
+    # First run - need to prompt
+    available = detect_available_ai_clis()
+    selected = prompt_ai_cli_selection(available, console)
+
+    if selected is None:
+        # No AI CLIs available
+        sys.exit(1)
+
+    # Save the selection to config
+    config.ai_cli = selected
+    AFK_DIR.mkdir(parents=True, exist_ok=True)
+    config.save()
+
+    console.print()
+    console.print(f"[green]✓[/green] Saved AI CLI choice: [cyan]{selected.command}[/cyan]")
+    console.print(f"  Config: [dim]{CONFIG_FILE}[/dim]")
+    console.print()
+
+    return selected
 
 
 def _is_github_repo(root: Path) -> bool:
