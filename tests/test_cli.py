@@ -598,3 +598,76 @@ class TestStartCommand:
         result = cli_runner.invoke(main, ["start", "-y"])
         assert result.exit_code == 0
         assert "Session Complete" in result.output
+
+
+class TestGoCommand:
+    """Tests for afk go command (zero-config quick start)."""
+
+    def test_go_help(self, cli_runner: CliRunner) -> None:
+        """Test go command has help."""
+        result = cli_runner.invoke(main, ["go", "--help"])
+        assert result.exit_code == 0
+        assert "Quick start with zero config" in result.output
+
+    def test_go_no_sources(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test go fails gracefully with no sources."""
+        # Need to have AI CLI configured to get past first-run
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "config.json").write_text(
+            '{"ai_cli": {"command": "echo", "args": []}}'
+        )
+        result = cli_runner.invoke(main, ["go"])
+        assert result.exit_code == 1
+        assert "No task sources found" in result.output
+
+    def test_go_dry_run(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test go --dry-run shows what would run."""
+        result = cli_runner.invoke(main, ["go", "--dry-run"])
+        assert result.exit_code == 0
+        assert "Dry Run" in result.output
+        assert "Iterations" in result.output
+        assert "Sources" in result.output
+
+    def test_go_with_iterations(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test go with iteration count."""
+        (temp_project / "TODO.md").write_text("- [ ] Task 1\n")
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "config.json").write_text(
+            '{"sources": [{"type": "markdown", "path": "TODO.md"}], '
+            '"ai_cli": {"command": "echo", "args": []}}'
+        )
+        result = cli_runner.invoke(main, ["go", "5", "--dry-run"])
+        assert result.exit_code == 0
+        assert "Iterations" in result.output
+
+    def test_go_with_source_file(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test go with explicit source file."""
+        (temp_project / "my-tasks.md").write_text("- [ ] Task 1\n")
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "config.json").write_text(
+            '{"ai_cli": {"command": "echo", "args": []}}'
+        )
+        result = cli_runner.invoke(main, ["go", "my-tasks.md", "3", "--dry-run"])
+        assert result.exit_code == 0
+        assert "markdown" in result.output
+
+    def test_go_source_not_found(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test go with non-existent source file."""
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "config.json").write_text(
+            '{"ai_cli": {"command": "echo", "args": []}}'
+        )
+        result = cli_runner.invoke(main, ["go", "nonexistent.md"])
+        assert result.exit_code == 1
+        assert "Source file not found" in result.output
+
+    def test_go_infers_sources(self, cli_runner: CliRunner, temp_project: Path) -> None:
+        """Test go auto-detects sources when none configured."""
+        (temp_project / "TODO.md").write_text("- [ ] Task 1\n")
+        (temp_project / ".afk").mkdir()
+        (temp_project / ".afk" / "config.json").write_text(
+            '{"ai_cli": {"command": "echo", "args": []}}'
+        )
+        result = cli_runner.invoke(main, ["go", "--dry-run"])
+        assert result.exit_code == 0
+        assert "markdown" in result.output

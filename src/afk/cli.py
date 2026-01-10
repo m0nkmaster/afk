@@ -15,16 +15,148 @@ from afk.config import AFK_DIR, CONFIG_FILE, LEARNINGS_FILE, AfkConfig
 console = Console()
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option(version=__version__, prog_name="afk")
 @click.pass_context
 def main(ctx: click.Context) -> None:
     """afk - Autonomous AI coding loops.
 
     Run AI coding tasks in a loop, Ralph Wiggum style.
+
+    \b
+    Zero-config usage:
+      afk go                 # Auto-detect, run 10 iterations
+      afk go 20              # Auto-detect, run 20 iterations
+      afk go TODO.md 5       # Use TODO.md as source, run 5 iterations
+
+    \b
+    Full control:
+      afk run 10             # Explicit run command
+      afk run --until-complete
+      afk init               # Explicit initialization
     """
     ctx.ensure_object(dict)
     ctx.obj["config"] = AfkConfig.load()
+
+    # If no subcommand, show help
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@main.command("go")
+@click.argument("iterations_or_source", required=False)
+@click.argument("iterations_if_source", type=int, required=False)
+@click.option("--dry-run", "-n", is_flag=True, help="Show what would run without running")
+@click.pass_context
+def go_command(
+    ctx: click.Context,
+    iterations_or_source: str | None,
+    iterations_if_source: int | None,
+    dry_run: bool,
+) -> None:
+    """Quick start with zero config.
+
+    \b
+    Examples:
+      afk go                 # Auto-detect, run 10 iterations
+      afk go 20              # Auto-detect, run 20 iterations
+      afk go TODO.md 5       # Use TODO.md as source, run 5 iterations
+    """
+    _run_zero_config(ctx, iterations_or_source, iterations_if_source, dry_run)
+
+
+def _run_zero_config(
+    ctx: click.Context,
+    iterations_or_source: str | None,
+    iterations_if_source: int | None,
+    dry_run: bool,
+) -> None:
+    """Handle zero-config invocation (afk go, afk go 10, afk go TODO.md 5)."""
+    from afk.bootstrap import (
+        detect_prompt_file,
+        ensure_ai_cli_configured,
+        infer_config,
+        infer_sources,
+    )
+    from afk.runner import run_loop
+
+    # Parse arguments
+    iterations = 10  # default
+    explicit_source: str | None = None
+
+    if iterations_or_source is not None:
+        # Check if it's a number or a file path
+        try:
+            iterations = int(iterations_or_source)
+        except ValueError:
+            # It's a source file
+            explicit_source = iterations_or_source
+            iterations = iterations_if_source or 10
+
+    # Get or infer config
+    config = infer_config()
+
+    # Ensure AI CLI is configured (first-run experience)
+    ai_cli = ensure_ai_cli_configured(config, console)
+    config.ai_cli = ai_cli
+
+    # Handle explicit source
+    if explicit_source:
+        from afk.config import SourceConfig
+
+        path = Path(explicit_source)
+        if not path.exists():
+            console.print(f"[red]Source file not found:[/red] {explicit_source}")
+            ctx.exit(1)
+
+        # Determine source type
+        if path.suffix == ".json":
+            source = SourceConfig(type="json", path=explicit_source)
+        elif path.suffix == ".md":
+            source = SourceConfig(type="markdown", path=explicit_source)
+        else:
+            console.print(f"[red]Unknown source type:[/red] {explicit_source}")
+            ctx.exit(1)
+
+        config.sources = [source]
+
+    # Infer sources if none configured
+    if not config.sources:
+        inferred = infer_sources()
+        if inferred:
+            config.sources = inferred
+        else:
+            # Check for prompt file (ralf.sh mode)
+            prompt_file = detect_prompt_file()
+            if prompt_file:
+                console.print(f"[cyan]Prompt-only mode:[/cyan] Using {prompt_file.name}")
+                # TODO: Implement prompt-only mode in runner
+                console.print("[yellow]Prompt-only mode not yet implemented.[/yellow]")
+                ctx.exit(0)
+            else:
+                console.print("[red]No task sources found.[/red]")
+                console.print()
+                console.print("Create one of:")
+                console.print("  • [cyan]TODO.md[/cyan] - Markdown task list")
+                console.print("  • [cyan]tasks.json[/cyan] - JSON task file")
+                console.print("  • [cyan]prompt.md[/cyan] - Single prompt (ralf.sh style)")
+                console.print("  • [cyan].beads/[/cyan] - Beads issue tracker")
+                ctx.exit(1)
+
+    if dry_run:
+        console.print(Panel.fit("[bold]Dry Run[/bold]", title="afk"))
+        console.print()
+        console.print(f"  [cyan]Iterations:[/cyan] {iterations}")
+        console.print(f"  [cyan]AI CLI:[/cyan] {config.ai_cli.command}")
+        console.print()
+        console.print("  [cyan]Sources:[/cyan]")
+        for src in config.sources:
+            path_info = f" ({src.path})" if src.path else ""
+            console.print(f"    • {src.type}{path_info}")
+        return
+
+    # Run the loop
+    run_loop(config=config, max_iterations=iterations)
 
 
 @main.command()
