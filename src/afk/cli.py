@@ -47,12 +47,14 @@ def main(ctx: click.Context) -> None:
 @click.argument("iterations_or_source", required=False)
 @click.argument("iterations_if_source", type=int, required=False)
 @click.option("--dry-run", "-n", is_flag=True, help="Show what would run without running")
+@click.option("--until-complete", "-u", is_flag=True, help="Run until all tasks complete")
 @click.pass_context
 def go_command(
     ctx: click.Context,
     iterations_or_source: str | None,
     iterations_if_source: int | None,
     dry_run: bool,
+    until_complete: bool,
 ) -> None:
     """Quick start with zero config.
 
@@ -60,9 +62,10 @@ def go_command(
     Examples:
       afk go                 # Auto-detect, run 10 iterations
       afk go 20              # Auto-detect, run 20 iterations
+      afk go -u              # Run until all tasks complete
       afk go TODO.md 5       # Use TODO.md as source, run 5 iterations
     """
-    _run_zero_config(ctx, iterations_or_source, iterations_if_source, dry_run)
+    _run_zero_config(ctx, iterations_or_source, iterations_if_source, dry_run, until_complete)
 
 
 def _run_zero_config(
@@ -70,6 +73,7 @@ def _run_zero_config(
     iterations_or_source: str | None,
     iterations_if_source: int | None,
     dry_run: bool,
+    until_complete: bool = False,
 ) -> None:
     """Handle zero-config invocation (afk go, afk go 10, afk go TODO.md 5)."""
     from afk.bootstrap import (
@@ -168,7 +172,7 @@ def _run_zero_config(
         return
 
     # Run the loop
-    run_loop(config=config, max_iterations=iterations)
+    run_loop(config=config, max_iterations=iterations, until_complete=until_complete)
 
 
 @main.command()
