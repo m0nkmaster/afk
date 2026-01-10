@@ -6,7 +6,27 @@ A tool-agnostic library for using the Ralph Wiggum approach for software develop
 
 ## Installation
 
+Install globally using [pipx](https://pipx.pypa.io/) (recommended):
+
 ```bash
+# From GitHub
+pipx install git+https://github.com/m0nkmaster/afk.git
+
+# Or from PyPI (once published)
+pipx install afk
+```
+
+Or with pip:
+
+```bash
+pip install git+https://github.com/m0nkmaster/afk.git
+```
+
+For development:
+
+```bash
+git clone https://github.com/m0nkmaster/afk.git
+cd afk
 pip install -e .
 ```
 
