@@ -3,33 +3,39 @@
 from __future__ import annotations
 
 from afk.config import SourceConfig
-from afk.sources import Task, _load_from_source, aggregate_tasks
+from afk.prd_store import UserStory
+from afk.sources import _load_from_source, aggregate_tasks
 
 
-class TestTask:
-    """Tests for Task dataclass."""
+class TestUserStoryFromSources:
+    """Tests for UserStory objects returned from sources."""
 
     def test_defaults(self) -> None:
         """Test default values."""
-        task = Task(id="task-1", description="Do something")
-        assert task.id == "task-1"
-        assert task.description == "Do something"
-        assert task.priority == "medium"
-        assert task.source == "unknown"
-        assert task.metadata is None
+        story = UserStory(id="task-1", title="Do something", description="Details")
+        assert story.id == "task-1"
+        assert story.title == "Do something"
+        assert story.description == "Details"
+        assert story.priority == 3
+        assert story.source == "unknown"
+        assert story.passes is False
+        assert story.acceptanceCriteria == []
 
     def test_all_fields(self) -> None:
         """Test all fields populated."""
-        task = Task(
+        story = UserStory(
             id="task-2",
-            description="Another task",
-            priority="high",
+            title="Another task",
+            description="Full description",
+            acceptanceCriteria=["Step 1", "Step 2"],
+            priority=1,
+            passes=False,
             source="beads",
-            metadata={"key": "value"},
+            notes="Some notes",
         )
-        assert task.priority == "high"
-        assert task.source == "beads"
-        assert task.metadata == {"key": "value"}
+        assert story.priority == 1
+        assert story.source == "beads"
+        assert len(story.acceptanceCriteria) == 2
 
 
 class TestAggregateTasksIntegration:
@@ -49,6 +55,9 @@ class TestAggregateTasksIntegration:
         tasks = aggregate_tasks(sources)
         # Should have tasks from both sources (excluding completed ones)
         assert len(tasks) >= 2
+        # All returned tasks should be UserStory instances
+        for task in tasks:
+            assert isinstance(task, UserStory)
 
 
 class TestLoadFromSource:
@@ -71,6 +80,7 @@ class TestLoadFromSource:
         assert len(tasks) == 2  # One is marked as passes=True
         assert tasks[0].id == "task-1"
         assert tasks[0].source == "json:tasks.json"
+        assert isinstance(tasks[0], UserStory)
 
     def test_markdown_source(self, sample_tasks_md: None) -> None:
         """Test loading from markdown source."""
@@ -78,3 +88,4 @@ class TestLoadFromSource:
         tasks = _load_from_source(source)
         assert len(tasks) == 3  # One is checked off
         assert any(t.id == "task-1" for t in tasks)
+        assert all(isinstance(t, UserStory) for t in tasks)

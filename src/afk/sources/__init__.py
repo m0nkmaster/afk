@@ -1,27 +1,17 @@
-"""Task source adapters for afk."""
+"""Task source adapters for afk.
+
+All sources return UserStory objects - the canonical task type.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
-
 from afk.config import SourceConfig
+from afk.prd_store import UserStory
 
 
-@dataclass
-class Task:
-    """A task from any source."""
-
-    id: str
-    description: str
-    priority: Literal["high", "medium", "low"] = "medium"
-    source: str = "unknown"
-    metadata: dict | None = None
-
-
-def aggregate_tasks(sources: list[SourceConfig]) -> list[Task]:
+def aggregate_tasks(sources: list[SourceConfig]) -> list[UserStory]:
     """Aggregate tasks from all configured sources."""
-    all_tasks: list[Task] = []
+    all_tasks: list[UserStory] = []
 
     for source in sources:
         tasks = _load_from_source(source)
@@ -30,7 +20,7 @@ def aggregate_tasks(sources: list[SourceConfig]) -> list[Task]:
     return all_tasks
 
 
-def _load_from_source(source: SourceConfig) -> list[Task]:
+def _load_from_source(source: SourceConfig) -> list[UserStory]:
     """Load tasks from a single source."""
     if source.type == "beads":
         from afk.sources.beads import load_beads_tasks

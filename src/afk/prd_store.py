@@ -11,7 +11,6 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
 
 from afk.config import AFK_DIR, AfkConfig, SourceConfig
 
@@ -66,7 +65,7 @@ class PrdDocument:
             or data.get("items")
             or []
         )
-        
+
         stories = []
         for item in story_data:
             # Handle both field naming conventions
@@ -81,7 +80,7 @@ class PrdDocument:
                 "notes": item.get("notes", ""),
             }
             stories.append(UserStory(**story_kwargs))
-        
+
         return cls(
             project=data.get("project", ""),
             branchName=data.get("branchName", ""),

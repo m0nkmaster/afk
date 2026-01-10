@@ -114,7 +114,7 @@ def generate_prompt(
 
     # Max iterations for display only (limit enforcement is in loop controller)
     max_iterations = limit_override or config.limits.max_iterations
-    
+
     # Check if all stories are complete (this is the only stop condition here)
     stop_signal = None
     if all_stories_complete(prd):

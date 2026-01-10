@@ -18,44 +18,44 @@ class TestMapBeadsPriority:
     """Tests for _map_beads_priority function."""
 
     def test_none_priority(self) -> None:
-        """Test None returns medium."""
-        assert _map_beads_priority(None) == "medium"
+        """Test None returns 3 (medium)."""
+        assert _map_beads_priority(None) == 3
 
     def test_integer_high(self) -> None:
-        """Test low integers map to high."""
-        assert _map_beads_priority(0) == "high"
-        assert _map_beads_priority(1) == "high"
+        """Test low integers map to high priority."""
+        assert _map_beads_priority(0) == 1  # Clamped to 1
+        assert _map_beads_priority(1) == 1
 
     def test_integer_medium(self) -> None:
-        """Test mid integers map to medium."""
-        assert _map_beads_priority(2) == "medium"
-        assert _map_beads_priority(3) == "medium"
+        """Test mid integers pass through."""
+        assert _map_beads_priority(2) == 2
+        assert _map_beads_priority(3) == 3
 
     def test_integer_low(self) -> None:
-        """Test high integers map to low."""
-        assert _map_beads_priority(4) == "low"
-        assert _map_beads_priority(10) == "low"
+        """Test high integers are clamped."""
+        assert _map_beads_priority(4) == 4
+        assert _map_beads_priority(10) == 5  # Clamped to 5
 
     def test_string_high(self) -> None:
-        """Test high priority strings."""
-        assert _map_beads_priority("high") == "high"
-        assert _map_beads_priority("critical") == "high"
-        assert _map_beads_priority("urgent") == "high"
-        assert _map_beads_priority("p0") == "high"
-        assert _map_beads_priority("P1") == "high"
+        """Test high priority strings map to 1."""
+        assert _map_beads_priority("high") == 1
+        assert _map_beads_priority("critical") == 1
+        assert _map_beads_priority("urgent") == 1
+        assert _map_beads_priority("p0") == 1
+        assert _map_beads_priority("P1") == 1
 
     def test_string_low(self) -> None:
-        """Test low priority strings."""
-        assert _map_beads_priority("low") == "low"
-        assert _map_beads_priority("minor") == "low"
-        assert _map_beads_priority("p3") == "low"
-        assert _map_beads_priority("P4") == "low"
+        """Test low priority strings map to 4."""
+        assert _map_beads_priority("low") == 4
+        assert _map_beads_priority("minor") == 4
+        assert _map_beads_priority("p3") == 4
+        assert _map_beads_priority("P4") == 4
 
     def test_string_medium(self) -> None:
-        """Test medium priority strings."""
-        assert _map_beads_priority("medium") == "medium"
-        assert _map_beads_priority("normal") == "medium"
-        assert _map_beads_priority("p2") == "medium"
+        """Test medium priority strings map to 3."""
+        assert _map_beads_priority("medium") == 3
+        assert _map_beads_priority("normal") == 3
+        assert _map_beads_priority("p2") == 3
 
 
 class TestLoadBeadsTasks:
@@ -89,10 +89,10 @@ class TestLoadBeadsTasks:
             tasks = load_beads_tasks()
             assert len(tasks) == 2
             assert tasks[0].id == "issue-1"
-            assert tasks[0].description == "First issue"
-            assert tasks[0].priority == "high"
+            assert tasks[0].title == "First issue"
+            assert tasks[0].priority == 1  # "high" maps to 1
             assert tasks[0].source == "beads"
-            assert tasks[1].priority == "medium"
+            assert tasks[1].priority == 3  # Default
 
     def test_json_output_alternative_fields(self) -> None:
         """Test parsing JSON with alternative field names."""
@@ -108,9 +108,7 @@ class TestLoadBeadsTasks:
             tasks = load_beads_tasks()
             assert len(tasks) == 2
             assert tasks[0].id == "ISSUE-123"
-            assert tasks[0].description == "Issue description"
             assert tasks[1].id == "456"
-            assert tasks[1].description == "Summary text"
 
     def test_json_decode_error_fallback(self) -> None:
         """Test fallback to text parsing on JSON error."""
@@ -137,11 +135,10 @@ class TestLoadBeadsTasks:
             tasks = load_beads_tasks()
             assert len(tasks) == 1
 
-    def test_skips_empty_tasks(self) -> None:
-        """Test that tasks without id or description are skipped."""
+    def test_skips_empty_id_tasks(self) -> None:
+        """Test that tasks without id are skipped."""
         json_data = [
             {"id": "", "title": "No ID"},
-            {"id": "valid", "title": ""},
             {"id": "good", "title": "Good task"},
         ]
         with patch("subprocess.run") as mock_run:
@@ -188,7 +185,7 @@ class TestParseBeadsTextOutput:
             tasks = _parse_beads_text_output()
             assert len(tasks) == 2
             assert tasks[0].id == "task-1"
-            assert tasks[0].description == "First task"
+            assert tasks[0].title == "First task"
             assert tasks[1].id == "task-2"
 
     def test_no_colon_format(self) -> None:
@@ -200,7 +197,7 @@ class TestParseBeadsTextOutput:
             )
             tasks = _parse_beads_text_output()
             assert len(tasks) == 2
-            assert tasks[0].description == "Implement feature"
+            assert tasks[0].title == "Implement feature"
             # ID should be generated from description
             assert tasks[0].id == "implement-feature"
 
@@ -215,14 +212,14 @@ class TestParseBeadsTextOutput:
             assert len(tasks) == 2
 
     def test_all_tasks_medium_priority(self) -> None:
-        """Test that text parsed tasks default to medium priority."""
+        """Test that text parsed tasks default to priority 3 (medium)."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 returncode=0,
                 stdout="task-1: Description\n",
             )
             tasks = _parse_beads_text_output()
-            assert tasks[0].priority == "medium"
+            assert tasks[0].priority == 3
 
 
 class TestCloseBeadsIssue:

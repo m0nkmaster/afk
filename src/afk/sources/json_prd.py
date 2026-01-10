@@ -4,26 +4,24 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from afk.sources import Task
+from afk.prd_store import UserStory
 
 
-def load_json_tasks(path: str | None) -> list[Task]:
+def load_json_tasks(path: str | None) -> list[UserStory]:
     """Load tasks from a JSON PRD file.
 
-    Supports two formats:
+    Supports formats:
 
-    1. Full Anthropic style (from afk prd parse):
+    1. Full afk style:
     {
         "tasks": [
             {
                 "id": "feature-id",
-                "category": "functional",
+                "title": "Feature title",
                 "description": "Feature description",
                 "priority": 1,
-                "steps": ["Step 1", "Step 2"],
+                "acceptanceCriteria": ["Step 1", "Step 2"],
                 "passes": false
             }
         ]
@@ -31,13 +29,9 @@ def load_json_tasks(path: str | None) -> list[Task]:
 
     2. Simple array:
     [
-        {"id": "...", "description": "..."}
+        {"id": "...", "title": "..."}
     ]
-
-    The full task data (including category, steps) is preserved in metadata.
     """
-    from afk.sources import Task
-
     if not path:
         # Try default locations
         for default_path in ["prd.json", "tasks.json", ".afk/prd.json"]:
@@ -58,59 +52,70 @@ def load_json_tasks(path: str | None) -> list[Task]:
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict):
-        items = data.get("tasks", data.get("items", []))
+        items = data.get("tasks", data.get("userStories", data.get("items", [])))
     else:
         return []
 
     tasks = []
     for item in items:
-        # Skip completed tasks (Anthropic style)
+        # Skip completed tasks
         if item.get("passes", False):
             continue
 
-        task_id = item.get("id") or _generate_id(item.get("description", ""))
-        description = item.get("description") or item.get("title") or item.get("summary", "")
+        task_id = item.get("id") or _generate_id(item.get("title", item.get("description", "")))
+        title = item.get("title") or item.get("summary") or item.get("description", "")
+        description = item.get("description") or title
         priority = _map_priority(item.get("priority"))
 
-        if task_id and description:
+        # Get acceptance criteria
+        acceptance_criteria = (
+            item.get("acceptanceCriteria")
+            or item.get("acceptance_criteria")
+            or item.get("steps")
+            or []
+        )
+        if isinstance(acceptance_criteria, str):
+            acceptance_criteria = [acceptance_criteria]
+        if not acceptance_criteria:
+            acceptance_criteria = [f"Complete: {title}"]
+
+        if task_id:
             tasks.append(
-                Task(
+                UserStory(
                     id=task_id,
+                    title=title,
                     description=description,
+                    acceptanceCriteria=acceptance_criteria,
                     priority=priority,
                     source=f"json:{path}",
-                    metadata=item,
+                    notes=item.get("notes", ""),
                 )
             )
 
     return tasks
 
 
-def _generate_id(description: str) -> str:
-    """Generate an ID from description."""
-    # Take first 30 chars, lowercase, replace spaces with dashes
-    clean = description[:30].lower()
+def _generate_id(text: str) -> str:
+    """Generate an ID from text."""
+    clean = text[:30].lower()
     clean = "".join(c if c.isalnum() or c == " " else "" for c in clean)
     return clean.replace(" ", "-").strip("-") or "task"
 
 
-def _map_priority(priority: str | int | None) -> str:
-    """Map various priority formats to afk priority."""
+def _map_priority(priority: str | int | None) -> int:
+    """Map various priority formats to int (1-5)."""
     if priority is None:
-        return "medium"
+        return 3
 
     if isinstance(priority, int):
-        if priority <= 1:
-            return "high"
-        elif priority <= 2:
-            return "medium"
-        else:
-            return "low"
+        return max(1, min(5, priority))
 
     priority_lower = str(priority).lower()
-    if priority_lower in ("high", "critical", "urgent", "1"):
-        return "high"
-    elif priority_lower in ("low", "minor", "3", "4", "5"):
-        return "low"
+    if priority_lower in ("high", "critical", "urgent", "1", "p0", "p1"):
+        return 1
+    elif priority_lower in ("medium", "normal", "2", "p2"):
+        return 2
+    elif priority_lower in ("low", "minor", "3", "4", "5", "p3", "p4"):
+        return 4
     else:
-        return "medium"
+        return 3

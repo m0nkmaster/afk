@@ -38,56 +38,56 @@ class TestParseTaskLine:
 
     def test_simple_task(self) -> None:
         """Test simple task without priority or ID."""
-        task_id, desc, priority = _parse_task_line("Implement feature")
-        assert desc == "Implement feature"
-        assert priority == "medium"
+        task_id, title, priority = _parse_task_line("Implement feature")
+        assert title == "Implement feature"
+        assert priority == 3  # Medium
         assert task_id == "implement-feature"
 
     def test_with_high_priority(self) -> None:
         """Test task with HIGH priority tag."""
-        task_id, desc, priority = _parse_task_line("[HIGH] Critical task")
-        assert desc == "Critical task"
-        assert priority == "high"
+        task_id, title, priority = _parse_task_line("[HIGH] Critical task")
+        assert title == "Critical task"
+        assert priority == 1  # High
 
     def test_with_critical_priority(self) -> None:
         """Test task with CRITICAL priority tag."""
-        task_id, desc, priority = _parse_task_line("[CRITICAL] Very important")
-        assert priority == "high"
+        task_id, title, priority = _parse_task_line("[CRITICAL] Very important")
+        assert priority == 1  # High
 
     def test_with_low_priority(self) -> None:
         """Test task with LOW priority tag."""
-        task_id, desc, priority = _parse_task_line("[LOW] Minor task")
-        assert desc == "Minor task"
-        assert priority == "low"
+        task_id, title, priority = _parse_task_line("[LOW] Minor task")
+        assert title == "Minor task"
+        assert priority == 4  # Low
 
     def test_with_p0_priority(self) -> None:
         """Test task with P0 priority tag."""
         _, _, priority = _parse_task_line("[P0] Urgent")
-        assert priority == "high"
+        assert priority == 1  # High
 
     def test_with_p3_priority(self) -> None:
         """Test task with P3 priority tag."""
         _, _, priority = _parse_task_line("[P3] Not urgent")
-        assert priority == "low"
+        assert priority == 4  # Low
 
     def test_with_explicit_id(self) -> None:
         """Test task with explicit ID."""
-        task_id, desc, priority = _parse_task_line("my-task-id: Do the thing")
+        task_id, title, priority = _parse_task_line("my-task-id: Do the thing")
         assert task_id == "my-task-id"
-        assert desc == "Do the thing"
-        assert priority == "medium"
+        assert title == "Do the thing"
+        assert priority == 3  # Medium
 
     def test_with_priority_and_id(self) -> None:
         """Test task with both priority and ID."""
-        task_id, desc, priority = _parse_task_line("[HIGH] task-123: Important task")
+        task_id, title, priority = _parse_task_line("[HIGH] task-123: Important task")
         assert task_id == "task-123"
-        assert desc == "Important task"
-        assert priority == "high"
+        assert title == "Important task"
+        assert priority == 1  # High
 
     def test_unknown_priority_tag(self) -> None:
-        """Test task with unknown priority tag."""
+        """Test task with unknown priority tag defaults to medium."""
         _, _, priority = _parse_task_line("[MEDIUM] Normal task")
-        assert priority == "medium"
+        assert priority == 3  # Medium
 
 
 class TestLoadMarkdownTasks:
@@ -123,7 +123,7 @@ class TestLoadMarkdownTasks:
 
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 2
-        assert tasks[0].description == "Task one"
+        assert tasks[0].title == "Task one"
         assert tasks[0].source == f"markdown:{path}"
 
     def test_checked_checkbox_skipped(self, temp_project: Path) -> None:
@@ -134,7 +134,7 @@ class TestLoadMarkdownTasks:
 
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 1
-        assert tasks[0].description == "Pending"
+        assert tasks[0].title == "Pending"
 
     def test_uppercase_x_skipped(self, temp_project: Path) -> None:
         """Test that [X] is also skipped."""
@@ -153,7 +153,7 @@ class TestLoadMarkdownTasks:
 
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 1
-        assert tasks[0].description == "Task with asterisk"
+        assert tasks[0].title == "Task with asterisk"
 
     def test_indented_checkbox(self, temp_project: Path) -> None:
         """Test parsing indented checkboxes."""
@@ -176,9 +176,9 @@ class TestLoadMarkdownTasks:
 
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 3
-        assert tasks[0].priority == "high"
-        assert tasks[1].priority == "low"
-        assert tasks[2].priority == "medium"
+        assert tasks[0].priority == 1  # High
+        assert tasks[1].priority == 4  # Low
+        assert tasks[2].priority == 3  # Medium
 
     def test_with_explicit_ids(self, temp_project: Path) -> None:
         """Test parsing explicit IDs."""
@@ -192,7 +192,7 @@ class TestLoadMarkdownTasks:
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 2
         assert tasks[0].id == "task-1"
-        assert tasks[0].description == "First task"
+        assert tasks[0].title == "First task"
         assert tasks[1].id == "task-2"
 
     def test_mixed_content(self, temp_project: Path) -> None:
@@ -217,8 +217,8 @@ Not a task: just text.
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 2
         assert tasks[0].id == "task-1"
-        assert tasks[0].priority == "high"
-        assert tasks[1].priority == "medium"
+        assert tasks[0].priority == 1  # High
+        assert tasks[1].priority == 3  # Medium
 
     def test_non_checkbox_lines_ignored(self, temp_project: Path) -> None:
         """Test that non-checkbox lines are ignored."""
@@ -232,4 +232,4 @@ Not a task: just text.
 
         tasks = load_markdown_tasks(str(path))
         assert len(tasks) == 1
-        assert tasks[0].description == "Actual task"
+        assert tasks[0].title == "Actual task"

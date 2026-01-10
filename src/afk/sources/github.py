@@ -3,25 +3,22 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from afk.sources import Task
+from afk.prd_store import UserStory
 
 
 def load_github_tasks(
     repo: str | None = None,
     labels: list[str] | None = None,
-) -> list[Task]:
+) -> list[UserStory]:
     """Load tasks from GitHub issues using gh CLI.
 
     Requires GitHub CLI (gh) to be installed and authenticated.
     """
-    from afk.sources import Task
-
     try:
-        cmd = ["gh", "issue", "list", "--json", "number,title,labels,state"]
+        cmd = ["gh", "issue", "list", "--json", "number,title,body,labels,state"]
 
         if repo:
             cmd.extend(["--repo", repo])
@@ -49,17 +46,24 @@ def load_github_tasks(
         for issue in issues:
             number = issue.get("number")
             title = issue.get("title", "")
+            body = issue.get("body", "")
             issue_labels = [lbl.get("name", "") for lbl in issue.get("labels", [])]
             priority = _priority_from_labels(issue_labels)
 
+            # Extract acceptance criteria from body
+            acceptance_criteria = _extract_acceptance_criteria(body)
+            if not acceptance_criteria:
+                acceptance_criteria = [f"Complete: {title}"]
+
             if number and title:
                 tasks.append(
-                    Task(
+                    UserStory(
                         id=f"#{number}",
-                        description=title,
+                        title=title,
+                        description=body or title,
+                        acceptanceCriteria=acceptance_criteria,
                         priority=priority,
                         source="github",
-                        metadata=issue,
                     )
                 )
 
@@ -74,7 +78,7 @@ def load_github_tasks(
         return []
 
 
-def _priority_from_labels(labels: list[str]) -> str:
+def _priority_from_labels(labels: list[str]) -> int:
     """Infer priority from issue labels."""
     labels_lower = [lbl.lower() for lbl in labels]
 
@@ -82,8 +86,41 @@ def _priority_from_labels(labels: list[str]) -> str:
     low_labels = {"priority:low", "minor", "p3", "p4", "low-priority", "nice-to-have"}
 
     if any(lbl in high_labels for lbl in labels_lower):
-        return "high"
+        return 1
     elif any(lbl in low_labels for lbl in labels_lower):
-        return "low"
+        return 4
     else:
-        return "medium"
+        return 3
+
+
+def _extract_acceptance_criteria(text: str) -> list[str]:
+    """Extract acceptance criteria from text."""
+    if not text:
+        return []
+
+    criteria: list[str] = []
+
+    # Look for acceptance criteria section
+    ac_patterns = [
+        r"(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
+        r"##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)",
+    ]
+
+    for pattern in ac_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        if match:
+            section = match.group(1)
+            for line in section.split("\n"):
+                line = line.strip()
+                cleaned = re.sub(r"^[-*\d.]+\s*(\[[ x]\])?\s*", "", line)
+                if cleaned:
+                    criteria.append(cleaned)
+            break
+
+    # If no section found, look for checkbox items
+    if not criteria:
+        checkbox_pattern = r"[-*]\s*\[[ ]\]\s*(.+)"
+        matches = re.findall(checkbox_pattern, text)
+        criteria = [m.strip() for m in matches if m.strip()]
+
+    return criteria

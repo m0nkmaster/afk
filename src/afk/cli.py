@@ -740,10 +740,8 @@ def explain(ctx: click.Context, verbose: bool) -> None:
 
     Shows what task would be selected next, why, and session statistics.
     """
-    from typing import Any
-
     from afk.learnings import load_learnings
-    from afk.prd_store import load_prd
+    from afk.prd_store import UserStory, load_prd
     from afk.progress import SessionProgress
     from afk.sources import aggregate_tasks
 
@@ -755,21 +753,18 @@ def explain(ctx: click.Context, verbose: bool) -> None:
 
     progress = SessionProgress.load()
 
-    # Get tasks from sources, or fall back to PRD if no sources configured
-    # Tasks can be Task objects (from sources) or UserStory objects (from PRD)
-    prd = load_prd()
-    tasks: list[Any]
-    pending_tasks: list[Any]
+    # Get stories - all sources return UserStory, or read from PRD directly
+    stories: list[UserStory]
     if config.sources:
-        tasks = aggregate_tasks(config.sources)
-        # Completed from progress.json (source-based tracking)
-        completed_ids = {t.id for t in progress.get_completed_tasks()}
-        pending_tasks = [t for t in tasks if t.id not in completed_ids]
+        stories = aggregate_tasks(config.sources)
     else:
-        # Zero-config mode: read directly from PRD, completion is passes=true
-        tasks = list(prd.userStories)
-        completed_ids = {t.id for t in tasks if t.passes}
-        pending_tasks = [t for t in tasks if not t.passes]
+        # Zero-config mode: read directly from PRD
+        prd = load_prd()
+        stories = list(prd.userStories)
+
+    # Completion is tracked via passes field (UserStory.passes)
+    completed = [s for s in stories if s.passes]
+    pending = [s for s in stories if not s.passes]
 
     # Session info
     console.print(Panel.fit("[bold]Session State[/bold]", title="afk explain"))
@@ -784,9 +779,9 @@ def explain(ctx: click.Context, verbose: bool) -> None:
     skipped_tasks = [t for t in progress.tasks.values() if t.status == "skipped"]
 
     console.print("  [cyan]Tasks:[/cyan]")
-    console.print(f"    Total: {len(tasks)}")
-    console.print(f"    Completed: [green]{len(completed_ids)}[/green]")
-    console.print(f"    Pending: {len(pending_tasks)}")
+    console.print(f"    Total: {len(stories)}")
+    console.print(f"    Completed: [green]{len(completed)}[/green]")
+    console.print(f"    Pending: {len(pending)}")
     if failed_tasks:
         console.print(f"    Failed: [red]{len(failed_tasks)}[/red]")
     if skipped_tasks:
@@ -794,30 +789,17 @@ def explain(ctx: click.Context, verbose: bool) -> None:
     console.print()
 
     # Next task
-    if pending_tasks:
-        # Sort by priority (int for UserStory, string for Task)
-        def priority_sort_key(t: Any) -> int:
-            p = t.priority
-            if isinstance(p, int):
-                return p
-            return {"high": 1, "medium": 2, "low": 3}.get(str(p).lower(), 2)
-
-        pending_tasks.sort(key=priority_sort_key)
-        next_task = pending_tasks[0]
+    if pending:
+        # Sort by priority (1=highest, 5=lowest)
+        pending.sort(key=lambda s: s.priority)
+        next_story = pending[0]
         console.print("  [cyan]Next task:[/cyan]")
-        console.print(f"    ID: [bold]{next_task.id}[/bold]")
-        # Priority can be int (UserStory) or string (Task)
-        priority_val = next_task.priority
-        if isinstance(priority_val, int):
-            priority_str = {1: "HIGH", 2: "MEDIUM", 3: "MEDIUM", 4: "LOW", 5: "LOW"}.get(
-                priority_val, "MEDIUM"
-            )
-        else:
-            priority_str = str(priority_val).upper()
+        console.print(f"    ID: [bold]{next_story.id}[/bold]")
+        priority_str = {1: "HIGH", 2: "MEDIUM", 3: "MEDIUM", 4: "LOW", 5: "LOW"}.get(
+            next_story.priority, "MEDIUM"
+        )
         console.print(f"    Priority: {priority_str}")
-        # Description field may be 'description' or 'title' depending on type
-        desc = getattr(next_task, "description", None) or getattr(next_task, "title", "")
-        console.print(f"    Description: {str(desc)[:80]}...")
+        console.print(f"    Title: {next_story.title[:80]}...")
     else:
         console.print("  [green]All tasks complete![/green]")
 

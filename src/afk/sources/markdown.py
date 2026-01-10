@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from afk.sources import Task
+from afk.prd_store import UserStory
 
 
-def load_markdown_tasks(path: str | None) -> list[Task]:
+def load_markdown_tasks(path: str | None) -> list[UserStory]:
     """Load tasks from a markdown file with checkboxes.
 
     Supports formats:
@@ -19,8 +17,6 @@ def load_markdown_tasks(path: str | None) -> list[Task]:
     - [ ] [HIGH] Task with priority
     - [ ] task-id: Task with explicit ID
     """
-    from afk.sources import Task
-
     if not path:
         # Try default locations
         for default_path in ["tasks.md", "TODO.md", "prd.md", ".afk/tasks.md"]:
@@ -38,7 +34,6 @@ def load_markdown_tasks(path: str | None) -> list[Task]:
     tasks = []
 
     # Match markdown checkboxes
-    # - [ ] unchecked, - [x] checked
     pattern = r"^[\s]*[-*]\s*\[([ xX])\]\s*(.+)$"
 
     for match in re.finditer(pattern, content, re.MULTILINE):
@@ -49,12 +44,14 @@ def load_markdown_tasks(path: str | None) -> list[Task]:
             # Skip completed tasks
             continue
 
-        task_id, description, priority = _parse_task_line(text)
+        task_id, title, priority = _parse_task_line(text)
 
         tasks.append(
-            Task(
+            UserStory(
                 id=task_id,
-                description=description,
+                title=title,
+                description=title,
+                acceptanceCriteria=[f"Complete: {title}"],
                 priority=priority,
                 source=f"markdown:{path}",
             )
@@ -63,42 +60,41 @@ def load_markdown_tasks(path: str | None) -> list[Task]:
     return tasks
 
 
-def _parse_task_line(text: str) -> tuple[str, str, str]:
-    """Parse a task line to extract ID, description, and priority.
+def _parse_task_line(text: str) -> tuple[str, str, int]:
+    """Parse a task line to extract ID, title, and priority.
 
-    Returns (id, description, priority)
+    Returns (id, title, priority)
     """
-    priority = "medium"
-    description = text
+    priority = 3
+    title = text
 
     # Check for priority tag: [HIGH], [LOW], [P0], etc.
     priority_match = re.match(r"^\[([A-Z0-9]+)\]\s*(.+)$", text)
     if priority_match:
         tag = priority_match.group(1).upper()
-        description = priority_match.group(2).strip()
+        title = priority_match.group(2).strip()
 
         if tag in ("HIGH", "CRITICAL", "URGENT", "P0", "P1"):
-            priority = "high"
+            priority = 1
         elif tag in ("LOW", "MINOR", "P3", "P4"):
-            priority = "low"
+            priority = 4
         else:
-            priority = "medium"
+            priority = 3
 
     # Check for explicit ID: "task-id: description"
-    id_match = re.match(r"^([a-z0-9_-]+):\s*(.+)$", description, re.IGNORECASE)
+    id_match = re.match(r"^([a-z0-9_-]+):\s*(.+)$", title, re.IGNORECASE)
     if id_match:
         task_id = id_match.group(1).lower()
-        description = id_match.group(2).strip()
+        title = id_match.group(2).strip()
     else:
-        # Generate ID from description
-        task_id = _generate_id(description)
+        # Generate ID from title
+        task_id = _generate_id(title)
 
-    return task_id, description, priority
+    return task_id, title, priority
 
 
-def _generate_id(description: str) -> str:
-    """Generate an ID from description."""
-    # Take first 30 chars, lowercase, replace spaces with dashes
-    clean = description[:30].lower()
+def _generate_id(text: str) -> str:
+    """Generate an ID from text."""
+    clean = text[:30].lower()
     clean = "".join(c if c.isalnum() or c == " " else "" for c in clean)
     return clean.replace(" ", "-").strip("-") or "task"
