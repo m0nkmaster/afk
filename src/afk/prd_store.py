@@ -52,10 +52,36 @@ class PrdDocument:
 
     @classmethod
     def from_dict(cls, data: dict) -> PrdDocument:
-        """Create from dictionary."""
-        stories = [
-            UserStory(**story) for story in data.get("userStories", [])
-        ]
+        """Create from dictionary.
+        
+        Supports multiple key names for backwards compatibility:
+        - userStories (canonical)
+        - tasks (afk prd parse output)
+        - items (legacy)
+        """
+        # Support multiple key names for stories
+        story_data = (
+            data.get("userStories")
+            or data.get("tasks")
+            or data.get("items")
+            or []
+        )
+        
+        stories = []
+        for item in story_data:
+            # Handle both field naming conventions
+            story_kwargs = {
+                "id": item.get("id", ""),
+                "title": item.get("title") or item.get("description") or item.get("summary", ""),
+                "description": item.get("description") or item.get("title", ""),
+                "acceptanceCriteria": item.get("acceptanceCriteria") or item.get("steps") or [],
+                "priority": item.get("priority", 3),
+                "passes": item.get("passes", False),
+                "source": item.get("source", "json:.afk/prd.json"),
+                "notes": item.get("notes", ""),
+            }
+            stories.append(UserStory(**story_kwargs))
+        
         return cls(
             project=data.get("project", ""),
             branchName=data.get("branchName", ""),
