@@ -428,21 +428,21 @@ class TestAiCliDefinitions:
         """Test Cursor Agent CLI definition."""
         agent = next(cli for cli in AI_CLIS if cli.command == "agent")
         assert agent.name == "Cursor Agent"
-        assert agent.args == ["--force", "-p"]
+        assert agent.args == ["-p", "--force"]
         assert "cursor" in agent.install_url.lower()
 
     def test_claude_cli_definition(self) -> None:
         """Test Claude Code CLI definition."""
         claude = next(cli for cli in AI_CLIS if cli.command == "claude")
         assert claude.name == "Claude Code"
-        assert claude.args == ["--dangerously-skip-permissions", "-p"]
+        assert claude.args == ["--dangerously-skip-permissions"]
         assert "anthropic" in claude.install_url.lower()
 
     def test_codex_cli_definition(self) -> None:
         """Test Codex CLI definition."""
         codex = next(cli for cli in AI_CLIS if cli.command == "codex")
         assert codex.name == "Codex"
-        assert codex.args == ["--approval-mode", "full-auto", "-q"]
+        assert codex.args == ["--approval-mode", "full-auto"]
         assert "openai" in codex.install_url.lower() or "codex" in codex.install_url.lower()
 
     def test_kiro_cli_definition(self) -> None:
