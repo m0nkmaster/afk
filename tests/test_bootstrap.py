@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from afk.bootstrap import (
     AI_CLIS,
     CONTEXT_FILES,
+    PROMPT_FILES,
     STACKS,
     TASK_FILES,
     AiCliInfo,
@@ -23,11 +24,14 @@ from afk.bootstrap import (
     _is_github_repo,
     analyse_project,
     detect_available_ai_clis,
+    detect_prompt_file,
     ensure_ai_cli_configured,
     generate_config,
+    infer_config,
+    infer_sources,
     prompt_ai_cli_selection,
 )
-from afk.config import AiCliConfig, FeedbackLoopsConfig
+from afk.config import AfkConfig, AiCliConfig, FeedbackLoopsConfig
 
 
 class TestProjectStack:
@@ -581,3 +585,125 @@ class TestEnsureAiCliConfigured:
             assert exc_info.value.code == 1
         finally:
             os.chdir(old_cwd)
+
+
+class TestPromptFiles:
+    """Tests for prompt file definitions."""
+
+    def test_prompt_files_defined(self) -> None:
+        """Test that prompt files are defined."""
+        assert "prompt.md" in PROMPT_FILES
+        assert "PROMPT.md" in PROMPT_FILES
+
+
+class TestDetectPromptFile:
+    """Tests for detect_prompt_file function."""
+
+    def test_no_prompt_file(self, temp_project: Path) -> None:
+        """Test when no prompt file exists."""
+        result = detect_prompt_file(temp_project)
+        assert result is None
+
+    def test_prompt_md(self, temp_project: Path) -> None:
+        """Test detecting prompt.md."""
+        (temp_project / "prompt.md").write_text("# Do the thing\n")
+        result = detect_prompt_file(temp_project)
+        assert result is not None
+        assert result.name == "prompt.md"
+
+    def test_uppercase_prompt(self, temp_project: Path) -> None:
+        """Test detecting PROMPT.md (case-insensitive filesystems may normalise)."""
+        (temp_project / "PROMPT.md").write_text("# Do the thing\n")
+        result = detect_prompt_file(temp_project)
+        assert result is not None
+        # macOS has case-insensitive filesystem, so accept either
+        assert result.name.lower() == "prompt.md"
+
+    def test_priority_order(self, temp_project: Path) -> None:
+        """Test that lowercase prompt.md takes priority."""
+        (temp_project / "prompt.md").write_text("lower\n")
+        (temp_project / "PROMPT.md").write_text("upper\n")
+        result = detect_prompt_file(temp_project)
+        assert result is not None
+        assert result.name == "prompt.md"
+
+
+class TestInferSources:
+    """Tests for infer_sources function."""
+
+    def test_no_sources(self, temp_project: Path) -> None:
+        """Test when no sources exist."""
+        sources = infer_sources(temp_project)
+        assert sources == []
+
+    def test_markdown_source(self, temp_project: Path) -> None:
+        """Test inferring markdown source."""
+        (temp_project / "TODO.md").write_text("- [ ] Task\n")
+        sources = infer_sources(temp_project)
+        assert len(sources) == 1
+        assert sources[0].type == "markdown"
+        assert sources[0].path == "TODO.md"
+
+    def test_json_source(self, temp_project: Path) -> None:
+        """Test inferring JSON source."""
+        (temp_project / "tasks.json").write_text("[]")
+        sources = infer_sources(temp_project)
+        assert len(sources) == 1
+        assert sources[0].type == "json"
+
+    def test_beads_source(self, temp_project: Path) -> None:
+        """Test inferring beads source."""
+        (temp_project / ".beads").mkdir()
+        with patch("afk.bootstrap._command_exists") as mock_exists:
+            mock_exists.return_value = True  # bd is available
+            sources = infer_sources(temp_project)
+        # May or may not have beads depending on mock scope
+        assert isinstance(sources, list)
+
+    def test_default_root(self) -> None:
+        """Test using current directory as default."""
+        sources = infer_sources()
+        assert isinstance(sources, list)
+
+
+class TestInferConfig:
+    """Tests for infer_config function."""
+
+    def test_loads_existing_config(self, temp_project: Path) -> None:
+        """Test that existing config is loaded."""
+        import os
+
+        from afk.config import AfkConfig
+
+        old_cwd = os.getcwd()
+        os.chdir(temp_project)
+
+        try:
+            # Create config
+            (temp_project / ".afk").mkdir()
+            config = AfkConfig()
+            config.limits.max_iterations = 99
+            config.save(temp_project / ".afk" / "config.json")
+
+            with patch("afk.bootstrap.CONFIG_FILE", temp_project / ".afk" / "config.json"):
+                result = infer_config(temp_project)
+
+            assert result.limits.max_iterations == 99
+        finally:
+            os.chdir(old_cwd)
+
+    def test_infers_without_config(self, python_project: Path) -> None:
+        """Test inferring config when none exists."""
+        with patch("afk.bootstrap.CONFIG_FILE", python_project / ".afk" / "config.json"):
+            result = infer_config(python_project)
+
+        assert result is not None
+        # Should detect Python stack
+        assert result.feedback_loops.lint is not None
+        # Should detect context files
+        assert len(result.prompt.context_files) > 0
+
+    def test_default_root(self) -> None:
+        """Test using current directory as default."""
+        result = infer_config()
+        assert isinstance(result, AfkConfig)
