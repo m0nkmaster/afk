@@ -24,6 +24,7 @@ from rich.panel import Panel
 
 from afk.config import AfkConfig, FeedbackLoopsConfig
 from afk.feedback import FeedbackDisplay, MetricsCollector
+from afk.file_watcher import FileWatcher
 from afk.git_ops import archive_session, clear_session, create_branch
 from afk.output_parser import (
     ErrorEvent,
@@ -111,6 +112,8 @@ class OutputHandler:
         completion_signals: list[str] | None = None,
         feedback_enabled: bool = False,
         feedback_mode: str = "full",
+        watch_root: str | Path | None = None,
+        watch_ignore_patterns: list[str] | None = None,
     ) -> None:
         """Initialise output handler.
 
@@ -119,6 +122,8 @@ class OutputHandler:
             completion_signals: Signals to detect for early termination
             feedback_enabled: Whether to show real-time feedback display
             feedback_mode: Feedback display mode ('full', 'minimal', 'off')
+            watch_root: Root directory to watch for file changes (enables FileWatcher)
+            watch_ignore_patterns: Glob patterns to ignore in file watching
         """
         self.console = console or Console()
         self.signals = completion_signals or COMPLETION_SIGNALS
@@ -129,6 +134,12 @@ class OutputHandler:
         self._feedback: FeedbackDisplay | None = None
         if self._feedback_enabled:
             self._feedback = FeedbackDisplay()
+        # FileWatcher for backup file change detection
+        self._file_watcher: FileWatcher | None = None
+        if watch_root is not None:
+            self._file_watcher = FileWatcher(watch_root, watch_ignore_patterns)
+        # Track paths already recorded to avoid duplicates
+        self._recorded_paths: set[str] = set()
 
     @property
     def metrics_collector(self) -> MetricsCollector:
@@ -145,21 +156,53 @@ class OutputHandler:
         """Access the feedback display if enabled."""
         return self._feedback
 
+    @property
+    def file_watcher(self) -> FileWatcher | None:
+        """Access the file watcher if configured."""
+        return self._file_watcher
+
     def start_feedback(self) -> None:
-        """Start the feedback display if enabled.
+        """Start the feedback display and file watcher if enabled.
 
         Should be called when an iteration begins.
         """
         if self._feedback is not None:
             self._feedback.start()
+        if self._file_watcher is not None:
+            self._file_watcher.start()
+            # Clear any stale changes from previous runs
+            self._file_watcher.get_changes()
+        # Reset recorded paths for the new iteration
+        self._recorded_paths.clear()
 
     def stop_feedback(self) -> None:
-        """Stop the feedback display if enabled.
+        """Stop the feedback display and file watcher if enabled.
 
-        Should be called when an iteration completes.
+        Should be called when an iteration completes. Polls any remaining
+        file changes from the watcher and records them before stopping.
         """
+        # Poll final changes from file watcher before stopping
+        if self._file_watcher is not None:
+            self._poll_watcher_changes()
+            self._file_watcher.stop()
         if self._feedback is not None:
             self._feedback.stop()
+
+    def _poll_watcher_changes(self) -> None:
+        """Poll file watcher for changes and record in metrics collector.
+
+        Deduplicates changes by path to avoid double-counting files that
+        were already recorded from parsed output events.
+        """
+        if self._file_watcher is None:
+            return
+
+        changes = self._file_watcher.get_changes()
+        for change in changes:
+            # Deduplicate: only record if path not already recorded
+            if change.path not in self._recorded_paths:
+                self._collector.record_file_change(change.path, change.change_type)
+                self._recorded_paths.add(change.path)
 
     def contains_completion_signal(self, output: str | None) -> bool:
         """Check if output contains any completion signal."""
@@ -184,7 +227,8 @@ class OutputHandler:
 
         Parses the line through OutputParser and records any detected
         events (tool calls, file changes, errors, warnings) in the
-        MetricsCollector. Updates the feedback display if enabled.
+        MetricsCollector. Also polls the file watcher for backup detection
+        of file changes. Updates the feedback display if enabled.
 
         Args:
             line: A line of output from the AI CLI.
@@ -198,12 +242,17 @@ class OutputHandler:
                 self._collector.record_tool_call(event.tool_name)
             elif isinstance(event, FileChangeEvent):
                 self._collector.record_file_change(event.file_path, event.change_type)
+                # Track path to avoid duplicates from file watcher
+                self._recorded_paths.add(event.file_path)
             elif isinstance(event, ErrorEvent):
                 self._collector.metrics.errors.append(event.error_message)
                 self._collector.metrics.last_activity = datetime.now()
             elif isinstance(event, WarningEvent):
                 self._collector.metrics.warnings.append(event.warning_message)
                 self._collector.metrics.last_activity = datetime.now()
+
+        # Poll file watcher for backup file change detection
+        self._poll_watcher_changes()
 
         # Update feedback display with current metrics
         if self._feedback is not None:

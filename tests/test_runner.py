@@ -636,6 +636,177 @@ class TestRunPromptOnly:
         assert result.stop_reason == StopReason.AI_ERROR
 
 
+class TestOutputHandlerFileWatcherIntegration:
+    """Tests for OutputHandler file watcher integration."""
+
+    def test_file_watcher_disabled_by_default(self) -> None:
+        """Test file watcher is disabled when no watch_root provided."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler()
+
+        assert handler._file_watcher is None
+        assert handler.file_watcher is None
+
+    def test_file_watcher_enabled_with_watch_root(self, tmp_path: Path) -> None:
+        """Test file watcher is created when watch_root is provided."""
+        from afk.file_watcher import FileWatcher
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+
+        assert handler._file_watcher is not None
+        assert isinstance(handler._file_watcher, FileWatcher)
+        assert handler.file_watcher is handler._file_watcher
+
+    def test_file_watcher_accepts_string_path(self, tmp_path: Path) -> None:
+        """Test file watcher accepts string path for watch_root."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=str(tmp_path))
+
+        assert handler._file_watcher is not None
+
+    def test_file_watcher_accepts_custom_ignore_patterns(self, tmp_path: Path) -> None:
+        """Test file watcher uses custom ignore patterns."""
+        from afk.runner import OutputHandler
+
+        patterns = ["*.log", "build"]
+        handler = OutputHandler(watch_root=tmp_path, watch_ignore_patterns=patterns)
+
+        assert handler._file_watcher is not None
+        assert handler._file_watcher._ignore_patterns == patterns
+
+    def test_start_feedback_starts_watcher(self, tmp_path: Path) -> None:
+        """Test start_feedback() starts the file watcher."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+
+        assert handler._file_watcher is not None
+        assert handler._file_watcher.is_running is False
+
+        handler.start_feedback()
+
+        assert handler._file_watcher.is_running is True
+
+        handler.stop_feedback()
+
+    def test_stop_feedback_stops_watcher(self, tmp_path: Path) -> None:
+        """Test stop_feedback() stops the file watcher."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+        handler.start_feedback()
+
+        assert handler._file_watcher is not None
+        assert handler._file_watcher.is_running is True
+
+        handler.stop_feedback()
+
+        assert handler._file_watcher.is_running is False
+
+    def test_start_feedback_clears_recorded_paths(self, tmp_path: Path) -> None:
+        """Test start_feedback() clears the recorded paths set."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+        handler._recorded_paths.add("/some/path.py")
+
+        handler.start_feedback()
+
+        assert len(handler._recorded_paths) == 0
+
+        handler.stop_feedback()
+
+    def test_stream_line_polls_watcher_changes(self, tmp_path: Path) -> None:
+        """Test stream_line() polls file watcher and records changes."""
+        import time
+
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+        handler.start_feedback()
+
+        # Give watcher time to start
+        time.sleep(0.1)
+
+        # Create a file while watcher is running
+        test_file = tmp_path / "new_file.py"
+        test_file.write_text("# test")
+
+        # Give watchdog time to detect
+        time.sleep(0.5)
+
+        # Stream a line to trigger polling
+        handler.stream_line("Some output\n")
+
+        # Check that the change was recorded in metrics
+        metrics = handler.metrics_collector.metrics
+        all_files = metrics.files_created + metrics.files_modified
+
+        handler.stop_feedback()
+
+        assert str(test_file) in all_files
+
+    def test_stream_line_deduplicates_parsed_and_watched_changes(
+        self, tmp_path: Path
+    ) -> None:
+        """Test that files from parsed output are not double-counted from watcher."""
+        import time
+
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+        handler.start_feedback()
+        time.sleep(0.1)
+
+        # Create a file
+        test_file = tmp_path / "parsed_file.py"
+        test_file.write_text("# test")
+        time.sleep(0.5)
+
+        # Simulate the output parser detecting this file first
+        # by calling stream_line with output that matches the file pattern
+        handler.stream_line(f"Edited {test_file}\n")
+
+        # The path should now be in recorded_paths (from parsed event)
+        assert str(test_file) in handler._recorded_paths
+
+        # Metrics should show the file only once
+        metrics = handler.metrics_collector.metrics
+        modified_count = metrics.files_modified.count(str(test_file))
+
+        handler.stop_feedback()
+
+        # File should appear only once (from parsed output, not watcher)
+        assert modified_count == 1
+
+    def test_stop_feedback_polls_final_changes(self, tmp_path: Path) -> None:
+        """Test stop_feedback() polls remaining watcher changes."""
+        import time
+
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(watch_root=tmp_path)
+        handler.start_feedback()
+        time.sleep(0.1)
+
+        # Create a file
+        test_file = tmp_path / "final_file.py"
+        test_file.write_text("# test")
+        time.sleep(0.5)
+
+        # Don't call stream_line - the change should still be caught on stop
+
+        handler.stop_feedback()
+
+        # Check metrics has the file
+        metrics = handler.metrics_collector.metrics
+        all_files = metrics.files_created + metrics.files_modified
+        assert str(test_file) in all_files
+
+
 class TestOutputHandlerFeedbackIntegration:
     """Tests for OutputHandler feedback display integration."""
 
