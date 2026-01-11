@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime
 
-from afk.feedback import IterationMetrics
+from afk.feedback import IterationMetrics, MetricsCollector
 
 
 class TestIterationMetrics:
@@ -100,3 +100,161 @@ class TestIterationMetrics:
 
         assert metrics.last_activity == now
         assert isinstance(metrics.last_activity, datetime)
+
+
+class TestMetricsCollector:
+    """Tests for the MetricsCollector class."""
+
+    def test_default_instantiation(self) -> None:
+        """Test MetricsCollector can be created with default empty metrics."""
+        collector = MetricsCollector()
+
+        assert collector.metrics.tool_calls == 0
+        assert collector.metrics.files_modified == []
+        assert collector.metrics.files_created == []
+        assert collector.metrics.files_deleted == []
+
+    def test_record_tool_call_increments_count(self) -> None:
+        """Test record_tool_call increments the tool_calls counter."""
+        collector = MetricsCollector()
+
+        collector.record_tool_call("write_file")
+        assert collector.metrics.tool_calls == 1
+
+        collector.record_tool_call("read_file")
+        assert collector.metrics.tool_calls == 2
+
+        collector.record_tool_call("execute_command")
+        assert collector.metrics.tool_calls == 3
+
+    def test_record_file_change_modified(self) -> None:
+        """Test record_file_change adds modified files to the list."""
+        collector = MetricsCollector()
+
+        collector.record_file_change("src/main.py", "modified")
+
+        assert "src/main.py" in collector.metrics.files_modified
+        assert len(collector.metrics.files_modified) == 1
+        assert collector.metrics.files_created == []
+        assert collector.metrics.files_deleted == []
+
+    def test_record_file_change_created(self) -> None:
+        """Test record_file_change adds created files to the list."""
+        collector = MetricsCollector()
+
+        collector.record_file_change("src/new.py", "created")
+
+        assert "src/new.py" in collector.metrics.files_created
+        assert len(collector.metrics.files_created) == 1
+        assert collector.metrics.files_modified == []
+        assert collector.metrics.files_deleted == []
+
+    def test_record_file_change_deleted(self) -> None:
+        """Test record_file_change adds deleted files to the list."""
+        collector = MetricsCollector()
+
+        collector.record_file_change("old.py", "deleted")
+
+        assert "old.py" in collector.metrics.files_deleted
+        assert len(collector.metrics.files_deleted) == 1
+        assert collector.metrics.files_modified == []
+        assert collector.metrics.files_created == []
+
+    def test_record_file_change_multiple_types(self) -> None:
+        """Test recording multiple file changes of different types."""
+        collector = MetricsCollector()
+
+        collector.record_file_change("modified.py", "modified")
+        collector.record_file_change("created.py", "created")
+        collector.record_file_change("deleted.py", "deleted")
+        collector.record_file_change("also_modified.py", "modified")
+
+        assert collector.metrics.files_modified == ["modified.py", "also_modified.py"]
+        assert collector.metrics.files_created == ["created.py"]
+        assert collector.metrics.files_deleted == ["deleted.py"]
+
+    def test_record_file_change_updates_last_activity(self) -> None:
+        """Test record_file_change updates last_activity timestamp."""
+        collector = MetricsCollector()
+        assert collector.metrics.last_activity is None
+
+        collector.record_file_change("test.py", "modified")
+
+        assert collector.metrics.last_activity is not None
+        assert isinstance(collector.metrics.last_activity, datetime)
+
+    def test_record_tool_call_updates_last_activity(self) -> None:
+        """Test record_tool_call updates last_activity timestamp."""
+        collector = MetricsCollector()
+        assert collector.metrics.last_activity is None
+
+        collector.record_tool_call("some_tool")
+
+        assert collector.metrics.last_activity is not None
+        assert isinstance(collector.metrics.last_activity, datetime)
+
+    def test_reset_clears_all_metrics(self) -> None:
+        """Test reset() clears all accumulated metrics."""
+        collector = MetricsCollector()
+
+        # Accumulate some metrics
+        collector.record_tool_call("tool1")
+        collector.record_tool_call("tool2")
+        collector.record_file_change("a.py", "modified")
+        collector.record_file_change("b.py", "created")
+        collector.record_file_change("c.py", "deleted")
+
+        # Verify we have data
+        assert collector.metrics.tool_calls == 2
+        assert len(collector.metrics.files_modified) == 1
+        assert len(collector.metrics.files_created) == 1
+        assert len(collector.metrics.files_deleted) == 1
+        assert collector.metrics.last_activity is not None
+
+        # Reset
+        collector.reset()
+
+        # Verify everything is cleared
+        assert collector.metrics.tool_calls == 0
+        assert collector.metrics.files_modified == []
+        assert collector.metrics.files_created == []
+        assert collector.metrics.files_deleted == []
+        assert collector.metrics.lines_added == 0
+        assert collector.metrics.lines_removed == 0
+        assert collector.metrics.errors == []
+        assert collector.metrics.warnings == []
+        assert collector.metrics.last_activity is None
+
+    def test_reset_creates_new_metrics_instance(self) -> None:
+        """Test reset() creates a fresh IterationMetrics instance."""
+        collector = MetricsCollector()
+        collector.record_tool_call("tool")
+        old_metrics = collector.metrics
+
+        collector.reset()
+
+        # Should be a different instance
+        assert collector.metrics is not old_metrics
+
+    def test_metrics_property_returns_current_metrics(self) -> None:
+        """Test metrics property provides access to current IterationMetrics."""
+        collector = MetricsCollector()
+        collector.record_tool_call("test")
+
+        metrics = collector.metrics
+
+        assert isinstance(metrics, IterationMetrics)
+        assert metrics.tool_calls == 1
+
+    def test_record_file_change_ignores_unknown_change_type(self) -> None:
+        """Test record_file_change handles unknown change types gracefully."""
+        collector = MetricsCollector()
+
+        # Should not raise, but also should not add to any list
+        collector.record_file_change("unknown.py", "renamed")
+
+        assert collector.metrics.files_modified == []
+        assert collector.metrics.files_created == []
+        assert collector.metrics.files_deleted == []
+        # But last_activity should still be updated
+        assert collector.metrics.last_activity is not None
