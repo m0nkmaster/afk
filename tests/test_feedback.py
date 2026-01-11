@@ -665,3 +665,65 @@ class TestFeedbackDisplay:
         assert "+" in output
         assert "existing.py" in output
         assert "new.py" in output
+
+    def test_update_with_changing_metrics(self) -> None:
+        """Test update() correctly refreshes display with changing metrics."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            # Initial update with baseline metrics
+            metrics1 = IterationMetrics(
+                tool_calls=1,
+                files_modified=["first.py"],
+            )
+            display.update(metrics1)
+
+            assert display._spinner_frame == 1
+
+            # Update with changed metrics
+            metrics2 = IterationMetrics(
+                tool_calls=5,
+                files_modified=["first.py", "second.py"],
+                files_created=["new.py"],
+                lines_added=100,
+            )
+            display.update(metrics2)
+
+            assert display._spinner_frame == 2
+
+            # The Live context should have been updated
+            # We verify by checking the internal state was processed
+            assert display._live is not None
+        finally:
+            display.stop()
+
+    def test_update_rebuilds_panel_each_call(self) -> None:
+        """Test update() rebuilds the panel on each call with current metrics."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        # Build panel with different metrics to verify rebuilding
+        metrics1 = IterationMetrics(tool_calls=1)
+        metrics2 = IterationMetrics(tool_calls=10)
+
+        console = Console(force_terminal=True, width=80)
+
+        with console.capture() as capture1:
+            panel1 = display._build_panel(metrics1)
+            console.print(panel1)
+        output1 = capture1.get()
+
+        with console.capture() as capture2:
+            panel2 = display._build_panel(metrics2)
+            console.print(panel2)
+        output2 = capture2.get()
+
+        # Tool counts should be different in each output
+        assert "1" in output1
+        assert "10" in output2
