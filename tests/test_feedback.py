@@ -258,3 +258,106 @@ class TestMetricsCollector:
         assert collector.metrics.files_deleted == []
         # But last_activity should still be updated
         assert collector.metrics.last_activity is not None
+
+
+class TestFeedbackDisplay:
+    """Tests for the FeedbackDisplay class."""
+
+    def test_instantiation(self) -> None:
+        """Test FeedbackDisplay can be created."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        assert display is not None
+        assert display._live is None  # Not started yet
+
+    def test_start_initialises_live_context(self) -> None:
+        """Test start() initialises Rich Live context."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            assert display._live is not None
+            assert display._started is True
+        finally:
+            display.stop()
+
+    def test_stop_exits_live_context(self) -> None:
+        """Test stop() cleanly exits Live context."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+        display.stop()
+
+        # After stop, started flag should be False
+        assert display._started is False
+
+    def test_stop_before_start_is_safe(self) -> None:
+        """Test stop() is safe to call without start()."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        # Should not raise
+        display.stop()
+
+    def test_build_panel_returns_renderable(self) -> None:
+        """Test _build_panel returns a Rich Panel."""
+        from rich.console import Console
+        from rich.panel import Panel
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        panel = display._build_panel()
+
+        # Verify it's renderable by using Console
+        console = Console(force_terminal=True, width=80)
+        # If it's not renderable, this would raise
+        with console.capture():
+            console.print(panel)
+
+        assert isinstance(panel, Panel)
+
+    def test_build_panel_contains_header(self) -> None:
+        """Test _build_panel includes header with afk title."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        panel = display._build_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "afk" in output.lower()
+
+    def test_double_start_is_safe(self) -> None:
+        """Test calling start() twice doesn't crash."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            # Second start should be a no-op or safe
+            display.start()
+            assert display._live is not None
+        finally:
+            display.stop()
+
+    def test_double_stop_is_safe(self) -> None:
+        """Test calling stop() twice doesn't crash."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+        display.stop()
+        # Second stop should be safe
+        display.stop()

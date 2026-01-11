@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from rich.console import Console, Group
+from rich.live import Live
+from rich.panel import Panel
+from rich.text import Text
+
 
 @dataclass
 class IterationMetrics:
@@ -87,3 +92,68 @@ class MetricsCollector:
     def reset(self) -> None:
         """Clear all accumulated metrics and start fresh."""
         self._metrics = IterationMetrics()
+
+
+class FeedbackDisplay:
+    """Real-time feedback display using Rich Live panel.
+
+    This class provides a live-updating terminal display that shows
+    iteration progress, activity metrics, and status information
+    during autonomous coding loops.
+    """
+
+    def __init__(self) -> None:
+        """Initialise the feedback display."""
+        self._console = Console()
+        self._live: Live | None = None
+        self._started = False
+
+    def start(self) -> None:
+        """Start the live display context.
+
+        Initialises the Rich Live context for real-time updates.
+        Safe to call multiple times; subsequent calls are no-ops.
+        """
+        if self._started:
+            return
+
+        self._live = Live(
+            self._build_panel(),
+            console=self._console,
+            refresh_per_second=4,
+            transient=True,
+        )
+        self._live.start()
+        self._started = True
+
+    def stop(self) -> None:
+        """Stop the live display context.
+
+        Cleanly exits the Rich Live context. Safe to call
+        without having called start() first.
+        """
+        if self._live is not None:
+            self._live.stop()
+            self._started = False
+
+    def _build_panel(self) -> Panel:
+        """Build the main display panel.
+
+        Returns:
+            A Rich renderable containing the feedback display.
+        """
+        header = Text()
+        header.append("◉ ", style="green bold")
+        header.append("afk", style="bold cyan")
+        header.append(" running...", style="dim")
+
+        content = Group(
+            header,
+            Text("Waiting for activity...", style="dim"),
+        )
+
+        return Panel(
+            content,
+            title="[bold]afk[/bold]",
+            border_style="cyan",
+        )
