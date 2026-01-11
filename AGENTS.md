@@ -1,6 +1,6 @@
 # Agent Instructions
 
-**afk** - Autonomous AI coding loops, Ralph Wiggum style.
+**afk** — Autonomous AI coding loops, Ralph Wiggum style.
 
 ## Project Overview
 
@@ -37,9 +37,9 @@ pytest                       # Tests with coverage
 
 ## Testing
 
-This project maintains test coverage with pytest. Tests are required for all changes.
+This project maintains test coverage with pytest (currently ~89%). Tests are required for all changes.
 
-Write tests first. Follow the red-green-refactor test driven development process (TDD).
+Write tests first. Follow the red-green-refactor test-driven development process (TDD).
 
 ### Running Tests
 
@@ -53,32 +53,40 @@ pytest -k "test_load"        # Run tests matching pattern
 ### Test Structure
 
 Tests are organised by module:
-- `tests/test_config.py` - Configuration models
-- `tests/test_progress.py` - Session and task progress
-- `tests/test_bootstrap.py` - Project analysis
-- `tests/test_prompt.py` - Prompt generation
-- `tests/test_output.py` - Output handlers
-- `tests/test_cli.py` - CLI commands
-- `tests/test_git_ops.py` - Git operations
-- `tests/test_runner.py` - Autonomous loop runner
-- `tests/test_prd.py` - PRD parsing
-- `tests/test_sources*.py` - Task source adapters
-- `tests/test_art.py` - ASCII art spinners
-- `tests/test_feedback.py` - Feedback display (WIP)
-- `tests/test_file_watcher.py` - File system watcher (WIP)
-- `tests/test_output_parser.py` - AI output parsing (WIP)
+
+| Test File | Module | Coverage |
+|-----------|--------|----------|
+| `test_config.py` | Configuration models | 100% |
+| `test_progress.py` | Session and task progress | 100% |
+| `test_bootstrap.py` | Project analysis | 100% |
+| `test_prompt.py` | Prompt generation | 93% |
+| `test_output.py` | Output handlers | 100% |
+| `test_cli.py` | CLI commands | ~90% |
+| `test_git_ops.py` | Git operations | 95% |
+| `test_runner.py` | Autonomous loop runner | 83% |
+| `test_prd.py` | PRD parsing | 100% |
+| `test_sources.py` | Source aggregation | 79% |
+| `test_sources_beads.py` | Beads adapter | 87% |
+| `test_sources_github.py` | GitHub adapter | 99% |
+| `test_sources_json.py` | JSON adapter | 94% |
+| `test_sources_markdown.py` | Markdown adapter | 100% |
+| `test_art.py` | ASCII art spinners | 100% |
+| `test_feedback.py` | Feedback display | 97% |
+| `test_file_watcher.py` | File system watcher | 91% |
+| `test_output_parser.py` | AI output parsing | 100% |
 
 ### Writing Tests
 
 1. **Use fixtures** from `tests/conftest.py` for common setup (temp directories, sample data)
-2. **Mock external calls** - subprocess, clipboard, file I/O where appropriate
-3. **Test edge cases** - empty inputs, missing files, error conditions
-4. **Keep tests focused** - one behaviour per test
+2. **Mock external calls** — subprocess, clipboard, file I/O where appropriate
+3. **Test edge cases** — empty inputs, missing files, error conditions
+4. **Keep tests focused** — one behaviour per test
 
 ### Coverage Requirements
 
 - Coverage report generated as HTML in `htmlcov/`
 - New code must include corresponding tests
+- Target: maintain >85% overall coverage
 
 ## Architecture
 
@@ -92,18 +100,30 @@ src/afk/
 ├── output.py        # Output handlers (clipboard, file, stdout)
 ├── prd.py           # PRD parsing prompt generation
 ├── prd_store.py     # PRD storage, sync, and task aggregation
-├── runner.py        # Autonomous loop runner (Ralph pattern)
+├── runner.py        # Autonomous loop runner (Ralph pattern) - largest module
 ├── git_ops.py       # Git operations (branch, commit, archive)
 ├── art.py           # ASCII art and spinner animations
-├── feedback.py      # Real-time feedback display (WIP)
-├── file_watcher.py  # File system monitoring (WIP)
-├── output_parser.py # AI CLI output parsing (WIP)
+├── feedback.py      # Real-time feedback display with Rich Live panels
+├── file_watcher.py  # File system monitoring using watchdog
+├── output_parser.py # AI CLI output parsing (Claude/Cursor patterns)
 └── sources/         # Task source adapters
+    ├── __init__.py  # aggregate_tasks() dispatcher
     ├── beads.py     # Beads (bd) integration
     ├── json_prd.py  # JSON PRD files
     ├── markdown.py  # Markdown checklists
     └── github.py    # GitHub issues via gh CLI
 ```
+
+### Module Sizes
+
+| Module | Lines | Notes |
+|--------|-------|-------|
+| `runner.py` | ~1,030 | Consider splitting into submodules |
+| `cli.py` | ~1,130 | All Click commands |
+| `bootstrap.py` | ~530 | Project detection |
+| `prd_store.py` | ~275 | Task persistence |
+| `feedback.py` | ~360 | Rich Live panels |
+| `output_parser.py` | ~285 | Regex patterns for AI output |
 
 ## Key Patterns
 
@@ -112,8 +132,8 @@ src/afk/
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations, task status, and per-task learnings (short-term memory)
 - **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
 - **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into prd.json
-- **Prompts**: Jinja2 templates, customizable via config
-- **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
+- **Prompts**: Jinja2 templates, customisable via config
+- **Runner**: Implements Ralph Wiggum pattern — spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
 - **Archiving**: Sessions archived on completion, branch change, or manually
@@ -150,6 +170,13 @@ When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` u
 2. Implement `load_newsource_tasks() -> list[UserStory]`
 3. Add to `SourceConfig.type` literal in `config.py`
 4. Add case to `_load_from_source()` in `sources/__init__.py`
+5. Add tests in `tests/test_sources_newsource.py`
+
+## Known Technical Debt
+
+- **Duplicate AC extraction**: `_extract_acceptance_criteria()` is duplicated in `sources/beads.py` and `sources/github.py`. Should be extracted to `sources/utils.py`.
+- **runner.py size**: At 1,030 lines, this module could be split into `runner/output_handler.py`, `runner/iteration.py`, `runner/controller.py`.
+- **Prompt iteration increment**: `generate_prompt()` calls `progress.increment_iteration()` on every call, but this is also called by `afk next` which shouldn't increment. Needs refactoring.
 
 ## Landing the Plane (Session Completion)
 
@@ -157,22 +184,22 @@ When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` u
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+1. **File issues for remaining work** — Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) — Tests, linters, builds
+3. **Update issue status** — Close finished work, update in-progress items
+4. **PUSH TO REMOTE** — This is MANDATORY:
    ```bash
    git pull --rebase
    bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. **Clean up** — Clear stashes, prune remote branches
+6. **Verify** — All changes committed AND pushed
+7. **Hand off** — Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
+- NEVER stop before pushing — that leaves work stranded locally
+- NEVER say "ready to push when you are" — YOU must push
 - If push fails, resolve and retry until it succeeds

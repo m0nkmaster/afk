@@ -1,94 +1,20 @@
 # afk Usage Guide
 
-**afk** — Autonomous AI coding loops, Ralph Wiggum style.
-
-A tool-agnostic CLI for autonomous AI-driven software development. Run your AI coding tasks in a loop, letting the AI work autonomously while you step away from the keyboard.
+Complete reference for **afk** — autonomous AI coding loops, Ralph Wiggum style.
 
 ---
 
 ## Table of Contents
 
-- [How It Works](#how-it-works)
 - [Quick Start](#quick-start)
 - [Core Concepts](#core-concepts)
 - [Commands Reference](#commands-reference)
 - [Configuration](#configuration)
 - [Task Sources](#task-sources)
+- [AI CLI Support](#ai-cli-support)
 - [Workflow Examples](#workflow-examples)
 - [Debugging](#debugging)
-- [AI CLI Support](#ai-cli-support)
-
----
-
-## How It Works
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        afk run                                   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-              ┌───────────────────────────────┐
-              │  Load tasks from sources      │
-              │  (beads, json, markdown, gh)  │
-              └───────────────────────────────┘
-                              │
-                              ▼
-              ┌───────────────────────────────┐
-              │  All tasks complete?          │──── Yes ───▶ EXIT ✓
-              └───────────────────────────────┘
-                              │ No
-                              ▼
-              ┌───────────────────────────────┐
-              │  Generate prompt with:        │
-              │  • Next task                  │
-              │  • Context files              │
-              │  • Session learnings          │
-              └───────────────────────────────┘
-                              │
-                              ▼
-              ┌───────────────────────────────┐
-              │  Spawn FRESH AI instance      │◀──────────┐
-              │  (clean context each time)    │           │
-              └───────────────────────────────┘           │
-                              │                           │
-                              ▼                           │
-              ┌───────────────────────────────┐           │
-              │  AI implements task           │           │
-              │  • Code changes               │           │
-              │  • Records learnings          │           │
-              │  • Updates AGENTS.md          │           │
-              │  • Runs `afk done <id>`       │           │
-              └───────────────────────────────┘           │
-                              │                           │
-                              ▼                           │
-              ┌───────────────────────────────┐           │
-              │  Run quality gates            │           │
-              │  (lint, test, typecheck)      │           │
-              └───────────────────────────────┘           │
-                              │                           │
-                      Pass?   │                           │
-                     ┌────────┴────────┐                  │
-                     │ Yes             │ No               │
-                     ▼                 ▼                  │
-              ┌─────────────┐   ┌─────────────┐           │
-              │ Auto-commit │   │ Skip commit │           │
-              └─────────────┘   └─────────────┘           │
-                     │                 │                  │
-                     └────────┬────────┘                  │
-                              │                           │
-                              └───────────────────────────┘
-```
-
-### The Ralph Wiggum Pattern
-
-Each iteration spawns a **fresh AI instance** with clean context. This prevents context overflow and ensures consistent behaviour. Memory persists only through:
-
-| Persistence Layer | Purpose |
-|-------------------|---------|
-| **Git history** | Commits from previous iterations |
-| **progress.json** | Task status and per-task learnings (short-term memory) |
-| **AGENTS.md** | Project-wide conventions and patterns (long-term memory) |
+- [File Structure](#file-structure)
 
 ---
 
@@ -123,6 +49,16 @@ This means you can just drop a `prd.json` in `.afk/` and run `afk go` — no con
 ---
 
 ## Core Concepts
+
+### The Ralph Wiggum Pattern
+
+Each iteration spawns a **fresh AI instance** with clean context. This prevents context overflow and ensures consistent behaviour. Memory persists only through:
+
+| Persistence Layer | Purpose |
+|-------------------|---------|
+| **Git history** | Commits from previous iterations |
+| **progress.json** | Task status and per-task learnings (short-term memory) |
+| **AGENTS.md** | Project-wide conventions and patterns (long-term memory) |
 
 ### Tasks
 
@@ -199,10 +135,10 @@ The AI reads these files directly and updates them as it works. Task-specific le
 | `afk go -u` | Run until all tasks complete |
 | `afk go TODO.md 5` | Use specific source, run 5 iterations |
 | `afk start [N]` | Init if needed + run N iterations (default: 10) |
-| `afk run [N]` | Run N iterations with configured AI CLI |
+| `afk run [N]` | Run N iterations with configured AI CLI (default: 5) |
 | `afk run --until-complete` | Run until all tasks done |
 | `afk run -b feature-name` | Create feature branch first |
-| `afk resume` | Continue from last session |
+| `afk resume [N]` | Continue from last session without archiving |
 
 ### Task Management Commands
 
@@ -221,6 +157,8 @@ The AI reads these files directly and updates them as it works. Task-specific le
 | `afk explain` | Show current loop state |
 | `afk explain -v` | Verbose: include learnings and failures |
 | `afk next` | Preview next prompt (without running) |
+| `afk verify` | Run quality gates |
+| `afk verify -v` | Show full output from failed gates |
 
 ### Source Management Commands
 
@@ -275,12 +213,12 @@ All config lives in `.afk/config.json`:
     "timeout_minutes": 120
   },
   "ai_cli": {
-    "command": "agent",
-    "args": []
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p"]
   },
   "git": {
     "auto_commit": true,
-    "auto_branch": true,
+    "auto_branch": false,
     "branch_prefix": "afk/"
   },
   "archive": {
@@ -324,16 +262,6 @@ All config lives in `.afk/config.json`:
 
 #### Limits
 
-```json
-{
-  "limits": {
-    "max_iterations": 20,
-    "max_task_failures": 3,
-    "timeout_minutes": 120
-  }
-}
-```
-
 | Limit | Description | Default |
 |-------|-------------|---------|
 | `max_iterations` | Stop after N iterations | 20 |
@@ -364,8 +292,14 @@ All config lives in `.afk/config.json`:
   "tasks": [
     {
       "id": "auth-flow",
+      "title": "Implement login flow",
       "description": "Implement user authentication",
       "priority": 1,
+      "acceptanceCriteria": [
+        "User can enter email/password",
+        "Invalid credentials show error",
+        "Successful login redirects to dashboard"
+      ],
       "passes": false
     }
   ]
@@ -388,6 +322,34 @@ Uses `bd ready` to get available work from your beads issue tracker.
 ### GitHub Issues
 
 Uses `gh issue list`. Requires GitHub CLI to be installed and authenticated.
+
+---
+
+## AI CLI Support
+
+afk works with any CLI that accepts prompts as the final argument. On first run, `afk go` auto-detects installed CLIs and prompts you to select one.
+
+### Supported CLIs
+
+| CLI | Configuration |
+|-----|---------------|
+| **Claude Code** | `{"command": "claude", "args": ["--dangerously-skip-permissions", "-p"]}` |
+| **Cursor Agent** | `{"command": "agent", "args": ["-p", "--force"]}` |
+| **Codex** | `{"command": "codex", "args": ["--approval-mode", "full-auto", "-q"]}` |
+| **Aider** | `{"command": "aider", "args": ["--yes"]}` |
+| **Amp** | `{"command": "amp", "args": ["--dangerously-allow-all"]}` |
+| **Kiro** | `{"command": "kiro", "args": ["--auto"]}` |
+| **Custom** | `{"command": "your-cli", "args": [...]}` |
+
+### Completion Signals
+
+The AI can signal task completion by outputting:
+
+- `<promise>COMPLETE</promise>` (Ralph-compatible)
+- `AFK_COMPLETE`
+- `AFK_STOP`
+
+When detected, afk terminates the current iteration gracefully.
 
 ---
 
@@ -493,33 +455,6 @@ ls .afk/archive/           # Previous sessions
 
 ---
 
-## AI CLI Support
-
-afk works with any CLI that accepts prompts as the final argument:
-
-| CLI | Configuration |
-|-----|---------------|
-| **Cursor Agent** (default) | `{"command": "agent", "args": ["--force", "-p"]}` |
-| **Claude CLI** | `{"command": "claude", "args": ["--dangerously-skip-permissions", "-p"]}` |
-| **Codex** | `{"command": "codex", "args": ["--approval-mode", "full-auto", "-q"]}` |
-| **Aider** | `{"command": "aider", "args": ["--yes"]}` |
-| **Amp** | `{"command": "amp", "args": ["--dangerously-allow-all"]}` |
-| **Custom** | `{"command": "your-cli", "args": [...]}` |
-
-When you run `afk go` for the first time, it will auto-detect installed AI CLIs and prompt you to select one.
-
-### Completion Signals
-
-The AI can signal task completion by outputting:
-
-- `<promise>COMPLETE</promise>`
-- `AFK_COMPLETE`
-- `AFK_STOP`
-
-When detected, afk terminates the current iteration gracefully.
-
----
-
 ## File Structure
 
 ```
@@ -529,7 +464,7 @@ When detected, afk terminates the current iteration gracefully.
 ├── progress.json    # Session state (iterations, task status, per-task learnings)
 ├── prompt.md        # Generated prompt (if using file output)
 └── archive/         # Previous sessions
-    └── 2025-01-11-feature-x/
+    └── 2025-01-11_12-30-00_main_complete/
         ├── prd.json
         ├── progress.json
         └── metadata.json
@@ -542,22 +477,13 @@ AGENTS.md            # Long-term project knowledge (at project root or in subfol
 ## Installation
 
 ```bash
-# Recommended: install globally with pipx
-pipx install git+https://github.com/m0nkmaster/afk.git
-
-# Or with pip
-pip install git+https://github.com/m0nkmaster/afk.git
-
-# Development
+# From source (recommended during development)
 git clone https://github.com/m0nkmaster/afk.git && cd afk
 pip install -e ".[dev]"
+
+# Or with pip (once published)
+pip install afk
+
+# Or with pipx (once published)
+pipx install afk
 ```
-
----
-
-## Inspired By
-
-- [Ralph Wiggum pattern](https://ghuntley.com/ralph/) by Geoffrey Huntley
-- [snarktank/ralph](https://github.com/snarktank/ralph) by Ryan Carson
-- [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) by Anthropic
-- [Beads](https://github.com/steveyegge/beads) by Steve Yegge
