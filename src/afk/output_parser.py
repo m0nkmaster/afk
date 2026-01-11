@@ -102,13 +102,21 @@ class OutputParser:
     """Parse AI CLI output to detect tool calls, file operations, and events.
 
     Supports multiple AI CLIs with different output formats. Currently
-    implements Claude Code pattern detection.
+    implements Claude Code and Cursor pattern detection.
     """
 
     # Claude Code output patterns
     _CLAUDE_TOOL_CALL = re.compile(r"Calling tool: (\w+)")
     _CLAUDE_FILE_WRITE = re.compile(r"Writing to: (.+)")
     _CLAUDE_FILE_READ = re.compile(r"Reading: (.+)")
+
+    # Cursor CLI output patterns
+    # Tool calls are prefixed with ⏺ (record symbol) followed by ToolName(params)
+    _CURSOR_TOOL_CALL = re.compile(r"⏺\s+(\w+)\(")
+    # File operations: "Edited path", "Created path", "Deleted path"
+    _CURSOR_FILE_EDITED = re.compile(r"^Edited\s+(.+)$")
+    _CURSOR_FILE_CREATED = re.compile(r"^Created\s+(.+)$")
+    _CURSOR_FILE_DELETED = re.compile(r"^Deleted\s+(.+)$")
 
     def parse(self, line: str) -> list[Event]:
         """Parse a line of AI output and return detected events.
@@ -154,6 +162,49 @@ class OutputParser:
                     raw_line=line,
                     file_path=match.group(1).strip(),
                     change_type="read",
+                )
+            )
+
+        # Check for Cursor tool call pattern
+        if match := self._CURSOR_TOOL_CALL.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name=match.group(1),
+                )
+            )
+
+        # Check for Cursor file edited pattern
+        if match := self._CURSOR_FILE_EDITED.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="modified",
+                )
+            )
+
+        # Check for Cursor file created pattern
+        if match := self._CURSOR_FILE_CREATED.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="created",
+                )
+            )
+
+        # Check for Cursor file deleted pattern
+        if match := self._CURSOR_FILE_DELETED.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="deleted",
                 )
             )
 

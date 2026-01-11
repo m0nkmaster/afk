@@ -482,3 +482,225 @@ class TestOutputParserReturnsCorrectTypes:
 
         assert len(events) == 1
         assert type(events[0]) is FileChangeEvent
+
+
+class TestOutputParserCursorToolCalls:
+    """Tests for Cursor CLI tool call pattern detection."""
+
+    def test_detect_cursor_tool_read(self) -> None:
+        """Test detection of Cursor Read tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ Read(path: src/main.py)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].event_type == EventType.TOOL_CALL
+        assert events[0].tool_name == "Read"
+
+    def test_detect_cursor_tool_write(self) -> None:
+        """Test detection of Cursor Write tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ Write(path: src/config.py)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Write"
+
+    def test_detect_cursor_tool_edit(self) -> None:
+        """Test detection of Cursor Edit tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ Edit(path: tests/test_cli.py)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Edit"
+
+    def test_detect_cursor_tool_shell(self) -> None:
+        """Test detection of Cursor Shell tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ Shell(command: pytest)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Shell"
+
+    def test_detect_cursor_tool_grep(self) -> None:
+        """Test detection of Cursor Grep tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ Grep(pattern: TODO)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Grep"
+
+    def test_detect_cursor_tool_glob(self) -> None:
+        """Test detection of Cursor Glob tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ Glob(pattern: **/*.py)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Glob"
+
+    def test_detect_cursor_str_replace(self) -> None:
+        """Test detection of Cursor StrReplace tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("⏺ StrReplace(path: src/utils.py)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "StrReplace"
+
+    def test_detect_cursor_tool_with_whitespace(self) -> None:
+        """Test Cursor tool detection with leading whitespace."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("  ⏺ Read(path: file.py)")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Read"
+
+
+class TestOutputParserCursorFileOperations:
+    """Tests for Cursor CLI file operation pattern detection."""
+
+    def test_detect_cursor_edited_file(self) -> None:
+        """Test detection of Cursor Edited file indicator."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Edited src/main.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].event_type == EventType.FILE_CHANGE
+        assert events[0].file_path == "src/main.py"
+        assert events[0].change_type == "modified"
+
+    def test_detect_cursor_created_file(self) -> None:
+        """Test detection of Cursor Created file indicator."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Created tests/test_new.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "tests/test_new.py"
+        assert events[0].change_type == "created"
+
+    def test_detect_cursor_deleted_file(self) -> None:
+        """Test detection of Cursor Deleted file indicator."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Deleted old_file.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "old_file.py"
+        assert events[0].change_type == "deleted"
+
+    def test_detect_cursor_edited_deep_path(self) -> None:
+        """Test detection of Cursor Edited with deep directory path."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Edited src/components/auth/LoginForm.tsx")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "src/components/auth/LoginForm.tsx"
+
+    def test_detect_cursor_edited_with_spaces_in_path(self) -> None:
+        """Test detection of Cursor Edited with spaces in file path."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Edited docs/my file.md")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "docs/my file.md"
+
+    def test_cursor_edited_case_insensitive(self) -> None:
+        """Test Cursor file operation detection is case insensitive."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # These should all match
+        for prefix in ["Edited", "Created", "Deleted"]:
+            events = parser.parse(f"{prefix} test.py")
+            assert len(events) == 1
+            assert isinstance(events[0], FileChangeEvent)
+
+
+class TestOutputParserNoConflicts:
+    """Tests to ensure Cursor and Claude patterns don't conflict."""
+
+    def test_claude_pattern_still_works(self) -> None:
+        """Test Claude patterns still work after adding Cursor patterns."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # Claude tool call
+        events = parser.parse("Calling tool: write_file")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "write_file"
+
+    def test_claude_file_write_still_works(self) -> None:
+        """Test Claude file write still works after adding Cursor patterns."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # Claude file write
+        events = parser.parse("Writing to: src/main.py")
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].change_type == "modified"
+
+    def test_distinct_patterns_no_overlap(self) -> None:
+        """Test patterns detect correct tool without false positives."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # This should only match Cursor pattern, not Claude
+        events = parser.parse("⏺ Write(path: test.py)")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Write"
+
+        # This should only match Claude pattern
+        events = parser.parse("Calling tool: Write")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Write"
+
+    def test_non_matching_line_still_returns_empty(self) -> None:
+        """Test non-matching lines return empty after adding patterns."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Some random output text")
+        assert events == []
