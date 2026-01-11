@@ -104,6 +104,16 @@ get_latest_release() {
     fi
 }
 
+# Global temp dir for cleanup trap
+TEMP_DIR=""
+
+cleanup() {
+    if [[ -n "$TEMP_DIR" && -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+    fi
+}
+trap cleanup EXIT
+
 # Download and verify binary
 download_binary() {
     local version="$1"
@@ -113,24 +123,22 @@ download_binary() {
     local download_url="https://github.com/${REPO}/releases/download/${version}/${binary_name}"
     local checksum_url="https://github.com/${REPO}/releases/download/${version}/checksums.sha256"
     
-    local tmp_dir
-    tmp_dir="$(mktemp -d)"
-    trap 'rm -rf "$tmp_dir"' EXIT
+    TEMP_DIR="$(mktemp -d)"
     
     info "Downloading afk ${version} for ${os}-${arch}..."
     
     # Download binary
-    if ! curl -fsSL -o "${tmp_dir}/${binary_name}" "$download_url"; then
+    if ! curl -fsSL -o "${TEMP_DIR}/${binary_name}" "$download_url"; then
         error "Failed to download binary from ${download_url}"
     fi
     
     # Download checksums
-    if ! curl -fsSL -o "${tmp_dir}/checksums.sha256" "$checksum_url"; then
+    if ! curl -fsSL -o "${TEMP_DIR}/checksums.sha256" "$checksum_url"; then
         warn "Warning: Could not download checksums for verification"
     else
         # Verify checksum
         info "Verifying checksum..."
-        cd "$tmp_dir"
+        cd "$TEMP_DIR"
         
         # Extract just the line for our binary
         grep "${binary_name}" checksums.sha256 > our_checksum.sha256
@@ -155,7 +163,7 @@ download_binary() {
     
     # Install binary
     info "Installing to ${INSTALL_DIR}/${BINARY_NAME}..."
-    mv "${tmp_dir}/${binary_name}" "${INSTALL_DIR}/${BINARY_NAME}"
+    mv "${TEMP_DIR}/${binary_name}" "${INSTALL_DIR}/${BINARY_NAME}"
     chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
 }
 
