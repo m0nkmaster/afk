@@ -322,6 +322,31 @@ class OutputHandler:
             self.console.print(f"[green bold]✓ Task Complete![/green bold] [cyan]{task_id}[/cyan]")
             self.console.print()
 
+    def show_session_complete(
+        self, tasks_completed: int, iterations: int, duration_seconds: float
+    ) -> None:
+        """Display session complete celebration with summary statistics.
+
+        Uses FeedbackDisplay if available, otherwise falls back to console output.
+
+        Args:
+            tasks_completed: Number of tasks completed in this session.
+            iterations: Number of iterations run.
+            duration_seconds: Total session duration in seconds.
+        """
+        if self._feedback is not None:
+            self._feedback.show_session_complete(tasks_completed, iterations, duration_seconds)
+        else:
+            # Fallback: print simple session complete message to console
+            minutes = int(duration_seconds) // 60
+            seconds = int(duration_seconds) % 60
+            self.console.print()
+            self.console.print("[green bold]✓ All Tasks Complete![/green bold]")
+            self.console.print(f"  Tasks: [cyan]{tasks_completed}[/cyan]")
+            self.console.print(f"  Iterations: [cyan]{iterations}[/cyan]")
+            self.console.print(f"  Time: [cyan]{minutes}m {seconds}s[/cyan]")
+            self.console.print()
+
     def loop_start_panel(
         self,
         ai_cli: str,
@@ -669,6 +694,14 @@ class LoopController:
             archived_to = archive_session(self.config, reason=stop_reason.name.lower())
 
         duration = (datetime.now() - start_time).total_seconds()
+
+        # Show session complete celebration when all tasks finished
+        if stop_reason == StopReason.COMPLETE and tasks_completed_this_session > 0:
+            self.output.show_session_complete(
+                tasks_completed=tasks_completed_this_session,
+                iterations=iterations_completed,
+                duration_seconds=duration,
+            )
 
         self.output.session_complete_panel(
             iterations=iterations_completed,

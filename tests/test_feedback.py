@@ -1902,3 +1902,214 @@ class TestFeedbackDisplayCelebration:
                 display.show_celebration(task_id)
             output = capture.get()
             assert task_id in output
+
+
+class TestFeedbackDisplaySessionComplete:
+    """Tests for FeedbackDisplay session complete feature."""
+
+    def test_show_session_complete_displays_tasks_count(self) -> None:
+        """Test show_session_complete displays the tasks completed count."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=5, iterations=10, duration_seconds=120)
+
+        output = capture.get()
+        assert "5" in output
+        assert "Tasks completed" in output
+
+    def test_show_session_complete_displays_iterations_count(self) -> None:
+        """Test show_session_complete displays the iterations count."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=3, iterations=15, duration_seconds=300)
+
+        output = capture.get()
+        assert "15" in output
+        assert "Iterations" in output
+
+    def test_show_session_complete_displays_duration(self) -> None:
+        """Test show_session_complete displays the total time."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=2, iterations=5, duration_seconds=125)
+
+        output = capture.get()
+        # 125 seconds = 2m 5s
+        assert "2m" in output
+        assert "5s" in output
+        assert "Total time" in output
+
+    def test_show_session_complete_displays_all_tasks_complete_message(self) -> None:
+        """Test show_session_complete includes 'All Tasks Complete' message."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=30)
+
+        output = capture.get()
+        assert "All Tasks Complete" in output
+
+    def test_show_session_complete_displays_checkmark(self) -> None:
+        """Test show_session_complete includes checkmark symbol."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=30)
+
+        output = capture.get()
+        assert "✓" in output
+
+    def test_show_session_complete_displays_stars(self) -> None:
+        """Test show_session_complete includes star decorations."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=30)
+
+        output = capture.get()
+        assert "★" in output
+
+    def test_show_session_complete_displays_celebration_mascot(self) -> None:
+        """Test show_session_complete displays the celebration mascot art."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=30)
+
+        output = capture.get()
+        # Celebration mascot has \(^o^)/ face
+        assert "^o^" in output
+
+    def test_show_session_complete_displays_panel(self) -> None:
+        """Test show_session_complete renders in a panel with borders."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=30)
+
+        output = capture.get()
+        # Should have panel borders
+        assert "╭" in output or "─" in output
+
+    def test_show_session_complete_includes_session_complete_title(self) -> None:
+        """Test show_session_complete panel includes 'Session Complete' in title."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=30)
+
+        output = capture.get()
+        assert "Session Complete" in output
+
+    def test_show_session_complete_handles_zero_duration(self) -> None:
+        """Test show_session_complete handles zero duration correctly."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=0)
+
+        output = capture.get()
+        assert "0m" in output
+        assert "0s" in output
+
+    def test_show_session_complete_handles_large_duration(self) -> None:
+        """Test show_session_complete handles large durations (over an hour)."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            # 75 minutes = 4500 seconds
+            display.show_session_complete(tasks_completed=10, iterations=50, duration_seconds=4500)
+
+        output = capture.get()
+        # 4500 seconds = 75m 0s
+        assert "75m" in output
+        assert "0s" in output
+
+    def test_show_session_complete_with_fractional_duration(self) -> None:
+        """Test show_session_complete truncates fractional seconds."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            # 90.7 seconds should display as 1m 30s
+            display.show_session_complete(
+                tasks_completed=1, iterations=1, duration_seconds=90.7
+            )
+
+        output = capture.get()
+        assert "1m" in output
+        assert "30s" in output

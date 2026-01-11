@@ -674,3 +674,93 @@ class FeedbackDisplay:
         self._console.print()  # Add spacing
         self._console.print(panel)
         time.sleep(0.5)  # Brief pause to let the user see the celebration
+
+    def show_session_complete(
+        self,
+        tasks_completed: int,
+        iterations: int,
+        duration_seconds: float,
+    ) -> None:
+        """Display a full celebration when all tasks in the session are complete.
+
+        Shows the celebration mascot with summary statistics including
+        tasks completed, iterations run, and total time elapsed.
+
+        Args:
+            tasks_completed: Number of tasks completed in this session.
+            iterations: Number of iterations run.
+            duration_seconds: Total session duration in seconds.
+        """
+        import time
+
+        # Get celebration mascot art
+        celebration_art = get_mascot("celebration")
+
+        # Build content lines
+        content_lines: list[Text] = []
+
+        # Add star border
+        star_line = Text()
+        star_line.append("  ★ " * 10, style="yellow bold")
+        content_lines.append(star_line)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add mascot art
+        mascot_text = Text()
+        mascot_text.append(celebration_art, style="green bold")
+        content_lines.append(mascot_text)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add session complete message
+        title_message = Text()
+        title_message.append("  ✓ All Tasks Complete! ", style="green bold")
+        content_lines.append(title_message)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add statistics
+        stats_line1 = Text()
+        stats_line1.append("  Tasks completed: ", style="dim")
+        stats_line1.append(str(tasks_completed), style="cyan bold")
+        content_lines.append(stats_line1)
+
+        stats_line2 = Text()
+        stats_line2.append("  Iterations: ", style="dim")
+        stats_line2.append(str(iterations), style="cyan bold")
+        content_lines.append(stats_line2)
+
+        # Format duration
+        total_seconds = int(duration_seconds)
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        duration_str = f"{minutes}m {seconds}s"
+
+        stats_line3 = Text()
+        stats_line3.append("  Total time: ", style="dim")
+        stats_line3.append(duration_str, style="cyan bold")
+        content_lines.append(stats_line3)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add star border again
+        content_lines.append(star_line)
+
+        content = Group(*content_lines)
+
+        # Create session complete panel
+        panel = Panel(
+            content,
+            title="[bold green]🎉 Session Complete 🎉[/bold green]",
+            border_style="green",
+        )
+
+        # Display the panel with animation
+        self._console.print()  # Add spacing
+        self._console.print(panel)
+        time.sleep(0.5)  # Brief pause for celebration
