@@ -6,7 +6,9 @@ on:
       - "v*"
 
 env:
-  PYTHON_VERSION: "3.14"
+  # Note: Nuitka 2.8.x doesn't fully support Python 3.14 yet
+  # Use 3.13 for release builds until Nuitka catches up
+  PYTHON_VERSION: "3.13"
 
 jobs:
   # Determine release type from tag
