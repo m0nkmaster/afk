@@ -257,3 +257,228 @@ class TestEventInheritance:
 
         for event, expected_type in events:
             assert event.event_type == expected_type
+
+
+class TestOutputParser:
+    """Tests for the OutputParser class."""
+
+    def test_parser_instantiation(self) -> None:
+        """Test OutputParser can be instantiated."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        assert parser is not None
+
+    def test_parse_returns_list(self) -> None:
+        """Test parse() returns a list."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        result = parser.parse("some line")
+        assert isinstance(result, list)
+
+    def test_parse_empty_line_returns_empty_list(self) -> None:
+        """Test parse() returns empty list for empty input."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        result = parser.parse("")
+        assert result == []
+
+    def test_parse_non_matching_line_returns_empty_list(self) -> None:
+        """Test parse() returns empty list for non-matching lines."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        result = parser.parse("Just some random text output")
+        assert result == []
+
+
+class TestOutputParserClaudeToolCalls:
+    """Tests for Claude Code tool call pattern detection."""
+
+    def test_detect_tool_call_write_file(self) -> None:
+        """Test detection of write_file tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Calling tool: write_file")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].event_type == EventType.TOOL_CALL
+        assert events[0].tool_name == "write_file"
+        assert events[0].raw_line == "Calling tool: write_file"
+
+    def test_detect_tool_call_read_file(self) -> None:
+        """Test detection of read_file tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Calling tool: read_file")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "read_file"
+
+    def test_detect_tool_call_execute_command(self) -> None:
+        """Test detection of execute_command tool call."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Calling tool: execute_command")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "execute_command"
+
+    def test_detect_various_tool_calls(self) -> None:
+        """Test detection of various tool names."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        tools = ["edit", "search", "list_files", "bash"]
+
+        for tool in tools:
+            events = parser.parse(f"Calling tool: {tool}")
+            assert len(events) == 1
+            assert isinstance(events[0], ToolCallEvent)
+            assert events[0].tool_name == tool
+
+    def test_tool_call_case_sensitive(self) -> None:
+        """Test tool call pattern is case sensitive for tool name."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        # Pattern should match the exact casing
+        events = parser.parse("Calling tool: Write_File")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Write_File"
+
+    def test_tool_call_with_prefix_text(self) -> None:
+        """Test tool call detection even with prefix text."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("  [INFO] Calling tool: write_file")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "write_file"
+
+
+class TestOutputParserClaudeFileOperations:
+    """Tests for Claude Code file operation pattern detection."""
+
+    def test_detect_file_write(self) -> None:
+        """Test detection of file write operation."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Writing to: src/main.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].event_type == EventType.FILE_CHANGE
+        assert events[0].file_path == "src/main.py"
+        assert events[0].change_type == "modified"
+
+    def test_detect_file_write_with_spaces(self) -> None:
+        """Test detection of file write with spaces in path."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Writing to: src/my file.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "src/my file.py"
+
+    def test_detect_file_write_deep_path(self) -> None:
+        """Test detection of file write with deep directory path."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Writing to: src/components/auth/LoginForm.tsx")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "src/components/auth/LoginForm.tsx"
+
+    def test_detect_file_read(self) -> None:
+        """Test detection of file read operation."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Reading: config.json")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "config.json"
+        assert events[0].change_type == "read"
+
+    def test_detect_file_read_with_prefix(self) -> None:
+        """Test detection of file read with prefix text."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("  Reading: tests/test_config.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "tests/test_config.py"
+
+    def test_multiple_events_in_line(self) -> None:
+        """Test that each line returns at most one event per pattern."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        # Line with tool call pattern
+        events = parser.parse("Calling tool: write_file")
+        assert len(events) == 1
+
+    def test_file_write_absolute_path(self) -> None:
+        """Test detection of file write with absolute path."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Writing to: /home/user/project/file.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "/home/user/project/file.py"
+
+
+class TestOutputParserReturnsCorrectTypes:
+    """Tests ensuring parse() returns correct Event subtypes."""
+
+    def test_tool_call_returns_tool_call_event(self) -> None:
+        """Test tool call pattern returns ToolCallEvent."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Calling tool: test_tool")
+
+        assert len(events) == 1
+        assert type(events[0]) is ToolCallEvent
+
+    def test_file_write_returns_file_change_event(self) -> None:
+        """Test file write pattern returns FileChangeEvent."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Writing to: test.py")
+
+        assert len(events) == 1
+        assert type(events[0]) is FileChangeEvent
+
+    def test_file_read_returns_file_change_event(self) -> None:
+        """Test file read pattern returns FileChangeEvent."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Reading: test.py")
+
+        assert len(events) == 1
+        assert type(events[0]) is FileChangeEvent

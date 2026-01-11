@@ -7,6 +7,7 @@ calls, file changes, errors, and warnings.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 
@@ -95,3 +96,65 @@ class WarningEvent(Event):
 
     warning_message: str
     """The warning message or description."""
+
+
+class OutputParser:
+    """Parse AI CLI output to detect tool calls, file operations, and events.
+
+    Supports multiple AI CLIs with different output formats. Currently
+    implements Claude Code pattern detection.
+    """
+
+    # Claude Code output patterns
+    _CLAUDE_TOOL_CALL = re.compile(r"Calling tool: (\w+)")
+    _CLAUDE_FILE_WRITE = re.compile(r"Writing to: (.+)")
+    _CLAUDE_FILE_READ = re.compile(r"Reading: (.+)")
+
+    def parse(self, line: str) -> list[Event]:
+        """Parse a line of AI output and return detected events.
+
+        Args:
+            line: A single line from the AI CLI output stream.
+
+        Returns:
+            List of Event objects detected in the line. Empty list if
+            no patterns match.
+        """
+        if not line:
+            return []
+
+        events: list[Event] = []
+
+        # Check for Claude Code tool call pattern
+        if match := self._CLAUDE_TOOL_CALL.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name=match.group(1),
+                )
+            )
+
+        # Check for Claude Code file write pattern
+        if match := self._CLAUDE_FILE_WRITE.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="modified",
+                )
+            )
+
+        # Check for Claude Code file read pattern
+        if match := self._CLAUDE_FILE_READ.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="read",
+                )
+            )
+
+        return events
