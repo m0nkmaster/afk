@@ -9,6 +9,7 @@ from typing import Literal
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.progress_bar import ProgressBar
 from rich.text import Text
 
 from afk.art import get_spinner_frame
@@ -120,6 +121,9 @@ class FeedbackDisplay:
         self._iteration_current: int = 0
         self._iteration_total: int = 0
         self._mode: Literal["full", "minimal"] = mode
+        self._task_id: str | None = None
+        self._task_description: str | None = None
+        self._progress: float = 0.0
 
     def start(self) -> None:
         """Start the live display context.
@@ -190,6 +194,11 @@ class FeedbackDisplay:
                 header,
                 Text("Waiting for activity...", style="dim"),
             )
+
+        # Add task panel as footer if task info available
+        if self._task_id is not None:
+            task_panel = self._build_task_panel()
+            content = Group(content, task_panel)
 
         return Panel(
             content,
@@ -310,6 +319,58 @@ class FeedbackDisplay:
             border_style="dim",
         )
 
+    def _build_task_panel(self) -> Panel:
+        """Build the task panel showing current task and progress bar.
+
+        Returns:
+            A Rich Panel containing task information and progress bar.
+        """
+        lines: list[Text | ProgressBar] = []
+
+        # Task ID line
+        task_line = Text()
+        task_line.append("  Task: ", style="dim")
+        task_line.append(str(self._task_id or ""), style="cyan bold")
+        lines.append(task_line)
+
+        # Task description line (if available)
+        if self._task_description:
+            desc_line = Text()
+            desc_line.append("  ", style="dim")
+            # Truncate description if too long
+            description = self._task_description
+            if len(description) > 50:
+                description = description[:47] + "..."
+            desc_line.append(description, style="dim italic")
+            lines.append(desc_line)
+
+        # Progress bar
+        progress_line = Text()
+        progress_line.append("  ", style="dim")
+        lines.append(progress_line)
+
+        progress_bar = ProgressBar(
+            total=100,
+            completed=int(self._progress * 100),
+            width=40,
+            complete_style="green",
+            finished_style="green bold",
+        )
+        lines.append(progress_bar)
+
+        # Percentage text
+        pct_line = Text()
+        pct_line.append(f"  {int(self._progress * 100)}% complete", style="dim")
+        lines.append(pct_line)
+
+        content = Group(*lines)
+
+        return Panel(
+            content,
+            title="[dim]Task[/dim]",
+            border_style="dim",
+        )
+
     def _truncate_path(self, path: str, max_length: int) -> str:
         """Truncate a file path to fit within max_length.
 
@@ -350,6 +411,9 @@ class FeedbackDisplay:
         metrics: IterationMetrics,
         iteration_current: int = 0,
         iteration_total: int = 0,
+        task_id: str | None = None,
+        task_description: str | None = None,
+        progress: float = 0.0,
     ) -> None:
         """Update the display with new metrics.
 
@@ -357,10 +421,18 @@ class FeedbackDisplay:
             metrics: The current iteration metrics.
             iteration_current: Current iteration number (1-indexed).
             iteration_total: Total number of iterations planned.
+            task_id: ID of the current task being worked on.
+            task_description: Description of the current task.
+            progress: Task completion percentage (0.0 to 1.0).
         """
         # Update iteration tracking
         self._iteration_current = iteration_current
         self._iteration_total = iteration_total
+
+        # Update task tracking
+        self._task_id = task_id
+        self._task_description = task_description
+        self._progress = max(0.0, min(1.0, progress))  # Clamp to [0.0, 1.0]
 
         if self._live is None or not self._started:
             return

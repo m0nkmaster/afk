@@ -1080,3 +1080,241 @@ class TestFeedbackDisplay:
         # Single line output should not have Rich panel borders
         assert "╭" not in output  # No panel top border
         assert "╰" not in output  # No panel bottom border
+
+    def test_update_accepts_task_parameters(self) -> None:
+        """Test update() accepts task_id, task_description, and progress."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            metrics = IterationMetrics()
+            display.update(
+                metrics,
+                task_id="auth-login",
+                task_description="Implement user login flow",
+                progress=0.5,
+            )
+
+            assert display._task_id == "auth-login"
+            assert display._task_description == "Implement user login flow"
+            assert display._progress == 0.5
+        finally:
+            display.stop()
+
+    def test_update_clamps_progress_to_valid_range(self) -> None:
+        """Test update() clamps progress to [0.0, 1.0] range."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            metrics = IterationMetrics()
+
+            # Test progress above 1.0 is clamped
+            display.update(metrics, progress=1.5)
+            assert display._progress == 1.0
+
+            # Test progress below 0.0 is clamped
+            display.update(metrics, progress=-0.5)
+            assert display._progress == 0.0
+        finally:
+            display.stop()
+
+    def test_build_task_panel_returns_panel(self) -> None:
+        """Test _build_task_panel returns a Rich Panel."""
+        from rich.panel import Panel
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._progress = 0.5
+
+        panel = display._build_task_panel()
+
+        assert isinstance(panel, Panel)
+
+    def test_build_task_panel_shows_task_id(self) -> None:
+        """Test _build_task_panel displays the task ID."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "auth-login"
+        display._progress = 0.3
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "auth-login" in output
+
+    def test_build_task_panel_shows_description(self) -> None:
+        """Test _build_task_panel displays the task description."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._task_description = "Implement feature X"
+        display._progress = 0.5
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Implement feature X" in output
+
+    def test_build_task_panel_truncates_long_description(self) -> None:
+        """Test _build_task_panel truncates descriptions over 50 chars."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._task_description = (
+            "This is a very long description that should be truncated to fit"
+        )
+        display._progress = 0.5
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "..." in output
+        # Full description should not appear
+        assert "to fit" not in output
+
+    def test_build_task_panel_shows_progress_bar(self) -> None:
+        """Test _build_task_panel includes a progress bar."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._progress = 0.5
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Progress bar uses box-drawing characters for the bar
+        assert "━" in output or "█" in output or "▓" in output or "─" in output
+
+    def test_build_task_panel_shows_percentage(self) -> None:
+        """Test _build_task_panel shows completion percentage."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._progress = 0.75
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "75%" in output
+
+    def test_build_task_panel_shows_zero_percent(self) -> None:
+        """Test _build_task_panel shows 0% when progress is 0."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._progress = 0.0
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "0%" in output
+
+    def test_build_task_panel_shows_hundred_percent(self) -> None:
+        """Test _build_task_panel shows 100% when progress is 1.0."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "test-task"
+        display._progress = 1.0
+
+        panel = display._build_task_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "100%" in output
+
+    def test_build_panel_includes_task_panel_when_task_set(self) -> None:
+        """Test _build_panel includes task panel in footer when task info set."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = "my-task"
+        display._task_description = "Do something important"
+        display._progress = 0.6
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "my-task" in output
+        assert "60%" in output
+
+    def test_build_panel_excludes_task_panel_when_no_task(self) -> None:
+        """Test _build_panel excludes task panel when no task_id set."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._task_id = None
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # "Task" panel title should not appear
+        assert "Task" not in output or output.count("Task") == 0
