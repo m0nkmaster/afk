@@ -1280,9 +1280,7 @@ class TestLoopControllerCelebration:
 
         # PRD with pending story that stays pending
         prd = PrdDocument(
-            user_stories=[
-                UserStory(id="story-1", title="Test", description="", passes=False)
-            ]
+            user_stories=[UserStory(id="story-1", title="Test", description="", passes=False)]
         )
 
         controller = LoopController(config)

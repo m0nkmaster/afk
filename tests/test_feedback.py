@@ -2106,9 +2106,7 @@ class TestFeedbackDisplaySessionComplete:
 
         with console.capture() as capture:
             # 90.7 seconds should display as 1m 30s
-            display.show_session_complete(
-                tasks_completed=1, iterations=1, duration_seconds=90.7
-            )
+            display.show_session_complete(tasks_completed=1, iterations=1, duration_seconds=90.7)
 
         output = capture.get()
         assert "1m" in output
