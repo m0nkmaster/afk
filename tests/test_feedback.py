@@ -361,3 +361,166 @@ class TestFeedbackDisplay:
         display.stop()
         # Second stop should be safe
         display.stop()
+
+    def test_build_activity_panel_returns_panel(self) -> None:
+        """Test _build_activity_panel returns a Rich Panel."""
+        from rich.panel import Panel
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            tool_calls=3,
+            files_modified=["a.py"],
+            files_created=["b.py"],
+            lines_added=50,
+            lines_removed=10,
+        )
+
+        panel = display._build_activity_panel(metrics)
+
+        assert isinstance(panel, Panel)
+
+    def test_build_activity_panel_shows_spinner(self) -> None:
+        """Test _build_activity_panel includes spinner character."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        panel = display._build_activity_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # The dots spinner includes characters like ⠋, ⠙, etc.
+        # At frame 0, should be ⠋
+        assert "⠋" in output
+
+    def test_build_activity_panel_shows_tool_count(self) -> None:
+        """Test _build_activity_panel displays tool call count."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(tool_calls=5)
+
+        panel = display._build_activity_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Tools" in output
+        assert "5" in output
+
+    def test_build_activity_panel_shows_files_touched(self) -> None:
+        """Test _build_activity_panel displays files touched count."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            files_modified=["a.py", "b.py"],
+            files_created=["c.py"],
+            files_deleted=["d.py"],
+        )
+
+        panel = display._build_activity_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Files" in output
+        # 2 modified + 1 created + 1 deleted = 4
+        assert "4" in output
+
+    def test_build_activity_panel_shows_line_changes(self) -> None:
+        """Test _build_activity_panel displays lines added/removed."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            lines_added=100,
+            lines_removed=25,
+        )
+
+        panel = display._build_activity_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Lines" in output
+        assert "+100" in output
+        assert "-25" in output
+
+    def test_update_increments_spinner_frame(self) -> None:
+        """Test update() increments the spinner frame index."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            assert display._spinner_frame == 0
+
+            metrics = IterationMetrics()
+            display.update(metrics)
+
+            assert display._spinner_frame == 1
+
+            display.update(metrics)
+            display.update(metrics)
+
+            assert display._spinner_frame == 3
+        finally:
+            display.stop()
+
+    def test_update_without_start_is_safe(self) -> None:
+        """Test update() is safe to call without start()."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        # Should not raise
+        display.update(metrics)
+
+        # Spinner frame should not increment when not started
+        assert display._spinner_frame == 0
+
+    def test_build_panel_with_metrics(self) -> None:
+        """Test _build_panel includes activity panel when metrics provided."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            tool_calls=2,
+            files_modified=["test.py"],
+        )
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should include activity info, not "Waiting for activity"
+        assert "Activity" in output or "Tools" in output
+        assert "Waiting for activity" not in output

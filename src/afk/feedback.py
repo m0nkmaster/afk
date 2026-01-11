@@ -10,6 +10,8 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
+from afk.art import get_spinner_frame
+
 
 @dataclass
 class IterationMetrics:
@@ -107,6 +109,7 @@ class FeedbackDisplay:
         self._console = Console()
         self._live: Live | None = None
         self._started = False
+        self._spinner_frame: int = 0
 
     def start(self) -> None:
         """Start the live display context.
@@ -136,8 +139,11 @@ class FeedbackDisplay:
             self._live.stop()
             self._started = False
 
-    def _build_panel(self) -> Panel:
+    def _build_panel(self, metrics: IterationMetrics | None = None) -> Panel:
         """Build the main display panel.
+
+        Args:
+            metrics: Optional iteration metrics to display.
 
         Returns:
             A Rich renderable containing the feedback display.
@@ -147,13 +153,79 @@ class FeedbackDisplay:
         header.append("afk", style="bold cyan")
         header.append(" running...", style="dim")
 
-        content = Group(
-            header,
-            Text("Waiting for activity...", style="dim"),
-        )
+        if metrics is not None:
+            activity_panel = self._build_activity_panel(metrics)
+            content = Group(header, activity_panel)
+        else:
+            content = Group(
+                header,
+                Text("Waiting for activity...", style="dim"),
+            )
 
         return Panel(
             content,
             title="[bold]afk[/bold]",
             border_style="cyan",
         )
+
+    def _build_activity_panel(self, metrics: IterationMetrics) -> Panel:
+        """Build the activity panel showing spinner, tool calls, and line changes.
+
+        Args:
+            metrics: The current iteration metrics.
+
+        Returns:
+            A Rich Panel containing activity information.
+        """
+        # Get current spinner frame
+        spinner = get_spinner_frame("dots", self._spinner_frame)
+
+        # Build activity text
+        activity = Text()
+        activity.append(f"{spinner} ", style="cyan bold")
+        activity.append("Working", style="bold")
+
+        # Tool calls line
+        tools_line = Text()
+        tools_line.append("  Tools: ", style="dim")
+        tools_line.append(str(metrics.tool_calls), style="yellow bold")
+
+        # Files touched count (modified + created + deleted)
+        files_touched = (
+            len(metrics.files_modified)
+            + len(metrics.files_created)
+            + len(metrics.files_deleted)
+        )
+        files_line = Text()
+        files_line.append("  Files: ", style="dim")
+        files_line.append(str(files_touched), style="blue bold")
+
+        # Lines added/removed
+        lines_line = Text()
+        lines_line.append("  Lines: ", style="dim")
+        lines_line.append(f"+{metrics.lines_added}", style="green bold")
+        lines_line.append(" / ", style="dim")
+        lines_line.append(f"-{metrics.lines_removed}", style="red bold")
+
+        content = Group(activity, tools_line, files_line, lines_line)
+
+        return Panel(
+            content,
+            title="[dim]Activity[/dim]",
+            border_style="dim",
+        )
+
+    def update(self, metrics: IterationMetrics) -> None:
+        """Update the display with new metrics.
+
+        Args:
+            metrics: The current iteration metrics.
+        """
+        if self._live is None or not self._started:
+            return
+
+        # Increment spinner frame for animation
+        self._spinner_frame += 1
+
+        # Rebuild and update the display
+        self._live.update(self._build_panel(metrics))
