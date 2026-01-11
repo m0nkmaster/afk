@@ -615,3 +615,62 @@ class FeedbackDisplay:
             warning.append("Continuing...", style="yellow")
 
         self._console.print(warning)
+
+    def show_celebration(self, task_id: str) -> None:
+        """Display a celebration animation when a task is completed.
+
+        Shows the celebration mascot with stars and a completion message.
+        Uses a brief animation sequence for visual feedback.
+
+        Args:
+            task_id: The ID of the task that was completed.
+        """
+        import time
+
+        # Animation frames using celebration mascot
+        celebration_art = get_mascot("celebration")
+
+        # Build the celebration panel content
+        content_lines: list[Text] = []
+
+        # Add star border
+        star_line = Text()
+        star_line.append("  ★ " * 8, style="yellow bold")
+        content_lines.append(star_line)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add mascot art
+        mascot_text = Text()
+        mascot_text.append(celebration_art, style="green bold")
+        content_lines.append(mascot_text)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add completion message
+        message = Text()
+        message.append("  ✓ Task Complete! ", style="green bold")
+        message.append(task_id, style="cyan bold")
+        content_lines.append(message)
+
+        # Add empty line
+        content_lines.append(Text())
+
+        # Add star border again
+        content_lines.append(star_line)
+
+        content = Group(*content_lines)
+
+        # Create celebration panel
+        panel = Panel(
+            content,
+            title="[bold green]🎉 Celebration 🎉[/bold green]",
+            border_style="green",
+        )
+
+        # Brief animation: show the panel with a short delay
+        self._console.print()  # Add spacing
+        self._console.print(panel)
+        time.sleep(0.5)  # Brief pause to let the user see the celebration

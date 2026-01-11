@@ -1767,3 +1767,138 @@ class TestFeedbackDisplay:
         assert "o_o" not in output
         assert "._." not in output
         assert "x_x" not in output
+
+
+class TestFeedbackDisplayCelebration:
+    """Tests for FeedbackDisplay celebration feature."""
+
+    def test_show_celebration_displays_task_id(self) -> None:
+        """Test show_celebration displays the completed task ID."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("auth-login")
+
+        output = capture.get()
+        assert "auth-login" in output
+
+    def test_show_celebration_displays_completion_message(self) -> None:
+        """Test show_celebration includes 'Task Complete' message."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("test-task")
+
+        output = capture.get()
+        assert "Task Complete" in output
+
+    def test_show_celebration_displays_checkmark(self) -> None:
+        """Test show_celebration includes checkmark symbol."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("test-task")
+
+        output = capture.get()
+        assert "✓" in output
+
+    def test_show_celebration_displays_stars(self) -> None:
+        """Test show_celebration includes star decorations."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("test-task")
+
+        output = capture.get()
+        assert "★" in output
+
+    def test_show_celebration_displays_celebration_mascot(self) -> None:
+        """Test show_celebration displays the celebration mascot art."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("test-task")
+
+        output = capture.get()
+        # Celebration mascot has \(^o^)/ face
+        assert "^o^" in output
+
+    def test_show_celebration_displays_panel(self) -> None:
+        """Test show_celebration renders in a panel with borders."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("test-task")
+
+        output = capture.get()
+        # Should have panel borders
+        assert "╭" in output or "─" in output
+
+    def test_show_celebration_includes_celebration_title(self) -> None:
+        """Test show_celebration panel includes 'Celebration' in title."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_celebration("test-task")
+
+        output = capture.get()
+        assert "Celebration" in output
+
+    def test_show_celebration_works_with_different_task_ids(self) -> None:
+        """Test show_celebration works with various task ID formats."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        task_ids = ["simple", "with-dashes", "with_underscores", "CamelCase", "123-numeric"]
+        for task_id in task_ids:
+            with console.capture() as capture:
+                display.show_celebration(task_id)
+            output = capture.get()
+            assert task_id in output

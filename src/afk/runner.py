@@ -306,6 +306,22 @@ class OutputHandler:
                 msg += " │ Continuing..."
             self.console.print(f"[red]{msg}[/red]")
 
+    def show_celebration(self, task_id: str) -> None:
+        """Display celebration animation when a task is completed.
+
+        Uses FeedbackDisplay if available, otherwise falls back to console output.
+
+        Args:
+            task_id: The ID of the task that was completed.
+        """
+        if self._feedback is not None:
+            self._feedback.show_celebration(task_id)
+        else:
+            # Fallback: print simple celebration message to console
+            self.console.print()
+            self.console.print(f"[green bold]✓ Task Complete![/green bold] [cyan]{task_id}[/cyan]")
+            self.console.print()
+
     def loop_start_panel(
         self,
         ai_cli: str,
@@ -771,6 +787,8 @@ class LoopController:
                     status="completed",
                     source=story.source,
                 )
+                # Show celebration animation for each completed task
+                self.output.show_celebration(story.id)
 
             return len(newly_completed)
 

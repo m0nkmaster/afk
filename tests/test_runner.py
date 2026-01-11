@@ -921,3 +921,176 @@ class TestRunQualityGatesIntegration:
             )
 
         mock_show.assert_called_once_with(["lint"], continuing=False)
+
+
+class TestOutputHandlerCelebration:
+    """Tests for OutputHandler celebration feature."""
+
+    def test_show_celebration_uses_feedback_display(self) -> None:
+        """Test show_celebration() calls feedback display when enabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        with patch.object(handler._feedback, "show_celebration") as mock_show:
+            handler.show_celebration("test-task")
+
+        mock_show.assert_called_once_with("test-task")
+
+    def test_show_celebration_fallback_to_console(self) -> None:
+        """Test show_celebration() uses console when feedback disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_celebration("my-task")
+
+        # Should have multiple prints (spacing + message + spacing)
+        assert mock_print.call_count >= 1
+        # Check that task ID appears in one of the calls
+        all_calls = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "my-task" in all_calls
+
+    def test_show_celebration_fallback_includes_checkmark(self) -> None:
+        """Test show_celebration() fallback includes checkmark."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_celebration("task-id")
+
+        # Check that checkmark appears in one of the calls
+        all_calls = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "✓" in all_calls
+
+    def test_show_celebration_fallback_includes_task_complete(self) -> None:
+        """Test show_celebration() fallback includes 'Task Complete' message."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_celebration("task-id")
+
+        # Check that 'Task Complete' appears in one of the calls
+        all_calls = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "Task Complete" in all_calls
+
+
+class TestLoopControllerCelebration:
+    """Tests for LoopController celebration on task completion."""
+
+    def test_check_story_completion_calls_show_celebration(self, temp_afk_dir: Path) -> None:
+        """Test _check_story_completion calls show_celebration for each completed task."""
+        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import LoopController
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+            archive=ArchiveConfig(enabled=False),
+        )
+
+        # Initial PRD with pending story
+        old_prd = PrdDocument(
+            user_stories=[
+                UserStory(
+                    id="story-1",
+                    title="Test Story",
+                    description="Test",
+                    passes=False,
+                    source="json:test.json",
+                )
+            ]
+        )
+
+        # PRD after AI marks it complete
+        new_prd = PrdDocument(
+            user_stories=[
+                UserStory(
+                    id="story-1",
+                    title="Test Story",
+                    description="Test",
+                    passes=True,
+                    source="json:test.json",
+                )
+            ]
+        )
+
+        controller = LoopController(config)
+
+        with patch("afk.runner.load_prd", return_value=new_prd):
+            with patch.object(controller.output, "show_celebration") as mock_celebration:
+                completed_count = controller._check_story_completion(old_prd)
+
+        assert completed_count == 1
+        mock_celebration.assert_called_once_with("story-1")
+
+    def test_check_story_completion_calls_show_celebration_for_multiple(
+        self, temp_afk_dir: Path
+    ) -> None:
+        """Test _check_story_completion calls show_celebration for each completed task."""
+        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import LoopController
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+            archive=ArchiveConfig(enabled=False),
+        )
+
+        # Initial PRD with multiple pending stories
+        old_prd = PrdDocument(
+            user_stories=[
+                UserStory(id="story-1", title="Story 1", description="", passes=False),
+                UserStory(id="story-2", title="Story 2", description="", passes=False),
+            ]
+        )
+
+        # PRD after both are completed
+        new_prd = PrdDocument(
+            user_stories=[
+                UserStory(id="story-1", title="Story 1", description="", passes=True),
+                UserStory(id="story-2", title="Story 2", description="", passes=True),
+            ]
+        )
+
+        controller = LoopController(config)
+
+        with patch("afk.runner.load_prd", return_value=new_prd):
+            with patch.object(controller.output, "show_celebration") as mock_celebration:
+                completed_count = controller._check_story_completion(old_prd)
+
+        assert completed_count == 2
+        assert mock_celebration.call_count == 2
+        mock_celebration.assert_any_call("story-1")
+        mock_celebration.assert_any_call("story-2")
+
+    def test_check_story_completion_no_celebration_when_no_completion(
+        self, temp_afk_dir: Path
+    ) -> None:
+        """Test _check_story_completion doesn't call show_celebration when nothing completed."""
+        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import LoopController
+
+        config = AfkConfig(
+            ai_cli=AiCliConfig(command="echo", args=[]),
+            archive=ArchiveConfig(enabled=False),
+        )
+
+        # PRD with pending story that stays pending
+        prd = PrdDocument(
+            user_stories=[
+                UserStory(id="story-1", title="Test", description="", passes=False)
+            ]
+        )
+
+        controller = LoopController(config)
+
+        with patch("afk.runner.load_prd", return_value=prd):
+            with patch.object(controller.output, "show_celebration") as mock_celebration:
+                completed_count = controller._check_story_completion(prd)
+
+        assert completed_count == 0
+        mock_celebration.assert_not_called()
