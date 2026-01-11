@@ -844,3 +844,239 @@ class TestFeedbackDisplay:
             assert display._iteration_total == 0
         finally:
             display.stop()
+
+    def test_minimal_mode_instantiation(self) -> None:
+        """Test FeedbackDisplay can be created with minimal mode."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+
+        assert display._mode == "minimal"
+
+    def test_default_mode_is_full(self) -> None:
+        """Test FeedbackDisplay defaults to full mode."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        assert display._mode == "full"
+
+    def test_build_minimal_bar_returns_text(self) -> None:
+        """Test _build_minimal_bar returns a Rich Text object."""
+        from rich.text import Text
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics()
+
+        bar = display._build_minimal_bar(metrics)
+
+        assert isinstance(bar, Text)
+
+    def test_build_minimal_bar_contains_afk_indicator(self) -> None:
+        """Test _build_minimal_bar includes ◉ afk prefix."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics()
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "◉" in output
+        assert "afk" in output
+
+    def test_build_minimal_bar_shows_iteration_count(self) -> None:
+        """Test _build_minimal_bar includes iteration [x/y] format."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        display._iteration_current = 5
+        display._iteration_total = 20
+        metrics = IterationMetrics()
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "[5/20]" in output
+
+    def test_build_minimal_bar_shows_elapsed_time(self) -> None:
+        """Test _build_minimal_bar includes elapsed time mm:ss."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        display._start_time = datetime.now()
+        metrics = IterationMetrics()
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        # Should contain time format like "00:00"
+        assert ":" in output
+
+    def test_build_minimal_bar_shows_spinner(self) -> None:
+        """Test _build_minimal_bar includes spinner character."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics()
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        # Should contain a spinner character from dots sequence
+        dots_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        assert any(char in output for char in dots_chars)
+
+    def test_build_minimal_bar_shows_tool_calls(self) -> None:
+        """Test _build_minimal_bar shows N calls."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics(tool_calls=7)
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "7" in output
+        assert "calls" in output.lower()
+
+    def test_build_minimal_bar_shows_files_count(self) -> None:
+        """Test _build_minimal_bar shows N files."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics(
+            files_modified=["a.py", "b.py"],
+            files_created=["c.py"],
+        )
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "3" in output
+        assert "files" in output.lower()
+
+    def test_build_minimal_bar_shows_line_changes(self) -> None:
+        """Test _build_minimal_bar shows +N/-N line changes."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics(
+            lines_added=50,
+            lines_removed=12,
+        )
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "+50" in output
+        assert "-12" in output
+
+    def test_build_minimal_bar_uses_separator(self) -> None:
+        """Test _build_minimal_bar uses │ as section separator."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics(tool_calls=1)
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "│" in output
+
+    def test_minimal_mode_uses_minimal_bar_in_update(self) -> None:
+        """Test update() uses minimal bar when mode='minimal'."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        display.start()
+
+        try:
+            metrics = IterationMetrics(tool_calls=3)
+            display.update(metrics)
+
+            # In minimal mode, the Live display should have been updated
+            # with something (we can't easily inspect Rich's internal state,
+            # but we verify it doesn't crash and the display is running)
+            assert display._started is True
+            assert display._live is not None
+        finally:
+            display.stop()
+
+    def test_minimal_mode_renders_single_line(self) -> None:
+        """Test minimal mode renders as a single line (no panels)."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        display._start_time = datetime.now()
+        display._iteration_current = 1
+        display._iteration_total = 5
+        metrics = IterationMetrics(
+            tool_calls=2,
+            files_modified=["test.py"],
+            lines_added=10,
+            lines_removed=5,
+        )
+
+        bar = display._build_minimal_bar(metrics)
+
+        console = Console(force_terminal=True, width=100)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        # Single line output should not have Rich panel borders
+        assert "╭" not in output  # No panel top border
+        assert "╰" not in output  # No panel bottom border

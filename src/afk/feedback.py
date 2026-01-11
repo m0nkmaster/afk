@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from rich.console import Console, Group
 from rich.live import Live
@@ -104,8 +105,13 @@ class FeedbackDisplay:
     during autonomous coding loops.
     """
 
-    def __init__(self) -> None:
-        """Initialise the feedback display."""
+    def __init__(self, mode: Literal["full", "minimal"] = "full") -> None:
+        """Initialise the feedback display.
+
+        Args:
+            mode: Display mode - 'full' for multi-panel display,
+                  'minimal' for single-line status bar.
+        """
         self._console = Console()
         self._live: Live | None = None
         self._started = False
@@ -113,6 +119,7 @@ class FeedbackDisplay:
         self._start_time: datetime | None = None
         self._iteration_current: int = 0
         self._iteration_total: int = 0
+        self._mode: Literal["full", "minimal"] = mode
 
     def start(self) -> None:
         """Start the live display context.
@@ -124,8 +131,13 @@ class FeedbackDisplay:
             return
 
         self._start_time = datetime.now()
+        initial_renderable = (
+            self._build_minimal_bar(IterationMetrics())
+            if self._mode == "minimal"
+            else self._build_panel()
+        )
         self._live = Live(
-            self._build_panel(),
+            initial_renderable,
             console=self._console,
             refresh_per_second=4,
             transient=True,
@@ -356,5 +368,63 @@ class FeedbackDisplay:
         # Increment spinner frame for animation
         self._spinner_frame += 1
 
-        # Rebuild and update the display
-        self._live.update(self._build_panel(metrics))
+        # Rebuild and update the display using appropriate mode
+        if self._mode == "minimal":
+            self._live.update(self._build_minimal_bar(metrics))
+        else:
+            self._live.update(self._build_panel(metrics))
+
+    def _build_minimal_bar(self, metrics: IterationMetrics) -> Text:
+        """Build the minimal mode single-line status bar.
+
+        Format: ◉ afk [x/y] mm:ss │ ⣾ N calls │ N files │ +N/-N
+
+        Args:
+            metrics: The current iteration metrics.
+
+        Returns:
+            A Rich Text object containing the status bar.
+        """
+        bar = Text()
+
+        # Prefix: ◉ afk
+        bar.append("◉ ", style="green bold")
+        bar.append("afk", style="bold cyan")
+
+        # Iteration count: [x/y]
+        if self._iteration_total > 0:
+            bar.append(f" [{self._iteration_current}/{self._iteration_total}]", style="cyan")
+
+        # Elapsed time: mm:ss
+        elapsed = self._format_elapsed_time()
+        if elapsed:
+            bar.append(f" {elapsed}", style="dim")
+
+        # Separator
+        bar.append(" │ ", style="dim")
+
+        # Spinner and calls
+        spinner = get_spinner_frame("dots", self._spinner_frame)
+        bar.append(f"{spinner} ", style="cyan bold")
+        bar.append(f"{metrics.tool_calls} calls", style="yellow")
+
+        # Separator
+        bar.append(" │ ", style="dim")
+
+        # Files count
+        files_count = (
+            len(metrics.files_modified)
+            + len(metrics.files_created)
+            + len(metrics.files_deleted)
+        )
+        bar.append(f"{files_count} files", style="blue")
+
+        # Separator
+        bar.append(" │ ", style="dim")
+
+        # Line changes
+        bar.append(f"+{metrics.lines_added}", style="green bold")
+        bar.append("/", style="dim")
+        bar.append(f"-{metrics.lines_removed}", style="red bold")
+
+        return bar
