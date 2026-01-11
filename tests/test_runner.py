@@ -924,3 +924,111 @@ class TestOutputHandlerFeedbackIntegration:
 
         # Should not raise, even with no display
         handler.stream_line("Write file: test.py\n")
+
+    def test_show_gates_failed_uses_feedback_display(self) -> None:
+        """Test show_gates_failed() calls feedback display when enabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        with patch.object(handler._feedback, "show_gates_failed") as mock_show:
+            handler.show_gates_failed(["types", "lint"], continuing=True)
+
+        mock_show.assert_called_once_with(["types", "lint"], True)
+
+    def test_show_gates_failed_fallback_to_console(self) -> None:
+        """Test show_gates_failed() uses console when feedback disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_gates_failed(["test"], continuing=True)
+
+        mock_print.assert_called_once()
+        call_args = mock_print.call_args[0][0]
+        assert "test" in call_args
+        assert "Continuing" in call_args
+
+    def test_show_gates_failed_fallback_without_continuing(self) -> None:
+        """Test show_gates_failed() fallback without continuing indicator."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_gates_failed(["lint"], continuing=False)
+
+        mock_print.assert_called_once()
+        call_args = mock_print.call_args[0][0]
+        assert "lint" in call_args
+        assert "Continuing" not in call_args
+
+
+class TestRunQualityGatesIntegration:
+    """Tests for run_quality_gates feedback integration."""
+
+    def test_run_quality_gates_calls_show_gates_failed_on_failure(
+        self, temp_afk_dir: Path
+    ) -> None:
+        """Test run_quality_gates calls show_gates_failed when gates fail."""
+        from afk.config import FeedbackLoopsConfig
+        from afk.runner import OutputHandler, run_quality_gates
+
+        feedback_loops = FeedbackLoopsConfig(
+            types="exit 1",  # Always fails
+        )
+        handler = OutputHandler(feedback_enabled=True)
+
+        with patch.object(handler, "show_gates_failed") as mock_show:
+            result = run_quality_gates(
+                feedback_loops,
+                output_handler=handler,
+                continuing=True,
+            )
+
+        assert not result.passed
+        assert "types" in result.failed_gates
+        mock_show.assert_called_once_with(["types"], continuing=True)
+
+    def test_run_quality_gates_no_show_gates_failed_on_success(
+        self, temp_afk_dir: Path
+    ) -> None:
+        """Test run_quality_gates doesn't call show_gates_failed when all pass."""
+        from afk.config import FeedbackLoopsConfig
+        from afk.runner import OutputHandler, run_quality_gates
+
+        feedback_loops = FeedbackLoopsConfig(
+            types="exit 0",  # Always passes
+        )
+        handler = OutputHandler(feedback_enabled=True)
+
+        with patch.object(handler, "show_gates_failed") as mock_show:
+            result = run_quality_gates(
+                feedback_loops,
+                output_handler=handler,
+                continuing=True,
+            )
+
+        assert result.passed
+        mock_show.assert_not_called()
+
+    def test_run_quality_gates_passes_continuing_flag(self, temp_afk_dir: Path) -> None:
+        """Test run_quality_gates passes continuing flag correctly."""
+        from afk.config import FeedbackLoopsConfig
+        from afk.runner import OutputHandler, run_quality_gates
+
+        feedback_loops = FeedbackLoopsConfig(
+            lint="exit 1",  # Always fails
+        )
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler, "show_gates_failed") as mock_show:
+            run_quality_gates(
+                feedback_loops,
+                output_handler=handler,
+                continuing=False,
+            )
+
+        mock_show.assert_called_once_with(["lint"], continuing=False)

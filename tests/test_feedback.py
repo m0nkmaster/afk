@@ -1528,3 +1528,106 @@ class TestFeedbackDisplay:
         output = capture.get()
         # Default should show "Working"
         assert "Working" in output
+
+    def test_show_gates_failed_displays_warning(self) -> None:
+        """Test show_gates_failed displays warning with failed gate names."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        # Use a console we can capture
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_failed(["types", "lint"])
+
+        output = capture.get()
+        assert "Quality gates failed" in output
+        assert "types" in output
+        assert "lint" in output
+
+    def test_show_gates_failed_shows_continuing_indicator(self) -> None:
+        """Test show_gates_failed shows 'Continuing...' when continuing=True."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_failed(["test"], continuing=True)
+
+        output = capture.get()
+        assert "Continuing" in output
+
+    def test_show_gates_failed_hides_continuing_when_false(self) -> None:
+        """Test show_gates_failed hides 'Continuing...' when continuing=False."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_failed(["test"], continuing=False)
+
+        output = capture.get()
+        assert "Continuing" not in output
+
+    def test_show_gates_failed_includes_warning_symbol(self) -> None:
+        """Test show_gates_failed includes warning symbol ⚠."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_failed(["build"])
+
+        output = capture.get()
+        assert "⚠" in output
+
+    def test_show_gates_failed_with_single_gate(self) -> None:
+        """Test show_gates_failed works with a single gate."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_failed(["types"])
+
+        output = capture.get()
+        assert "types" in output
+        # Should not contain comma since there's only one gate
+        assert ", " not in output or output.count("types") == 1
+
+    def test_show_gates_failed_with_multiple_gates(self) -> None:
+        """Test show_gates_failed joins multiple gate names with commas."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_failed(["types", "lint", "test"])
+
+        output = capture.get()
+        assert "types" in output
+        assert "lint" in output
+        assert "test" in output

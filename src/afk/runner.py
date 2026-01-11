@@ -283,6 +283,24 @@ class OutputHandler:
         """Display a dimmed message."""
         self.console.print(f"[dim]{message}[/dim]")
 
+    def show_gates_failed(self, failed_gates: list[str], continuing: bool = True) -> None:
+        """Display quality gates failure feedback.
+
+        Uses FeedbackDisplay if available, otherwise falls back to console output.
+
+        Args:
+            failed_gates: List of names of gates that failed.
+            continuing: If True, show 'Continuing...' indicator.
+        """
+        if self._feedback is not None:
+            self._feedback.show_gates_failed(failed_gates, continuing)
+        else:
+            # Fallback: print directly to console
+            msg = f"Quality gates failed: {', '.join(failed_gates)}"
+            if continuing:
+                msg += " │ Continuing..."
+            self.console.print(f"[red]{msg}[/red]")
+
     def loop_start_panel(
         self,
         ai_cli: str,
@@ -874,17 +892,21 @@ class LoopController:
 def run_quality_gates(
     feedback_loops: FeedbackLoopsConfig,
     console: Console | None = None,
+    output_handler: OutputHandler | None = None,
+    continuing: bool = False,
 ) -> QualityGateResult:
     """Run all configured quality gates.
 
     Args:
         feedback_loops: Feedback loop configuration
         console: Optional console for output
+        output_handler: Optional OutputHandler for feedback display integration
+        continuing: If True and gates fail, show 'Continuing...' indicator
 
     Returns:
         QualityGateResult with pass/fail status and outputs
     """
-    output = OutputHandler(console)
+    output = output_handler or OutputHandler(console)
     gates: dict[str, str] = {}
 
     if feedback_loops.types:
@@ -929,6 +951,10 @@ def run_quality_gates(
             failed_gates.append(name)
             outputs[name] = str(e)
             output.console.print("[red]error[/red]")
+
+    # Show visual feedback for failed gates
+    if failed_gates:
+        output.show_gates_failed(failed_gates, continuing=continuing)
 
     return QualityGateResult(
         passed=len(failed_gates) == 0,

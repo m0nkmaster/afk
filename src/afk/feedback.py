@@ -564,3 +564,27 @@ class FeedbackDisplay:
         bar.append(f"-{metrics.lines_removed}", style="red bold")
 
         return bar
+
+    def show_gates_failed(
+        self, failed_gates: list[str], continuing: bool = True
+    ) -> None:
+        """Display visual feedback when quality gates fail.
+
+        Shows an orange/red warning with the names of failed gates, and
+        optionally indicates that the loop is continuing.
+
+        Args:
+            failed_gates: List of names of gates that failed.
+            continuing: If True, show 'Continuing...' indicator.
+        """
+        # Build the warning message
+        warning = Text()
+        warning.append("⚠ ", style="yellow bold")
+        warning.append("Quality gates failed: ", style="red bold")
+        warning.append(", ".join(failed_gates), style="red")
+
+        if continuing:
+            warning.append(" │ ", style="dim")
+            warning.append("Continuing...", style="yellow")
+
+        self._console.print(warning)
