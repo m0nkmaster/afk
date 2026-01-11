@@ -704,3 +704,260 @@ class TestOutputParserNoConflicts:
         parser = OutputParser()
         events = parser.parse("Some random output text")
         assert events == []
+
+
+class TestOutputParserErrorPatterns:
+    """Tests for error pattern detection in OutputParser."""
+
+    def test_detect_error_prefix(self) -> None:
+        """Test detection of 'Error:' prefix."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Error: Something went wrong")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+        assert events[0].event_type == EventType.ERROR
+        assert events[0].error_message == "Something went wrong"
+        assert events[0].raw_line == "Error: Something went wrong"
+
+    def test_detect_exception_prefix(self) -> None:
+        """Test detection of 'Exception:' prefix."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Exception: Connection refused")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+        assert events[0].error_message == "Connection refused"
+
+    def test_detect_traceback_line(self) -> None:
+        """Test detection of Python Traceback header."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Traceback (most recent call last):")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+        assert events[0].error_message == "Traceback (most recent call last):"
+
+    def test_detect_python_exception_types(self) -> None:
+        """Test detection of Python exception type patterns."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        exceptions = [
+            ("ValueError: invalid literal", "invalid literal"),
+            ("TypeError: expected str", "expected str"),
+            ("KeyError: 'missing_key'", "'missing_key'"),
+            ("FileNotFoundError: No such file", "No such file"),
+            ("AttributeError: 'NoneType' has no attribute", "'NoneType' has no attribute"),
+        ]
+
+        for line, expected_msg in exceptions:
+            events = parser.parse(line)
+            assert len(events) == 1, f"Failed to detect: {line}"
+            assert isinstance(events[0], ErrorEvent)
+            assert events[0].error_message == expected_msg
+
+    def test_detect_error_case_variations(self) -> None:
+        """Test error detection with case variations."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # Standard case
+        events = parser.parse("Error: test")
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+
+        # ERROR should also match
+        events = parser.parse("ERROR: test")
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+
+    def test_detect_error_with_prefix_text(self) -> None:
+        """Test error detection with leading text/timestamps."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("[2024-01-01 12:00:00] Error: Something failed")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+        assert events[0].error_message == "Something failed"
+
+    def test_detect_failed_assertion(self) -> None:
+        """Test detection of assertion errors."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("AssertionError: Expected True")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+        assert events[0].error_message == "Expected True"
+
+    def test_error_not_detected_in_normal_text(self) -> None:
+        """Test that 'error' in normal text doesn't trigger detection."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # These shouldn't trigger error detection
+        events = parser.parse("No errors found")
+        assert len(events) == 0
+
+        events = parser.parse("This handles error cases gracefully")
+        assert len(events) == 0
+
+
+class TestOutputParserWarningPatterns:
+    """Tests for warning pattern detection in OutputParser."""
+
+    def test_detect_warning_prefix(self) -> None:
+        """Test detection of 'Warning:' prefix."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Warning: Deprecated function used")
+
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+        assert events[0].event_type == EventType.WARNING
+        assert events[0].warning_message == "Deprecated function used"
+        assert events[0].raw_line == "Warning: Deprecated function used"
+
+    def test_detect_deprecation_warning(self) -> None:
+        """Test detection of DeprecationWarning."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("DeprecationWarning: Use new_api instead")
+
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+        assert events[0].warning_message == "Use new_api instead"
+
+    def test_detect_user_warning(self) -> None:
+        """Test detection of UserWarning."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("UserWarning: This is a custom warning")
+
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+        assert events[0].warning_message == "This is a custom warning"
+
+    def test_detect_warning_case_variations(self) -> None:
+        """Test warning detection with case variations."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # Standard case
+        events = parser.parse("Warning: test")
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+
+        # WARNING should also match
+        events = parser.parse("WARNING: test")
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+
+    def test_detect_warning_with_prefix_text(self) -> None:
+        """Test warning detection with leading text/timestamps."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("[INFO] Warning: Consider using async")
+
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+        assert events[0].warning_message == "Consider using async"
+
+    def test_detect_syntax_warning(self) -> None:
+        """Test detection of SyntaxWarning."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("SyntaxWarning: 'is' with a literal")
+
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+        assert events[0].warning_message == "'is' with a literal"
+
+    def test_detect_future_warning(self) -> None:
+        """Test detection of FutureWarning."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("FutureWarning: This will change in version 2.0")
+
+        assert len(events) == 1
+        assert isinstance(events[0], WarningEvent)
+
+    def test_warning_not_detected_in_normal_text(self) -> None:
+        """Test that 'warning' in normal text doesn't trigger detection."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # These shouldn't trigger warning detection
+        events = parser.parse("No warnings found")
+        assert len(events) == 0
+
+        events = parser.parse("The warning system is working")
+        assert len(events) == 0
+
+
+class TestOutputParserErrorWarningIntegration:
+    """Integration tests for error and warning pattern detection."""
+
+    def test_error_and_tool_call_same_line(self) -> None:
+        """Test that tool calls don't interfere with error detection."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # Tool call should be detected normally
+        events = parser.parse("Calling tool: write_file")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+
+        # Error should be detected normally
+        events = parser.parse("Error: Tool failed")
+        assert len(events) == 1
+        assert isinstance(events[0], ErrorEvent)
+
+    def test_file_operations_not_errors(self) -> None:
+        """Test that file operations don't trigger error detection."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        events = parser.parse("Writing to: error_handler.py")
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "error_handler.py"
+
+    def test_multiple_error_types_in_sequence(self) -> None:
+        """Test parsing sequence of different error types."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        lines = [
+            "Traceback (most recent call last):",
+            "ValueError: invalid value",
+            "Error: Operation failed",
+        ]
+
+        for line in lines:
+            events = parser.parse(line)
+            assert len(events) == 1
+            assert isinstance(events[0], ErrorEvent)

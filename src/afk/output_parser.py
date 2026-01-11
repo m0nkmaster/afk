@@ -118,6 +118,26 @@ class OutputParser:
     _CURSOR_FILE_CREATED = re.compile(r"^Created\s+(.+)$")
     _CURSOR_FILE_DELETED = re.compile(r"^Deleted\s+(.+)$")
 
+    # Error patterns - detect various error indicators
+    # Generic Error: prefix (case insensitive)
+    _ERROR_PREFIX = re.compile(r"(?:^|[\[\]\s])(?:Error|ERROR):\s*(.+)", re.IGNORECASE)
+    # Exception: prefix
+    _EXCEPTION_PREFIX = re.compile(r"(?:^|[\[\]\s])Exception:\s*(.+)")
+    # Python Traceback header
+    _TRACEBACK_HEADER = re.compile(r"Traceback \(most recent call last\):")
+    # Python exception types (e.g., ValueError: message)
+    _PYTHON_EXCEPTION = re.compile(
+        r"([A-Z][a-zA-Z]*(?:Error|Exception)):\s*(.+)"
+    )
+
+    # Warning patterns - detect various warning indicators
+    # Generic Warning: prefix (case insensitive)
+    _WARNING_PREFIX = re.compile(r"(?:^|[\[\]\s])(?:Warning|WARNING):\s*(.+)", re.IGNORECASE)
+    # Python warning types (e.g., DeprecationWarning: message)
+    _PYTHON_WARNING = re.compile(
+        r"([A-Z][a-zA-Z]*Warning):\s*(.+)"
+    )
+
     def parse(self, line: str) -> list[Event]:
         """Parse a line of AI output and return detected events.
 
@@ -205,6 +225,64 @@ class OutputParser:
                     raw_line=line,
                     file_path=match.group(1).strip(),
                     change_type="deleted",
+                )
+            )
+
+        # Check for error patterns
+        # Traceback header
+        if self._TRACEBACK_HEADER.search(line):
+            events.append(
+                ErrorEvent(
+                    event_type=EventType.ERROR,
+                    raw_line=line,
+                    error_message="Traceback (most recent call last):",
+                )
+            )
+        # Python exception types (e.g., ValueError:, TypeError:)
+        elif match := self._PYTHON_EXCEPTION.search(line):
+            events.append(
+                ErrorEvent(
+                    event_type=EventType.ERROR,
+                    raw_line=line,
+                    error_message=match.group(2).strip(),
+                )
+            )
+        # Generic Error: prefix
+        elif match := self._ERROR_PREFIX.search(line):
+            events.append(
+                ErrorEvent(
+                    event_type=EventType.ERROR,
+                    raw_line=line,
+                    error_message=match.group(1).strip(),
+                )
+            )
+        # Exception: prefix
+        elif match := self._EXCEPTION_PREFIX.search(line):
+            events.append(
+                ErrorEvent(
+                    event_type=EventType.ERROR,
+                    raw_line=line,
+                    error_message=match.group(1).strip(),
+                )
+            )
+
+        # Check for warning patterns
+        # Python warning types (e.g., DeprecationWarning:, UserWarning:)
+        if match := self._PYTHON_WARNING.search(line):
+            events.append(
+                WarningEvent(
+                    event_type=EventType.WARNING,
+                    raw_line=line,
+                    warning_message=match.group(2).strip(),
+                )
+            )
+        # Generic Warning: prefix
+        elif match := self._WARNING_PREFIX.search(line):
+            events.append(
+                WarningEvent(
+                    event_type=EventType.WARNING,
+                    raw_line=line,
+                    warning_message=match.group(1).strip(),
                 )
             )
 
