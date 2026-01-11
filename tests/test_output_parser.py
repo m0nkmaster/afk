@@ -706,6 +706,212 @@ class TestOutputParserNoConflicts:
         assert events == []
 
 
+class TestOutputParserAiderCommands:
+    """Tests for Aider CLI command pattern detection."""
+
+    def test_detect_aider_add_command(self) -> None:
+        """Test detection of Aider /add command."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("/add src/main.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].event_type == EventType.TOOL_CALL
+        assert events[0].tool_name == "add"
+        assert events[0].raw_line == "/add src/main.py"
+
+    def test_detect_aider_add_multiple_files(self) -> None:
+        """Test detection of Aider /add with multiple files."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("/add file1.py file2.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "add"
+
+    def test_detect_aider_drop_command(self) -> None:
+        """Test detection of Aider /drop command."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("/drop src/utils.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "drop"
+
+    def test_detect_aider_undo_command(self) -> None:
+        """Test detection of Aider /undo command."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("/undo")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "undo"
+
+    def test_detect_aider_commit_command(self) -> None:
+        """Test detection of Aider /commit command."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("/commit")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "commit"
+
+    def test_detect_aider_commit_with_message(self) -> None:
+        """Test detection of Aider /commit with message."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("/commit feat: add new feature")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "commit"
+
+
+class TestOutputParserAiderFileOperations:
+    """Tests for Aider CLI file operation pattern detection."""
+
+    def test_detect_aider_applied_edit(self) -> None:
+        """Test detection of Aider 'Applied edit to' pattern."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Applied edit to src/main.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].event_type == EventType.FILE_CHANGE
+        assert events[0].file_path == "src/main.py"
+        assert events[0].change_type == "modified"
+
+    def test_detect_aider_applied_edit_deep_path(self) -> None:
+        """Test detection of Aider edit with deep directory path."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Applied edit to src/components/auth/LoginForm.tsx")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "src/components/auth/LoginForm.tsx"
+
+    def test_detect_aider_wrote_file(self) -> None:
+        """Test detection of Aider 'Wrote' pattern."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Wrote src/new_file.py")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "src/new_file.py"
+        assert events[0].change_type == "modified"
+
+    def test_detect_aider_added_to_chat(self) -> None:
+        """Test detection of Aider 'Added to the chat' pattern."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Added src/config.py to the chat")
+
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "src/config.py"
+        assert events[0].change_type == "read"
+
+    def test_detect_aider_git_commit(self) -> None:
+        """Test detection of Aider git commit output."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Commit a1b2c3d feat: add new feature")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "git_commit"
+
+    def test_detect_aider_commit_full_hash(self) -> None:
+        """Test detection of Aider commit with longer hash."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+        events = parser.parse("Commit a1b2c3d4e5f6 fix: resolve bug")
+
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "git_commit"
+
+
+class TestOutputParserAiderNoConflicts:
+    """Tests to ensure Aider patterns don't conflict with other patterns."""
+
+    def test_claude_patterns_still_work(self) -> None:
+        """Test Claude patterns still work after adding Aider patterns."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        events = parser.parse("Calling tool: write_file")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "write_file"
+
+    def test_cursor_patterns_still_work(self) -> None:
+        """Test Cursor patterns still work after adding Aider patterns."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        events = parser.parse("⏺ Read(path: src/main.py)")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "Read"
+
+    def test_aider_patterns_distinct(self) -> None:
+        """Test Aider patterns detect correctly without false positives."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # This should only match Aider pattern
+        events = parser.parse("/add test.py")
+        assert len(events) == 1
+        assert isinstance(events[0], ToolCallEvent)
+        assert events[0].tool_name == "add"
+
+        # Normal text shouldn't match
+        events = parser.parse("Use /add to add files")
+        assert len(events) == 0
+
+    def test_wrote_vs_writing_to(self) -> None:
+        """Test Aider 'Wrote' doesn't conflict with Claude 'Writing to'."""
+        from afk.output_parser import OutputParser
+
+        parser = OutputParser()
+
+        # Claude pattern
+        events = parser.parse("Writing to: test.py")
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "test.py"
+
+        # Aider pattern
+        events = parser.parse("Wrote test.py")
+        assert len(events) == 1
+        assert isinstance(events[0], FileChangeEvent)
+        assert events[0].file_path == "test.py"
+
+
 class TestOutputParserErrorPatterns:
     """Tests for error pattern detection in OutputParser."""
 

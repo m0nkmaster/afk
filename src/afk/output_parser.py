@@ -102,7 +102,7 @@ class OutputParser:
     """Parse AI CLI output to detect tool calls, file operations, and events.
 
     Supports multiple AI CLIs with different output formats. Currently
-    implements Claude Code and Cursor pattern detection.
+    implements Claude Code, Cursor, and Aider pattern detection.
     """
 
     # Claude Code output patterns
@@ -117,6 +117,29 @@ class OutputParser:
     _CURSOR_FILE_EDITED = re.compile(r"^Edited\s+(.+)$")
     _CURSOR_FILE_CREATED = re.compile(r"^Created\s+(.+)$")
     _CURSOR_FILE_DELETED = re.compile(r"^Deleted\s+(.+)$")
+
+    # Aider CLI output patterns
+    # Source: https://github.com/paul-gauthier/aider
+    # Aider uses slash commands for user interaction (e.g., /add, /drop, /undo)
+    # and displays file changes with specific markers in the output.
+    #
+    # Command patterns: "/add file.py", "/drop file.py", "/undo"
+    _AIDER_ADD_COMMAND = re.compile(r"^/add\s+(.+)$")
+    _AIDER_DROP_COMMAND = re.compile(r"^/drop\s+(.+)$")
+    _AIDER_UNDO_COMMAND = re.compile(r"^/undo\s*$")
+    _AIDER_COMMIT_COMMAND = re.compile(r"^/commit\s*(.*)$")
+    #
+    # File modification patterns:
+    # - "Applied edit to <path>" - successful file edit
+    # - "Wrote <path>" - file written
+    # - "Added <path> to the chat" - file added to context
+    _AIDER_APPLIED_EDIT = re.compile(r"Applied edit to (.+)")
+    _AIDER_WROTE_FILE = re.compile(r"^Wrote\s+(.+)$")
+    _AIDER_ADDED_TO_CHAT = re.compile(r"Added (.+) to the chat")
+    #
+    # Git-related patterns:
+    # - "Commit <hash> <message>" - commit made
+    _AIDER_COMMIT_MADE = re.compile(r"Commit ([a-f0-9]+)\s+(.+)")
 
     # Error patterns - detect various error indicators
     # Generic Error: prefix (case insensitive)
@@ -221,6 +244,83 @@ class OutputParser:
                     raw_line=line,
                     file_path=match.group(1).strip(),
                     change_type="deleted",
+                )
+            )
+
+        # Check for Aider command patterns
+        if match := self._AIDER_ADD_COMMAND.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name="add",
+                )
+            )
+
+        if match := self._AIDER_DROP_COMMAND.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name="drop",
+                )
+            )
+
+        if match := self._AIDER_UNDO_COMMAND.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name="undo",
+                )
+            )
+
+        if match := self._AIDER_COMMIT_COMMAND.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name="commit",
+                )
+            )
+
+        # Check for Aider file modification patterns
+        if match := self._AIDER_APPLIED_EDIT.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="modified",
+                )
+            )
+
+        if match := self._AIDER_WROTE_FILE.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="modified",
+                )
+            )
+
+        if match := self._AIDER_ADDED_TO_CHAT.search(line):
+            events.append(
+                FileChangeEvent(
+                    event_type=EventType.FILE_CHANGE,
+                    raw_line=line,
+                    file_path=match.group(1).strip(),
+                    change_type="read",
+                )
+            )
+
+        if match := self._AIDER_COMMIT_MADE.search(line):
+            events.append(
+                ToolCallEvent(
+                    event_type=EventType.TOOL_CALL,
+                    raw_line=line,
+                    tool_name="git_commit",
                 )
             )
 
