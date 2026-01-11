@@ -1,0 +1,17 @@
+# afk working directory (created during testing)
+.afk/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Task storage
+tasks.json
