@@ -14,7 +14,7 @@ pip install -e ".[dev]"
 
 ## Issue Tracking
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started. Always use `beads create` to track tasks.
+This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ```bash
 bd ready              # Find available work
@@ -37,7 +37,7 @@ pytest                       # Tests with coverage
 
 ## Testing
 
-This project maintains **>80% test coverage**. Tests are required for all changes.
+This project maintains test coverage with pytest. Tests are required for all changes.
 
 Write tests first. Follow the red-green-refactor test driven development process (TDD).
 
@@ -63,6 +63,10 @@ Tests are organised by module:
 - `tests/test_runner.py` - Autonomous loop runner
 - `tests/test_prd.py` - PRD parsing
 - `tests/test_sources*.py` - Task source adapters
+- `tests/test_art.py` - ASCII art spinners
+- `tests/test_feedback.py` - Feedback display (WIP)
+- `tests/test_file_watcher.py` - File system watcher (WIP)
+- `tests/test_output_parser.py` - AI output parsing (WIP)
 
 ### Writing Tests
 
@@ -73,7 +77,6 @@ Tests are organised by module:
 
 ### Coverage Requirements
 
-- Minimum 80% coverage enforced by pytest-cov
 - Coverage report generated as HTML in `htmlcov/`
 - New code must include corresponding tests
 
@@ -91,6 +94,10 @@ src/afk/
 ├── prd_store.py     # PRD storage, sync, and task aggregation
 ├── runner.py        # Autonomous loop runner (Ralph pattern)
 ├── git_ops.py       # Git operations (branch, commit, archive)
+├── art.py           # ASCII art and spinner animations
+├── feedback.py      # Real-time feedback display (WIP)
+├── file_watcher.py  # File system monitoring (WIP)
+├── output_parser.py # AI CLI output parsing (WIP)
 └── sources/         # Task source adapters
     ├── beads.py     # Beads (bd) integration
     ├── json_prd.py  # JSON PRD files
@@ -119,6 +126,7 @@ afk go 20              # Run 20 iterations
 afk start              # Init if needed + run loop
 afk run N              # Run N iterations
 afk explain            # Debug current loop state
+afk verify             # Run quality gates (lint, test, types)
 afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task
@@ -139,7 +147,7 @@ When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` u
 ## Adding a New Task Source
 
 1. Create `src/afk/sources/newsource.py`
-2. Implement `load_newsource_tasks() -> list[Task]`
+2. Implement `load_newsource_tasks() -> list[UserStory]`
 3. Add to `SourceConfig.type` literal in `config.py`
 4. Add case to `_load_from_source()` in `sources/__init__.py`
 

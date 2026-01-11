@@ -182,7 +182,7 @@ class TestLoadGithubTasks:
                 stdout=json.dumps(issues),
             )
             tasks = load_github_tasks()
-            assert len(tasks[0].acceptanceCriteria) >= 1
+            assert len(tasks[0].acceptance_criteria) >= 1
 
     def test_command_structure(self) -> None:
         """Test the gh command is structured correctly."""

@@ -17,16 +17,9 @@ class TestGetTemplate:
         template = _get_template(config)
         assert template == DEFAULT_TEMPLATE
 
-    def test_minimal_template(self) -> None:
-        """Test minimal template selection."""
-        config = AfkConfig(prompt=PromptConfig(template="minimal"))
-        template = _get_template(config)
-        assert "prd.json" in template
-        assert len(template) < len(DEFAULT_TEMPLATE)
-
-    def test_verbose_template(self) -> None:
-        """Test verbose template is same as default."""
-        config = AfkConfig(prompt=PromptConfig(template="verbose"))
+    def test_unknown_template_fallback(self) -> None:
+        """Test unknown template name falls back to default."""
+        config = AfkConfig(prompt=PromptConfig(template="unknown"))
         template = _get_template(config)
         assert template == DEFAULT_TEMPLATE
 
@@ -58,12 +51,12 @@ class TestGeneratePrompt:
         # Create a prd.json with stories
         prd = PrdDocument(
             project="Test",
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="task-1",
                     title="Test task",
                     description="Test task description",
-                    acceptanceCriteria=["AC 1"],
+                    acceptance_criteria=["AC 1"],
                 )
             ],
         )
@@ -125,7 +118,7 @@ class TestGeneratePrompt:
 
         # Need pending stories to not get AFK_COMPLETE
         prd = PrdDocument(
-            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
+            user_stories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
         )
         save_prd(prd)
 
@@ -161,7 +154,7 @@ class TestGeneratePrompt:
 
         # Create PRD with one complete and one pending
         prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(id="task-1", title="Done", description="Done", passes=True),
                 UserStory(id="task-2", title="Pending", description="Pending", passes=False),
             ]
@@ -182,7 +175,7 @@ class TestGeneratePrompt:
         from afk.prd_store import PrdDocument, UserStory, save_prd
 
         prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(id="low", title="Low", description="Low", priority=4, passes=False),
                 UserStory(id="high", title="High", description="High", priority=1, passes=False),
             ]
@@ -208,7 +201,7 @@ class TestGeneratePrompt:
 
         # Need pending stories
         prd = PrdDocument(
-            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
+            user_stories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
         )
         save_prd(prd)
 
@@ -232,7 +225,7 @@ class TestGeneratePrompt:
 
         # All stories passed
         prd = PrdDocument(
-            userStories=[UserStory(id="task-1", title="Done", description="Done", passes=True)]
+            user_stories=[UserStory(id="task-1", title="Done", description="Done", passes=True)]
         )
         save_prd(prd)
 

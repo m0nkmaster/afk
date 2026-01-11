@@ -8,52 +8,87 @@ into a unified prd.json file that the AI reads directly. The AI then marks
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from afk.config import AFK_DIR, AfkConfig, SourceConfig
+from pydantic import BaseModel, ConfigDict, Field
+
+from afk.config import AFK_DIR, AfkConfig
 
 
-@dataclass
-class UserStory:
+class UserStory(BaseModel):
     """A user story in Ralph format with acceptance criteria."""
 
     id: str
     title: str
     description: str
-    acceptanceCriteria: list[str] = field(default_factory=list)
+    acceptance_criteria: list[str] = Field(default_factory=list)
     priority: int = 3  # 1-5, 1 = highest
     passes: bool = False
     source: str = "unknown"
     notes: str = ""
 
+    model_config = ConfigDict(populate_by_name=True)
 
-@dataclass
-class PrdDocument:
-    """The unified PRD document."""
-
-    project: str = ""
-    branchName: str = ""
-    description: str = ""
-    userStories: list[UserStory] = field(default_factory=list)
-    lastSynced: str = ""
-
-    def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialisation."""
+    def model_dump_json_compat(self) -> dict:
+        """Dump to dict with camelCase keys for JSON compatibility."""
         return {
-            "project": self.project,
-            "branchName": self.branchName,
+            "id": self.id,
+            "title": self.title,
             "description": self.description,
-            "userStories": [asdict(story) for story in self.userStories],
-            "lastSynced": self.lastSynced,
+            "acceptanceCriteria": self.acceptance_criteria,
+            "priority": self.priority,
+            "passes": self.passes,
+            "source": self.source,
+            "notes": self.notes,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> PrdDocument:  # noqa: N805
-        """Create from dictionary.
+    def from_json_dict(cls, data: dict) -> UserStory:
+        """Create from a dict that may use camelCase keys."""
+        return cls(
+            id=data.get("id", ""),
+            title=data.get("title") or data.get("description") or data.get("summary", ""),
+            description=data.get("description") or data.get("title", ""),
+            acceptance_criteria=(
+                data.get("acceptanceCriteria")
+                or data.get("acceptance_criteria")
+                or data.get("steps")
+                or []
+            ),
+            priority=data.get("priority", 3),
+            passes=data.get("passes", False),
+            source=data.get("source", "json:.afk/prd.json"),
+            notes=data.get("notes", ""),
+        )
 
-        Supports multiple key names for backwards compatibility:
+
+class PrdDocument(BaseModel):
+    """The unified PRD document."""
+
+    project: str = ""
+    branch_name: str = ""
+    description: str = ""
+    user_stories: list[UserStory] = Field(default_factory=list)
+    last_synced: str = ""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    def model_dump_json_compat(self) -> dict:
+        """Dump to dict with camelCase keys for JSON compatibility."""
+        return {
+            "project": self.project,
+            "branchName": self.branch_name,
+            "description": self.description,
+            "userStories": [story.model_dump_json_compat() for story in self.user_stories],
+            "lastSynced": self.last_synced,
+        }
+
+    @classmethod
+    def from_json_dict(cls, data: dict) -> PrdDocument:
+        """Create from a dict that may use camelCase keys.
+
+        Supports multiple key names for compatibility:
         - userStories (canonical)
         - tasks (afk prd parse output)
         - items (legacy)
@@ -61,27 +96,14 @@ class PrdDocument:
         # Support multiple key names for stories
         story_data = data.get("userStories") or data.get("tasks") or data.get("items") or []
 
-        stories = []
-        for item in story_data:
-            # Handle both field naming conventions
-            story_kwargs = {
-                "id": item.get("id", ""),
-                "title": item.get("title") or item.get("description") or item.get("summary", ""),
-                "description": item.get("description") or item.get("title", ""),
-                "acceptanceCriteria": item.get("acceptanceCriteria") or item.get("steps") or [],
-                "priority": item.get("priority", 3),
-                "passes": item.get("passes", False),
-                "source": item.get("source", "json:.afk/prd.json"),
-                "notes": item.get("notes", ""),
-            }
-            stories.append(UserStory(**story_kwargs))
+        stories = [UserStory.from_json_dict(item) for item in story_data]
 
         return cls(
             project=data.get("project", ""),
-            branchName=data.get("branchName", ""),
+            branch_name=data.get("branchName") or data.get("branch_name", ""),
             description=data.get("description", ""),
-            userStories=stories,
-            lastSynced=data.get("lastSynced", ""),
+            user_stories=stories,
+            last_synced=data.get("lastSynced") or data.get("last_synced", ""),
         )
 
 
@@ -96,7 +118,7 @@ def load_prd() -> PrdDocument:
     with open(PRD_FILE) as f:
         data = json.load(f)
 
-    return PrdDocument.from_dict(data)
+    return PrdDocument.from_json_dict(data)
 
 
 def save_prd(prd: PrdDocument) -> None:
@@ -104,7 +126,7 @@ def save_prd(prd: PrdDocument) -> None:
     PRD_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     with open(PRD_FILE, "w") as f:
-        json.dump(prd.to_dict(), f, indent=2)
+        json.dump(prd.model_dump_json_compat(), f, indent=2)
 
 
 def sync_prd(config: AfkConfig, branch_name: str | None = None) -> PrdDocument:
@@ -117,26 +139,25 @@ def sync_prd(config: AfkConfig, branch_name: str | None = None) -> PrdDocument:
     it's used directly as the source of truth (created by afk prd parse
     or manually placed there).
     """
+    from afk.sources import aggregate_tasks
+
     # Load existing PRD
     existing_prd = load_prd()
 
     # If no sources configured but PRD exists with stories, use it directly
     # This handles the case where user created .afk/prd.json via afk prd parse
     # or placed it there manually - we don't want to overwrite it
-    if not config.sources and existing_prd.userStories:
+    if not config.sources and existing_prd.user_stories:
         return existing_prd
 
-    existing_status = {story.id: story.passes for story in existing_prd.userStories}
+    existing_status = {story.id: story.passes for story in existing_prd.user_stories}
 
-    # Aggregate from all sources
-    stories: list[UserStory] = []
-    for source in config.sources:
-        source_stories = _load_from_source(source)
-        stories.extend(source_stories)
+    # Aggregate from all sources using the sources module
+    stories = aggregate_tasks(config.sources)
 
     # Safety check: don't wipe a populated PRD with an empty sync
     # This protects against sources returning nothing (e.g., empty beads)
-    if not stories and existing_prd.userStories:
+    if not stories and existing_prd.user_stories:
         return existing_prd
 
     # Preserve completion status from previous sync
@@ -154,367 +175,14 @@ def sync_prd(config: AfkConfig, branch_name: str | None = None) -> PrdDocument:
     # Build PRD document
     prd = PrdDocument(
         project=_get_project_name(),
-        branchName=branch_name,
+        branch_name=branch_name,
         description=existing_prd.description or "Tasks synced from configured sources",
-        userStories=stories,
-        lastSynced=datetime.now().isoformat(),
+        user_stories=stories,
+        last_synced=datetime.now().isoformat(),
     )
 
     save_prd(prd)
     return prd
-
-
-def _load_from_source(source: SourceConfig) -> list[UserStory]:
-    """Load user stories from a single source."""
-    if source.type == "beads":
-        return _load_beads_stories()
-    elif source.type == "json":
-        return _load_json_stories(source.path)
-    elif source.type == "markdown":
-        return _load_markdown_stories(source.path)
-    elif source.type == "github":
-        return _load_github_stories(source.repo, source.labels)
-    else:
-        return []
-
-
-def _load_beads_stories() -> list[UserStory]:
-    """Load stories from beads."""
-    import subprocess
-
-    try:
-        result = subprocess.run(
-            ["bd", "ready", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-
-        if result.returncode != 0:
-            return []
-
-        data = json.loads(result.stdout)
-        stories = []
-
-        for item in data:
-            task_id = item.get("id") or item.get("key") or str(item.get("number", ""))
-            title = item.get("title") or item.get("summary", "")
-            description = item.get("description") or item.get("body", "")
-
-            # Extract acceptance criteria from description if present
-            acceptance_criteria = _extract_acceptance_criteria(description)
-
-            # If no AC found, use title as single criterion
-            if not acceptance_criteria:
-                acceptance_criteria = [f"Complete: {title}"]
-
-            if task_id:
-                stories.append(
-                    UserStory(
-                        id=task_id,
-                        title=title,
-                        description=description or title,
-                        acceptanceCriteria=acceptance_criteria,
-                        priority=_map_priority(item.get("priority")),
-                        source="beads",
-                    )
-                )
-
-        return stories
-
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        return []
-
-
-def _load_json_stories(path: str | None) -> list[UserStory]:
-    """Load stories from JSON PRD file."""
-    if not path:
-        for default_path in ["prd.json", "tasks.json", ".afk/prd.json"]:
-            if Path(default_path).exists():
-                path = default_path
-                break
-        else:
-            return []
-
-    file_path = Path(path)
-    if not file_path.exists():
-        return []
-
-    with open(file_path) as f:
-        data = json.load(f)
-
-    # Handle both formats
-    items: list[dict] = []
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        items = data.get("tasks") or data.get("userStories") or data.get("items") or []
-    else:
-        return []
-
-    stories = []
-    for item in items:
-        # Skip if already completed in source
-        if item.get("passes", False):
-            continue
-
-        task_id = item.get("id") or _generate_id(item.get("title", item.get("description", "")))
-        title = item.get("title") or item.get("description") or item.get("summary", "")
-        description = item.get("description") or title
-
-        # Get acceptance criteria from various field names
-        acceptance_criteria = (
-            item.get("acceptanceCriteria")
-            or item.get("acceptance_criteria")
-            or item.get("steps")
-            or []
-        )
-
-        # Ensure it's a list
-        if isinstance(acceptance_criteria, str):
-            acceptance_criteria = [acceptance_criteria]
-
-        # If no AC, create from description
-        if not acceptance_criteria:
-            acceptance_criteria = [f"Complete: {title}"]
-
-        if task_id:
-            stories.append(
-                UserStory(
-                    id=task_id,
-                    title=title,
-                    description=description,
-                    acceptanceCriteria=acceptance_criteria,
-                    priority=_map_priority(item.get("priority")),
-                    source=f"json:{path}",
-                )
-            )
-
-    return stories
-
-
-def _load_markdown_stories(path: str | None) -> list[UserStory]:
-    """Load stories from markdown file."""
-    import re
-
-    if not path:
-        for default_path in ["tasks.md", "TODO.md", "prd.md", ".afk/tasks.md"]:
-            if Path(default_path).exists():
-                path = default_path
-                break
-        else:
-            return []
-
-    file_path = Path(path)
-    if not file_path.exists():
-        return []
-
-    content = file_path.read_text()
-    stories = []
-
-    # Match markdown checkboxes
-    pattern = r"^[\s]*[-*]\s*\[([ xX])\]\s*(.+)$"
-
-    for match in re.finditer(pattern, content, re.MULTILINE):
-        checked = match.group(1).lower() == "x"
-        text = match.group(2).strip()
-
-        if checked:
-            continue
-
-        task_id, description, priority = _parse_markdown_task(text)
-
-        stories.append(
-            UserStory(
-                id=task_id,
-                title=description,
-                description=description,
-                acceptanceCriteria=[f"Complete: {description}"],
-                priority=priority,
-                source=f"markdown:{path}",
-            )
-        )
-
-    return stories
-
-
-def _load_github_stories(
-    repo: str | None = None,
-    labels: list[str] | None = None,
-) -> list[UserStory]:
-    """Load stories from GitHub issues with full body."""
-    import subprocess
-
-    try:
-        # Include body for acceptance criteria
-        cmd = ["gh", "issue", "list", "--json", "number,title,body,labels,state"]
-
-        if repo:
-            cmd.extend(["--repo", repo])
-
-        if labels:
-            for label in labels:
-                cmd.extend(["--label", label])
-
-        cmd.extend(["--state", "open"])
-
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-
-        if result.returncode != 0:
-            return []
-
-        issues = json.loads(result.stdout)
-        stories = []
-
-        for issue in issues:
-            number = issue.get("number")
-            title = issue.get("title", "")
-            body = issue.get("body", "")
-            issue_labels = [lbl.get("name", "") for lbl in issue.get("labels", [])]
-            priority = _priority_from_labels(issue_labels)
-
-            # Extract acceptance criteria from body
-            acceptance_criteria = _extract_acceptance_criteria(body)
-            if not acceptance_criteria:
-                acceptance_criteria = [f"Complete: {title}"]
-
-            if number and title:
-                stories.append(
-                    UserStory(
-                        id=f"#{number}",
-                        title=title,
-                        description=body or title,
-                        acceptanceCriteria=acceptance_criteria,
-                        priority=priority,
-                        source="github",
-                    )
-                )
-
-        return stories
-
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        return []
-
-
-def _extract_acceptance_criteria(text: str) -> list[str]:
-    """Extract acceptance criteria from text.
-
-    Looks for common patterns:
-    - Checkbox lists (- [ ] or * [ ])
-    - Numbered lists under "Acceptance Criteria" heading
-    - Bullet points under "AC" or "Definition of Done"
-    """
-    import re
-
-    if not text:
-        return []
-
-    criteria: list[str] = []
-
-    # Look for acceptance criteria section
-    ac_patterns = [
-        r"(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
-        r"##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)",
-    ]
-
-    for pattern in ac_patterns:
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
-        if match:
-            section = match.group(1)
-            # Extract list items
-            for line in section.split("\n"):
-                line = line.strip()
-                # Remove list markers
-                cleaned = re.sub(r"^[-*\d.]+\s*(\[[ x]\])?\s*", "", line)
-                if cleaned:
-                    criteria.append(cleaned)
-            break
-
-    # If no section found, look for checkbox items anywhere
-    if not criteria:
-        checkbox_pattern = r"[-*]\s*\[[ ]\]\s*(.+)"
-        matches = re.findall(checkbox_pattern, text)
-        criteria = [m.strip() for m in matches if m.strip()]
-
-    return criteria
-
-
-def _parse_markdown_task(text: str) -> tuple[str, str, int]:
-    """Parse a markdown task line."""
-    import re
-
-    priority = 3
-    description = text
-
-    # Check for priority tag
-    priority_match = re.match(r"^\[([A-Z0-9]+)\]\s*(.+)$", text)
-    if priority_match:
-        tag = priority_match.group(1).upper()
-        description = priority_match.group(2).strip()
-
-        if tag in ("HIGH", "CRITICAL", "URGENT", "P0", "P1"):
-            priority = 1
-        elif tag in ("P2", "MEDIUM"):
-            priority = 2
-        elif tag in ("LOW", "MINOR", "P3", "P4"):
-            priority = 4
-
-    # Check for explicit ID
-    id_match = re.match(r"^([a-z0-9_-]+):\s*(.+)$", description, re.IGNORECASE)
-    if id_match:
-        task_id = id_match.group(1).lower()
-        description = id_match.group(2).strip()
-    else:
-        task_id = _generate_id(description)
-
-    return task_id, description, priority
-
-
-def _generate_id(text: str) -> str:
-    """Generate an ID from text."""
-    clean = text[:30].lower()
-    clean = "".join(c if c.isalnum() or c == " " else "" for c in clean)
-    return clean.replace(" ", "-").strip("-") or "task"
-
-
-def _map_priority(priority: str | int | None) -> int:
-    """Map various priority formats to 1-5 scale."""
-    if priority is None:
-        return 3
-
-    if isinstance(priority, int):
-        # Already numeric, clamp to 1-5
-        return max(1, min(5, priority))
-
-    priority_lower = str(priority).lower()
-    if priority_lower in ("high", "critical", "urgent", "1", "p0", "p1"):
-        return 1
-    elif priority_lower in ("medium", "normal", "2", "p2"):
-        return 2
-    elif priority_lower in ("low", "minor", "4", "5", "p3", "p4"):
-        return 4
-    else:
-        return 3
-
-
-def _priority_from_labels(labels: list[str]) -> int:
-    """Infer priority from GitHub labels."""
-    labels_lower = [lbl.lower() for lbl in labels]
-
-    high_labels = {"priority:high", "critical", "urgent", "p0", "p1", "high-priority"}
-    low_labels = {"priority:low", "minor", "p3", "p4", "low-priority", "nice-to-have"}
-
-    if any(lbl in high_labels for lbl in labels_lower):
-        return 1
-    elif any(lbl in low_labels for lbl in labels_lower):
-        return 4
-    else:
-        return 3
 
 
 def _get_current_branch() -> str:
@@ -559,7 +227,7 @@ def get_pending_stories(prd: PrdDocument | None = None) -> list[UserStory]:
     if prd is None:
         prd = load_prd()
 
-    pending = [story for story in prd.userStories if not story.passes]
+    pending = [story for story in prd.user_stories if not story.passes]
     pending.sort(key=lambda s: s.priority)
     return pending
 
@@ -580,7 +248,7 @@ def mark_story_complete(story_id: str) -> bool:
     """
     prd = load_prd()
 
-    for story in prd.userStories:
+    for story in prd.user_stories:
         if story.id == story_id:
             story.passes = True
             save_prd(prd)
@@ -601,7 +269,7 @@ def all_stories_complete(prd: PrdDocument | None = None) -> bool:
     if prd is None:
         prd = load_prd()
 
-    if not prd.userStories:
+    if not prd.user_stories:
         return True
 
-    return all(story.passes for story in prd.userStories)
+    return all(story.passes for story in prd.user_stories)

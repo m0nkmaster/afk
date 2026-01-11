@@ -139,6 +139,8 @@ afk status                 # Show configuration
 afk explain                # Show current loop state
 afk explain -v             # Verbose: include learnings and failures
 afk next                   # Preview next prompt (without running)
+afk verify                 # Run quality gates (lint, test, types)
+afk verify -v              # Show full output from failed gates
 ```
 
 ### Sources
@@ -297,15 +299,16 @@ Uses `gh issue list`. Requires GitHub CLI.
 
 ## AI CLI Support
 
-afk works with any CLI that accepts prompts via stdin:
+afk works with any CLI that accepts prompts as the final argument:
 
 | CLI | Config |
 |-----|--------|
-| Cursor Agent (default) | `{"command": "agent", "args": ["--force", "-p"]}` |
-| Claude CLI | `{"command": "claude", "args": ["--dangerously-skip-permissions", "-p"]}` |
-| Codex | `{"command": "codex", "args": ["--approval-mode", "full-auto", "-q"]}` |
-| Aider | `{"command": "aider", "args": ["--yes"]}` |
+| Claude CLI | `{"command": "claude", "args": ["--dangerously-skip-permissions"]}` |
+| Cursor Agent | `{"command": "agent", "args": ["-p", "--force"]}` |
+| Codex | `{"command": "codex", "args": ["--approval-mode", "full-auto"]}` |
+| Aider | `{"command": "aider", "args": ["--yes", "--message"]}` |
 | Amp | `{"command": "amp", "args": ["--dangerously-allow-all"]}` |
+| Kiro | `{"command": "kiro", "args": ["--auto"]}` |
 | Custom | `{"command": "your-cli", "args": [...]}` |
 
 When you run `afk go` for the first time, it will auto-detect installed AI CLIs and prompt you to select one.

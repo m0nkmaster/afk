@@ -19,7 +19,7 @@ class TestUserStoryFromSources:
         assert story.priority == 3
         assert story.source == "unknown"
         assert story.passes is False
-        assert story.acceptanceCriteria == []
+        assert story.acceptance_criteria == []
 
     def test_all_fields(self) -> None:
         """Test all fields populated."""
@@ -27,7 +27,7 @@ class TestUserStoryFromSources:
             id="task-2",
             title="Another task",
             description="Full description",
-            acceptanceCriteria=["Step 1", "Step 2"],
+            acceptance_criteria=["Step 1", "Step 2"],
             priority=1,
             passes=False,
             source="beads",
@@ -35,7 +35,7 @@ class TestUserStoryFromSources:
         )
         assert story.priority == 1
         assert story.source == "beads"
-        assert len(story.acceptanceCriteria) == 2
+        assert len(story.acceptance_criteria) == 2
 
 
 class TestAggregateTasksIntegration:

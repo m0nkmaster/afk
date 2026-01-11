@@ -82,7 +82,7 @@ def _run_zero_config(
         infer_config,
         infer_sources,
     )
-    from afk.runner import run_loop
+    from afk.runner import LoopController
 
     # Parse arguments
     iterations = 10  # default
@@ -131,7 +131,7 @@ def _run_zero_config(
         from afk.prd_store import load_prd
 
         existing_prd = load_prd()
-        if not existing_prd.userStories:
+        if not existing_prd.user_stories:
             # No PRD exists, try to infer sources
             inferred = infer_sources()
             if inferred:
@@ -142,7 +142,7 @@ def _run_zero_config(
         from afk.prd_store import load_prd
 
         existing_prd = load_prd()
-        if not existing_prd.userStories:
+        if not existing_prd.user_stories:
             # No sources AND no PRD - check for prompt file (ralf.sh mode)
             prompt_file = detect_prompt_file()
             if prompt_file:
@@ -191,7 +191,7 @@ def _run_zero_config(
         return
 
     # Run the loop
-    run_loop(config=config, max_iterations=iterations, until_complete=until_complete)
+    LoopController(config).run(max_iterations=iterations, until_complete=until_complete)
 
 
 @main.command()
@@ -510,17 +510,17 @@ def prd_sync(ctx: click.Context, branch: str | None) -> None:
 
     prd = sync_prd(config, branch_name=branch)
 
-    pending = sum(1 for s in prd.userStories if not s.passes)
-    complete = sum(1 for s in prd.userStories if s.passes)
+    pending = sum(1 for s in prd.user_stories if not s.passes)
+    complete = sum(1 for s in prd.user_stories if s.passes)
 
     console.print()
     console.print("[green]PRD synced:[/green] .afk/prd.json")
-    console.print(f"  Stories: {len(prd.userStories)} total")
+    console.print(f"  Stories: {len(prd.user_stories)} total")
     console.print(f"  Pending: {pending}")
     console.print(f"  Complete: {complete}")
 
-    if prd.branchName:
-        console.print(f"  Branch: {prd.branchName}")
+    if prd.branch_name:
+        console.print(f"  Branch: {prd.branch_name}")
 
 
 @prd.command("show")
@@ -535,7 +535,7 @@ def prd_show(ctx: click.Context, pending: bool) -> None:
 
     prd = load_prd()
 
-    if not prd.userStories:
+    if not prd.user_stories:
         console.print("[dim]No stories in PRD.[/dim] Run [cyan]afk prd sync[/cyan] first.")
         return
 
@@ -546,12 +546,12 @@ def prd_show(ctx: click.Context, pending: bool) -> None:
     table.add_column("AC", style="dim", width=3)
     table.add_column("Status", style="white")
 
-    for story in prd.userStories:
+    for story in prd.user_stories:
         if pending and story.passes:
             continue
 
         status = "[green]✓ Pass[/green]" if story.passes else "[dim]Pending[/dim]"
-        ac_count = str(len(story.acceptanceCriteria))
+        ac_count = str(len(story.acceptance_criteria))
 
         table.add_row(
             story.id,
@@ -563,10 +563,10 @@ def prd_show(ctx: click.Context, pending: bool) -> None:
 
     console.print(table)
 
-    if prd.branchName:
-        console.print(f"\n[dim]Branch: {prd.branchName}[/dim]")
-    if prd.lastSynced:
-        console.print(f"[dim]Last synced: {prd.lastSynced[:19]}[/dim]")
+    if prd.branch_name:
+        console.print(f"\n[dim]Branch: {prd.branch_name}[/dim]")
+    if prd.last_synced:
+        console.print(f"[dim]Last synced: {prd.last_synced[:19]}[/dim]")
 
 
 @main.command()
@@ -596,17 +596,17 @@ def sync(ctx: click.Context, branch: str | None) -> None:
 
     prd = sync_prd(config, branch_name=branch)
 
-    pending = sum(1 for s in prd.userStories if not s.passes)
-    complete = sum(1 for s in prd.userStories if s.passes)
+    pending = sum(1 for s in prd.user_stories if not s.passes)
+    complete = sum(1 for s in prd.user_stories if s.passes)
 
     console.print()
     console.print("[green]PRD synced:[/green] .afk/prd.json")
-    console.print(f"  Stories: {len(prd.userStories)} total")
+    console.print(f"  Stories: {len(prd.user_stories)} total")
     console.print(f"  Pending: {pending}")
     console.print(f"  Complete: {complete}")
 
-    if prd.branchName:
-        console.print(f"  Branch: {prd.branchName}")
+    if prd.branch_name:
+        console.print(f"  Branch: {prd.branch_name}")
 
 
 @main.command()
@@ -796,7 +796,7 @@ def explain(ctx: click.Context, verbose: bool) -> None:
     else:
         # Zero-config mode: read directly from PRD
         prd = load_prd()
-        stories = list(prd.userStories)
+        stories = list(prd.user_stories)
 
     # Completion is tracked via passes field (UserStory.passes)
     completed = [s for s in stories if s.passes]
@@ -882,7 +882,7 @@ def start(ctx: click.Context, iterations: int, branch: str | None, yes: bool) ->
         afk start -y                 # Skip prompts, accept defaults
     """
     from afk.bootstrap import analyse_project, generate_config
-    from afk.runner import run_loop
+    from afk.runner import LoopController
 
     config: AfkConfig = ctx.obj["config"]
 
@@ -916,8 +916,7 @@ def start(ctx: click.Context, iterations: int, branch: str | None, yes: bool) ->
             console.print("[dim]Cancelled.[/dim]")
             return
 
-    run_loop(
-        config=config,
+    LoopController(config).run(
         max_iterations=iterations,
         branch=branch,
     )
@@ -956,7 +955,7 @@ def run(
 
         afk run --continue            # Resume from last session
     """
-    from afk.runner import run_loop
+    from afk.runner import LoopController
 
     config: AfkConfig = ctx.obj["config"]
 
@@ -969,8 +968,7 @@ def run(
         return
 
     # Run the autonomous loop
-    run_loop(
-        config=config,
+    LoopController(config).run(
         max_iterations=iterations,
         branch=branch,
         until_complete=until_complete,
@@ -1004,7 +1002,7 @@ def resume(
         afk resume --until-complete   # Continue until all tasks done
     """
     from afk.config import PROGRESS_FILE
-    from afk.runner import run_loop
+    from afk.runner import LoopController
 
     config: AfkConfig = ctx.obj["config"]
 
@@ -1020,8 +1018,7 @@ def resume(
         console.print("[yellow]No session to resume.[/yellow] Starting fresh.")
 
     # Run the autonomous loop with resume flag
-    run_loop(
-        config=config,
+    LoopController(config).run(
         max_iterations=iterations,
         until_complete=until_complete,
         timeout_override=timeout,

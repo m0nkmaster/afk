@@ -154,12 +154,12 @@ class TestSyncPrd:
         (temp_project / ".afk").mkdir(parents=True)
         prd = PrdDocument(
             project="test",
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="task-1",
                     title="Test task",
                     description="A test task",
-                    acceptanceCriteria=["It works"],
+                    acceptance_criteria=["It works"],
                     priority=1,
                 )
             ],
@@ -172,8 +172,8 @@ class TestSyncPrd:
         result = sync_prd(config)
 
         # Should return the existing PRD, not an empty one
-        assert len(result.userStories) == 1
-        assert result.userStories[0].id == "task-1"
+        assert len(result.user_stories) == 1
+        assert result.user_stories[0].id == "task-1"
         assert result.project == "test"
 
     def test_sync_does_not_overwrite_existing_prd(self, temp_project: Path) -> None:
@@ -183,7 +183,7 @@ class TestSyncPrd:
         original_prd = PrdDocument(
             project="my-project",
             description="Original description",
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="original-task",
                     title="Original",
@@ -200,8 +200,8 @@ class TestSyncPrd:
 
         # Reload and check it wasn't modified
         reloaded = load_prd()
-        assert len(reloaded.userStories) == 1
-        assert reloaded.userStories[0].id == "original-task"
+        assert len(reloaded.user_stories) == 1
+        assert reloaded.user_stories[0].id == "original-task"
         assert reloaded.project == "my-project"
 
     def test_sync_overwrites_when_sources_configured(self, temp_project: Path) -> None:
@@ -212,7 +212,7 @@ class TestSyncPrd:
         (temp_project / ".afk").mkdir(parents=True)
         original_prd = PrdDocument(
             project="old-project",
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="old-task",
                     title="Old",
@@ -231,9 +231,9 @@ class TestSyncPrd:
         result = sync_prd(config)
 
         # Should have synced from markdown, not the old PRD
-        assert len(result.userStories) >= 1
+        assert len(result.user_stories) >= 1
         # The old task should be gone (replaced by sync)
-        task_ids = [s.id for s in result.userStories]
+        task_ids = [s.id for s in result.user_stories]
         assert "old-task" not in task_ids
 
     def test_sync_preserves_prd_when_sources_return_empty(self, temp_project: Path) -> None:
@@ -248,7 +248,7 @@ class TestSyncPrd:
         (temp_project / ".afk").mkdir(parents=True)
         original_prd = PrdDocument(
             project="my-project",
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="important-task",
                     title="Important",
@@ -267,8 +267,8 @@ class TestSyncPrd:
         result = sync_prd(config)
 
         # Should preserve the existing PRD, not wipe it
-        assert len(result.userStories) == 1
-        assert result.userStories[0].id == "important-task"
+        assert len(result.user_stories) == 1
+        assert result.user_stories[0].id == "important-task"
         assert result.project == "my-project"
 
 
@@ -281,7 +281,9 @@ class TestMarkStoryComplete:
 
         (temp_project / ".afk").mkdir(parents=True)
         prd = PrdDocument(
-            userStories=[UserStory(id="task-1", title="Task", description="Do thing", passes=False)]
+            user_stories=[
+                UserStory(id="task-1", title="Task", description="Do thing", passes=False)
+            ]
         )
         save_prd(prd)
 
@@ -289,14 +291,14 @@ class TestMarkStoryComplete:
 
         assert result is True
         reloaded = load_prd()
-        assert reloaded.userStories[0].passes is True
+        assert reloaded.user_stories[0].passes is True
 
     def test_returns_false_for_unknown_story(self, temp_project: Path) -> None:
         """Test returns False when story not found."""
         from afk.prd_store import mark_story_complete
 
         (temp_project / ".afk").mkdir(parents=True)
-        prd = PrdDocument(userStories=[])
+        prd = PrdDocument(user_stories=[])
         save_prd(prd)
 
         result = mark_story_complete("nonexistent")
@@ -311,7 +313,7 @@ class TestMarkStoryComplete:
 
         (temp_project / ".afk").mkdir(parents=True)
         prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="beads-123",
                     title="Beads Task",
@@ -338,7 +340,7 @@ class TestMarkStoryComplete:
 
         (temp_project / ".afk").mkdir(parents=True)
         prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="json-task",
                     title="JSON Task",

@@ -401,7 +401,7 @@ class TestRunCommand:
 
     def test_run_starts_loop(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test run starts the loop."""
-        from afk.runner import RunResult, StopReason
+        from afk.runner import LoopController, RunResult, StopReason
 
         mock_result = RunResult(
             iterations_completed=1,
@@ -409,14 +409,14 @@ class TestRunCommand:
             stop_reason=StopReason.MAX_ITERATIONS,
             duration_seconds=1.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["run"])
         assert result.exit_code == 0
-        mock_loop.assert_called_once()
+        mock_run.assert_called_once()
 
     def test_run_with_iterations(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test run with custom iteration count."""
-        from afk.runner import RunResult, StopReason
+        from afk.runner import LoopController, RunResult, StopReason
 
         mock_result = RunResult(
             iterations_completed=10,
@@ -424,11 +424,11 @@ class TestRunCommand:
             stop_reason=StopReason.MAX_ITERATIONS,
             duration_seconds=1.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["run", "10"])
         assert result.exit_code == 0
         # Verify iterations was passed correctly
-        call_kwargs = mock_loop.call_args.kwargs
+        call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("max_iterations") == 10
 
     def test_run_not_initialized(self, cli_runner: CliRunner, temp_project: Path) -> None:
@@ -454,7 +454,7 @@ class TestResumeCommand:
         self, cli_runner: CliRunner, initialized_project: Path
     ) -> None:
         """Test resume continues from existing session."""
-        from afk.runner import RunResult, StopReason
+        from afk.runner import LoopController, RunResult, StopReason
 
         # Create progress file with some iterations
         progress_file = initialized_project / ".afk" / "progress.json"
@@ -468,11 +468,11 @@ class TestResumeCommand:
             stop_reason=StopReason.COMPLETE,
             duration_seconds=10.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["resume"])
         assert result.exit_code == 0
-        # Verify resume was passed to run_loop
-        call_kwargs = mock_loop.call_args.kwargs
+        # Verify resume was passed to run
+        call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("resume") is True
 
     def test_resume_not_initialized(self, cli_runner: CliRunner, temp_project: Path) -> None:
@@ -493,7 +493,7 @@ class TestResumeCommand:
         self, cli_runner: CliRunner, initialized_project: Path
     ) -> None:
         """Test resume works even without existing session (starts fresh)."""
-        from afk.runner import RunResult, StopReason
+        from afk.runner import LoopController, RunResult, StopReason
 
         mock_result = RunResult(
             iterations_completed=1,
@@ -501,14 +501,14 @@ class TestResumeCommand:
             stop_reason=StopReason.NO_TASKS,
             duration_seconds=1.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["resume"])
         assert result.exit_code == 0
-        mock_loop.assert_called_once()
+        mock_run.assert_called_once()
 
     def test_resume_with_iterations(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test resume with custom iteration count."""
-        from afk.runner import RunResult, StopReason
+        from afk.runner import LoopController, RunResult, StopReason
 
         progress_file = initialized_project / ".afk" / "progress.json"
         progress_file.write_text(
@@ -521,16 +521,16 @@ class TestResumeCommand:
             stop_reason=StopReason.MAX_ITERATIONS,
             duration_seconds=100.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["resume", "20"])
         assert result.exit_code == 0
         # Verify max_iterations was passed correctly
-        call_kwargs = mock_loop.call_args.kwargs
+        call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("max_iterations") == 20
 
     def test_run_with_continue_flag(self, cli_runner: CliRunner, initialized_project: Path) -> None:
-        """Test run --continue passes resume=True to run_loop."""
-        from afk.runner import RunResult, StopReason
+        """Test run --continue passes resume=True to run."""
+        from afk.runner import LoopController, RunResult, StopReason
 
         progress_file = initialized_project / ".afk" / "progress.json"
         progress_file.write_text(
@@ -543,11 +543,11 @@ class TestResumeCommand:
             stop_reason=StopReason.MAX_ITERATIONS,
             duration_seconds=10.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["run", "--continue"])
         assert result.exit_code == 0
         # Verify resume=True was passed
-        call_kwargs = mock_loop.call_args.kwargs
+        call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("resume") is True
 
 
@@ -807,7 +807,7 @@ class TestStartCommand:
 
     def test_start_runs_loop(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test start runs the loop when sources exist."""
-        from afk.runner import RunResult, StopReason
+        from afk.runner import LoopController, RunResult, StopReason
 
         mock_result = RunResult(
             iterations_completed=1,
@@ -815,10 +815,10 @@ class TestStartCommand:
             stop_reason=StopReason.MAX_ITERATIONS,
             duration_seconds=1.0,
         )
-        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
             result = cli_runner.invoke(main, ["start", "-y"])
         assert result.exit_code == 0
-        mock_loop.assert_called_once()
+        mock_run.assert_called_once()
 
 
 class TestGoCommand:

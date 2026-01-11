@@ -138,7 +138,7 @@ def generate_prompt(
     # Load PRD (Ralph pattern - AI reads this file directly)
     prd = load_prd()
     pending_stories = get_pending_stories(prd)
-    total_stories = len(prd.userStories)
+    total_stories = len(prd.user_stories)
     completed_count = total_stories - len(pending_stories)
 
     # Max iterations for display only (limit enforcement is in loop controller)
@@ -199,24 +199,4 @@ def _get_template(config: AfkConfig) -> str:
         if custom_path.exists():
             return custom_path.read_text()
 
-    # Built-in templates
-    if config.prompt.template == "minimal":
-        return _MINIMAL_TEMPLATE
-    elif config.prompt.template == "verbose":
-        return DEFAULT_TEMPLATE  # verbose is the default for now
-
     return DEFAULT_TEMPLATE
-
-
-_MINIMAL_TEMPLATE = """\
-# afk {{ iteration }}/{{ max_iterations }}
-
-{% if stop_signal -%}
-{{ stop_signal }}
-{% else -%}
-Read `.afk/progress.json` → `.afk/prd.json` → implement highest priority `passes: false` story →
-run `afk verify` until it passes → set `passes: true` → commit → record learnings.
-
-If all stories pass, reply with: <promise>COMPLETE</promise>
-{% endif %}
-"""

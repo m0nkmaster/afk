@@ -61,7 +61,7 @@ def load_github_tasks(
                         id=f"#{number}",
                         title=title,
                         description=body or title,
-                        acceptanceCriteria=acceptance_criteria,
+                        acceptance_criteria=acceptance_criteria,
                         priority=priority,
                         source="github",
                     )
@@ -102,7 +102,8 @@ def _extract_acceptance_criteria(text: str) -> list[str]:
 
     # Look for acceptance criteria section
     ac_patterns = [
-        r"(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
+        r"(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n"
+        r"((?:[-*\d.]+\s*.+\n?)+)",
         r"##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)",
     ]
 

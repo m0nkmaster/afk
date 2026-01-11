@@ -177,7 +177,7 @@ class TestRunLoop:
         config = AfkConfig()
 
         # Empty PRD = all complete
-        empty_prd = PrdDocument(userStories=[])
+        empty_prd = PrdDocument(user_stories=[])
 
         with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.archive_session"):
@@ -204,7 +204,7 @@ class TestRunLoop:
             return IterationResult(success=True)
 
         mock_prd = PrdDocument(
-            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
+            user_stories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
         )
 
         with patch("afk.runner.sync_prd", return_value=mock_prd):
@@ -233,7 +233,7 @@ class TestRunLoop:
         progress_file = temp_afk_dir / "progress.json"
         progress_file.write_text('{"iterations": 5, "tasks": {}}')
 
-        empty_prd = PrdDocument(userStories=[])
+        empty_prd = PrdDocument(user_stories=[])
 
         with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.archive_session") as mock_archive:
@@ -258,7 +258,7 @@ class TestRunLoop:
 
         with patch("afk.runner.sync_prd") as mock_sync:
             mock_prd = MagicMock()
-            mock_prd.userStories = []
+            mock_prd.user_stories = []
             mock_sync.return_value = mock_prd
 
             with patch("afk.runner.load_prd") as mock_load:
@@ -291,7 +291,7 @@ class TestRunLoop:
 
         with patch("afk.runner.sync_prd") as mock_sync:
             mock_prd = MagicMock()
-            mock_prd.userStories = []
+            mock_prd.user_stories = []
             mock_sync.return_value = mock_prd
 
             with patch("afk.runner.load_prd") as mock_load:
@@ -319,7 +319,7 @@ class TestRunLoop:
             archive=ArchiveConfig(enabled=False),
         )
 
-        empty_prd = PrdDocument(userStories=[])
+        empty_prd = PrdDocument(user_stories=[])
 
         with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.create_branch") as mock_branch:
@@ -340,7 +340,7 @@ class TestRunLoop:
             ai_cli=AiCliConfig(command="echo", args=[]),
         )
 
-        empty_prd = PrdDocument(userStories=[])
+        empty_prd = PrdDocument(user_stories=[])
 
         with patch("afk.runner.sync_prd", return_value=empty_prd):
             with patch("afk.runner.check_limits") as mock_limits:
@@ -372,7 +372,7 @@ class TestTaskProgressTracking:
         )
 
         mock_prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="story-1",
                     title="Test Story",
@@ -383,10 +383,11 @@ class TestTaskProgressTracking:
             ]
         )
 
+        pending_stories = mock_prd.user_stories
         with patch("afk.runner.sync_prd", return_value=mock_prd):
             with patch("afk.runner.load_prd", return_value=mock_prd):
                 with patch("afk.runner.all_stories_complete", return_value=False):
-                    with patch("afk.runner.get_pending_stories", return_value=mock_prd.userStories):
+                    with patch("afk.runner.get_pending_stories", return_value=pending_stories):
                         with patch("afk.runner.check_limits") as mock_limits:
                             # Stop after first iteration
                             mock_limits.side_effect = [
@@ -417,7 +418,7 @@ class TestTaskProgressTracking:
 
         # Initial PRD with pending story
         old_prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="story-1",
                     title="Test Story",
@@ -430,7 +431,7 @@ class TestTaskProgressTracking:
 
         # PRD after AI marks it complete
         new_prd = PrdDocument(
-            userStories=[
+            user_stories=[
                 UserStory(
                     id="story-1",
                     title="Test Story",
@@ -477,13 +478,15 @@ class TestRunLoopIntegration:
             return (True, None)
 
         mock_prd = PrdDocument(
-            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
+            user_stories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
         )
 
         with patch("afk.runner.sync_prd", return_value=mock_prd):
             with patch("afk.runner.load_prd", return_value=mock_prd):
                 with patch("afk.runner.all_stories_complete", return_value=False):
-                    with patch("afk.runner.get_pending_stories", return_value=mock_prd.userStories):
+                    with patch(
+                        "afk.runner.get_pending_stories", return_value=mock_prd.user_stories
+                    ):
                         with patch("afk.runner.check_limits", side_effect=mock_check_limits):
                             with patch.object(IterationRunner, "run") as mock_iteration:
                                 mock_iteration.return_value = IterationResult(success=True)

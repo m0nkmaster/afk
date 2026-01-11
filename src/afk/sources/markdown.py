@@ -51,7 +51,7 @@ def load_markdown_tasks(path: str | None) -> list[UserStory]:
                 id=task_id,
                 title=title,
                 description=title,
-                acceptanceCriteria=[f"Complete: {title}"],
+                acceptance_criteria=[f"Complete: {title}"],
                 priority=priority,
                 source=f"markdown:{path}",
             )

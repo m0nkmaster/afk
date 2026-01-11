@@ -573,7 +573,7 @@ class LoopController:
             max_iterations="∞" if until_complete else max_iter,
             timeout_minutes=timeout_minutes,
             pending_count=len(pending),
-            total_count=len(prd.userStories),
+            total_count=len(prd.user_stories),
         )
 
         return self._run_loop(
@@ -613,7 +613,7 @@ class LoopController:
         max_iter: int,
         until_complete: bool,
         on_iteration_complete: Callable[[int, IterationResult], None] | None,
-        prd: object,  # PRD type
+        prd: PrdDocument,
     ) -> RunResult:
         """Execute the main loop."""
         iterations_completed = 0
@@ -737,7 +737,7 @@ class LoopController:
         can_continue, signal = check_limits(
             max_iterations=max_iter if not until_complete else 999999,
             max_failures=self.config.limits.max_task_failures,
-            total_tasks=len(prd.userStories),
+            total_tasks=len(prd.user_stories),
         )
 
         if not can_continue:
@@ -778,9 +778,9 @@ class LoopController:
         new_prd = load_prd()
 
         # Find stories that newly passed
-        old_passed_ids = {s.id for s in old_prd.userStories if s.passes}
+        old_passed_ids = {s.id for s in old_prd.user_stories if s.passes}
         newly_completed = [
-            s for s in new_prd.userStories if s.passes and s.id not in old_passed_ids
+            s for s in new_prd.user_stories if s.passes and s.id not in old_passed_ids
         ]
 
         if newly_completed:
@@ -872,11 +872,43 @@ def run_quality_gates(
 
 
 # =============================================================================
-# Backwards-compatible module-level functions
+# Prompt-only mode (ralf.sh style)
 # =============================================================================
 
-# Default console for module-level functions
-console = Console()
+
+def run_loop(
+    config: AfkConfig,
+    max_iterations: int | None = None,
+    branch: str | None = None,
+    until_complete: bool = False,
+    timeout_override: int | None = None,
+    on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
+    resume: bool = False,
+) -> RunResult:
+    """Run the autonomous afk loop.
+
+    Convenience function that creates a LoopController and runs it.
+
+    Args:
+        config: afk configuration
+        max_iterations: Override for max iterations
+        branch: Branch name to create/checkout
+        until_complete: If True, run until all tasks done
+        timeout_override: Override timeout in minutes
+        on_iteration_complete: Callback after each iteration
+        resume: If True, continue from last session
+
+    Returns:
+        RunResult with session statistics
+    """
+    return LoopController(config).run(
+        max_iterations=max_iterations,
+        branch=branch,
+        until_complete=until_complete,
+        timeout_override=timeout_override,
+        on_iteration_complete=on_iteration_complete,
+        resume=resume,
+    )
 
 
 def run_iteration(
@@ -887,7 +919,7 @@ def run_iteration(
 ) -> IterationResult:
     """Run a single iteration with fresh AI context.
 
-    This is a backwards-compatible wrapper around IterationRunner.
+    Convenience function that creates an IterationRunner and runs it.
 
     Args:
         config: afk configuration
@@ -902,40 +934,11 @@ def run_iteration(
     return runner.run(iteration, on_output=on_output, stream=stream)
 
 
-def run_loop(
-    config: AfkConfig,
-    max_iterations: int | None = None,
-    branch: str | None = None,
-    until_complete: bool = False,
-    timeout_override: int | None = None,
-    on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
-    resume: bool = False,
-) -> RunResult:
-    """Run the autonomous afk loop.
-
-    This is a backwards-compatible wrapper around LoopController.
-
-    Args:
-        config: afk configuration
-        max_iterations: Override for max iterations
-        branch: Branch name to create/checkout
-        until_complete: If True, run until all tasks done
-        timeout_override: Override timeout in minutes
-        on_iteration_complete: Callback after each iteration
-        resume: If True, continue from last session
-
-    Returns:
-        RunResult with session statistics
-    """
-    controller = LoopController(config)
-    return controller.run(
-        max_iterations=max_iterations,
-        branch=branch,
-        until_complete=until_complete,
-        timeout_override=timeout_override,
-        on_iteration_complete=on_iteration_complete,
-        resume=resume,
-    )
+def _contains_completion_signal(text: str | None) -> bool:
+    """Check if text contains any completion signal."""
+    if not text:
+        return False
+    return any(signal in text for signal in COMPLETION_SIGNALS)
 
 
 def run_prompt_only(
@@ -1024,12 +1027,3 @@ def run_prompt_only(
         duration_seconds=duration,
         archived_to=None,
     )
-
-
-def _contains_completion_signal(output: str | None) -> bool:
-    """Check if output contains any completion signal.
-
-    Backwards-compatible function wrapping OutputHandler method.
-    """
-    handler = OutputHandler()
-    return handler.contains_completion_signal(output)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 from afk.prd_store import UserStory
@@ -44,7 +45,7 @@ def load_beads_tasks() -> list[UserStory]:
                         id=task_id,
                         title=title,
                         description=description,
-                        acceptanceCriteria=acceptance_criteria,
+                        acceptance_criteria=acceptance_criteria,
                         priority=priority,
                         source="beads",
                     )
@@ -95,7 +96,7 @@ def _parse_beads_text_output() -> list[UserStory]:
                     id=task_id,
                     title=title,
                     description=title,
-                    acceptanceCriteria=[f"Complete: {title}"],
+                    acceptance_criteria=[f"Complete: {title}"],
                     priority=3,
                     source="beads",
                 )
@@ -127,8 +128,6 @@ def _map_beads_priority(priority: str | int | None) -> int:
 
 def _extract_acceptance_criteria(text: str) -> list[str]:
     """Extract acceptance criteria from text."""
-    import re
-
     if not text:
         return []
 
@@ -136,7 +135,8 @@ def _extract_acceptance_criteria(text: str) -> list[str]:
 
     # Look for acceptance criteria section
     ac_patterns = [
-        r"(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
+        r"(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n"
+        r"((?:[-*\d.]+\s*.+\n?)+)",
         r"##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)",
     ]
 

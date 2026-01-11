@@ -68,7 +68,7 @@ def load_json_tasks(path: str | None) -> list[UserStory]:
         description = item.get("description") or title
         priority = _map_priority(item.get("priority"))
 
-        # Get acceptance criteria
+        # Get acceptance criteria (support both camelCase and snake_case)
         acceptance_criteria = (
             item.get("acceptanceCriteria")
             or item.get("acceptance_criteria")
@@ -86,7 +86,7 @@ def load_json_tasks(path: str | None) -> list[UserStory]:
                     id=task_id,
                     title=title,
                     description=description,
-                    acceptanceCriteria=acceptance_criteria,
+                    acceptance_criteria=acceptance_criteria,
                     priority=priority,
                     source=f"json:{path}",
                     notes=item.get("notes", ""),

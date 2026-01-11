@@ -197,7 +197,7 @@ class TestLoadJsonTasks:
         path.write_text(json.dumps(data))
 
         tasks = load_json_tasks(str(path))
-        assert len(tasks[0].acceptanceCriteria) == 2
+        assert len(tasks[0].acceptance_criteria) == 2
 
     def test_skips_empty_tasks(self, temp_project: Path) -> None:
         """Test that tasks without id and title are skipped (generate default ac)."""
