@@ -50,9 +50,9 @@ class PrdDocument:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> PrdDocument:
+    def from_dict(cls, data: dict) -> PrdDocument:  # noqa: N805
         """Create from dictionary.
-        
+
         Supports multiple key names for backwards compatibility:
         - userStories (canonical)
         - tasks (afk prd parse output)
@@ -249,10 +249,11 @@ def _load_json_stories(path: str | None) -> list[UserStory]:
         data = json.load(f)
 
     # Handle both formats
+    items: list[dict] = []
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict):
-        items = data.get("tasks", data.get("userStories", data.get("items", [])))
+        items = data.get("tasks") or data.get("userStories") or data.get("items") or []
     else:
         return []
 
@@ -547,7 +548,10 @@ def _get_project_name() -> str:
         try:
             with open(pyproject, "rb") as f:
                 data = tomllib.load(f)
-            return data.get("project", {}).get("name", "") or data.get("tool", {}).get("poetry", {}).get("name", "")
+            name = data.get("project", {}).get("name", "")
+            if not name:
+                name = data.get("tool", {}).get("poetry", {}).get("name", "")
+            return name if isinstance(name, str) else ""
         except Exception:
             pass
 

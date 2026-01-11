@@ -49,10 +49,11 @@ def load_json_tasks(path: str | None) -> list[UserStory]:
         data = json.load(f)
 
     # Handle both formats
+    items: list[dict] = []
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict):
-        items = data.get("tasks", data.get("userStories", data.get("items", [])))
+        items = data.get("tasks") or data.get("userStories") or data.get("items") or []
     else:
         return []
 

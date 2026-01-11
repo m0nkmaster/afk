@@ -1,7 +1,5 @@
 """Tests for the TODO app models and commands."""
 
-import pytest
-
 from todo.models import Priority, Task, TaskList
 
 

@@ -24,7 +24,14 @@ from rich.panel import Panel
 
 from afk.config import AfkConfig, FeedbackLoopsConfig
 from afk.git_ops import archive_session, clear_session, create_branch
-from afk.prd_store import all_stories_complete, get_pending_stories, load_prd, sync_prd
+from afk.prd_store import (
+    PrdDocument,
+    UserStory,
+    all_stories_complete,
+    get_pending_stories,
+    load_prd,
+    sync_prd,
+)
 from afk.progress import SessionProgress, check_limits
 from afk.prompt import generate_prompt
 
@@ -563,6 +570,7 @@ class LoopController:
 
                 # Run iteration
                 iteration_num = iterations_completed + 1
+                assert self.iteration_runner is not None  # Set in __post_init__
                 result = self.iteration_runner.run(iteration_num)
 
                 if on_iteration_complete:
@@ -628,7 +636,7 @@ class LoopController:
 
         return StopReason.COMPLETE, False
 
-    def _check_prd_completion(self, prd: object) -> tuple[StopReason, bool]:
+    def _check_prd_completion(self, prd: PrdDocument) -> tuple[StopReason, bool]:
         """Check if all stories are complete."""
         if all_stories_complete(prd):
             self.output.success("All stories have passes: true")
@@ -645,7 +653,7 @@ class LoopController:
         self,
         max_iter: int,
         until_complete: bool,
-        prd: object,
+        prd: PrdDocument,
     ) -> tuple[StopReason, bool]:
         """Check progress limits."""
         can_continue, signal = check_limits(
@@ -678,7 +686,7 @@ class LoopController:
 
         return StopReason.COMPLETE, False
 
-    def _mark_task_in_progress(self, story: object) -> None:
+    def _mark_task_in_progress(self, story: UserStory) -> None:
         """Mark a task as in_progress in progress.json."""
         progress = SessionProgress.load()
         progress.set_task_status(
@@ -687,7 +695,7 @@ class LoopController:
             source=story.source,
         )
 
-    def _check_story_completion(self, old_prd: object) -> int:
+    def _check_story_completion(self, old_prd: PrdDocument) -> int:
         """Check for newly completed stories and update progress."""
         new_prd = load_prd()
 

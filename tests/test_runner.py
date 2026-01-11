@@ -139,7 +139,7 @@ class TestRunIteration:
                 result = run_iteration(config, iteration=1)
 
         assert result.success is False
-        assert "not found" in result.error
+        assert result.error is not None and "not found" in result.error
 
     def test_handles_timeout(self, temp_afk_dir: Path) -> None:
         """Test handles iteration timeout (non-streaming mode)."""
@@ -164,7 +164,7 @@ class TestRunIteration:
                 result = run_iteration(config, iteration=1, stream=False)
 
         assert result.success is False
-        assert "timed out" in result.error
+        assert result.error is not None and "timed out" in result.error
 
 
 class TestRunLoop:
@@ -197,7 +197,7 @@ class TestRunLoop:
 
         iteration_count = [0]
 
-        def mock_run_iteration(*args, **kwargs):
+        def mock_run_iteration(*args: object, **kwargs: object) -> IterationResult:
             iteration_count[0] += 1
             if iteration_count[0] >= 3:
                 return IterationResult(success=True, error="AFK_COMPLETE")
@@ -470,7 +470,7 @@ class TestRunLoopIntegration:
 
         call_count = [0]
 
-        def mock_check_limits(*args, **kwargs):
+        def mock_check_limits(*args: object, **kwargs: object) -> tuple[bool, str | None]:
             call_count[0] += 1
             if call_count[0] >= 2:
                 return (False, "AFK_COMPLETE: All tasks finished")

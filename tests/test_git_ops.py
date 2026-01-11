@@ -248,6 +248,7 @@ class TestArchiveSession:
 
         result = archive_session(config, reason="complete")
 
+        assert result is not None
         assert (result / "progress.json").exists()
         assert (result / "prompt.md").exists()
 

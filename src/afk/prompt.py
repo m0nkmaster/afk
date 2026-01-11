@@ -44,7 +44,8 @@ You are an autonomous coding agent working on a software project.
 
 ## Quality Gates
 
-**IMPORTANT**: Run `afk verify` before marking any story complete. Do NOT set `passes: true` until verify passes.
+**IMPORTANT**: Run `afk verify` before marking any story complete.
+Do NOT set `passes: true` until verify passes.
 
 ```bash
 afk verify           # Run all quality gates
@@ -213,8 +214,8 @@ _MINIMAL_TEMPLATE = """\
 {% if stop_signal -%}
 {{ stop_signal }}
 {% else -%}
-Read `.afk/progress.json` for learnings → `.afk/prd.json` for tasks → implement highest priority \
-`passes: false` story → run `afk verify` until it passes → set `passes: true` → commit → record learnings.
+Read `.afk/progress.json` → `.afk/prd.json` → implement highest priority `passes: false` story →
+run `afk verify` until it passes → set `passes: true` → commit → record learnings.
 
 If all stories pass, reply with: <promise>COMPLETE</promise>
 {% endif %}
