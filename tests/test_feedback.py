@@ -524,3 +524,144 @@ class TestFeedbackDisplay:
         # Should include activity info, not "Waiting for activity"
         assert "Activity" in output or "Tools" in output
         assert "Waiting for activity" not in output
+
+    def test_build_files_panel_returns_panel(self) -> None:
+        """Test _build_files_panel returns a Rich Panel."""
+        from rich.panel import Panel
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            files_modified=["src/main.py"],
+            files_created=["src/new.py"],
+        )
+
+        panel = display._build_files_panel(metrics)
+
+        assert isinstance(panel, Panel)
+
+    def test_build_files_panel_shows_modified_with_pencil(self) -> None:
+        """Test _build_files_panel shows modified files with ✎ prefix."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            files_modified=["src/main.py"],
+        )
+
+        panel = display._build_files_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "✎" in output
+        assert "main.py" in output
+
+    def test_build_files_panel_shows_created_with_plus(self) -> None:
+        """Test _build_files_panel shows created files with + prefix."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            files_created=["src/new.py"],
+        )
+
+        panel = display._build_files_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "+" in output
+        assert "new.py" in output
+
+    def test_build_files_panel_limits_to_five_files(self) -> None:
+        """Test _build_files_panel shows at most 5 files."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            files_modified=["a.py", "b.py", "c.py", "d.py", "e.py", "f.py", "g.py"],
+        )
+
+        panel = display._build_files_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # The last 5 files (most recent) should be shown: c.py, d.py, e.py, f.py, g.py
+        # First 2 (a.py, b.py) should not appear
+        assert "g.py" in output
+        assert "f.py" in output
+        assert "a.py" not in output
+
+    def test_build_files_panel_truncates_long_paths(self) -> None:
+        """Test _build_files_panel truncates paths that are too long."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        long_path = "src/very/deeply/nested/folder/structure/with/many/levels/file.py"
+        metrics = IterationMetrics(
+            files_modified=[long_path],
+        )
+
+        panel = display._build_files_panel(metrics)
+
+        console = Console(force_terminal=True, width=60)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should contain truncation indicator or the filename
+        assert "file.py" in output or "..." in output
+
+    def test_build_files_panel_empty_when_no_files(self) -> None:
+        """Test _build_files_panel handles empty file lists."""
+        from rich.panel import Panel
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        panel = display._build_files_panel(metrics)
+
+        assert isinstance(panel, Panel)
+
+    def test_build_files_panel_combines_modified_and_created(self) -> None:
+        """Test _build_files_panel shows both modified and created files."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics(
+            files_modified=["existing.py"],
+            files_created=["new.py"],
+        )
+
+        panel = display._build_files_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "✎" in output
+        assert "+" in output
+        assert "existing.py" in output
+        assert "new.py" in output

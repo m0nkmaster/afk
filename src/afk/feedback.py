@@ -155,7 +155,8 @@ class FeedbackDisplay:
 
         if metrics is not None:
             activity_panel = self._build_activity_panel(metrics)
-            content = Group(header, activity_panel)
+            files_panel = self._build_files_panel(metrics)
+            content = Group(header, activity_panel, files_panel)
         else:
             content = Group(
                 header,
@@ -214,6 +215,94 @@ class FeedbackDisplay:
             title="[dim]Activity[/dim]",
             border_style="dim",
         )
+
+    def _build_files_panel(
+        self, metrics: IterationMetrics, max_files: int = 5, max_path_length: int = 40
+    ) -> Panel:
+        """Build the files panel showing recently modified/created files.
+
+        Args:
+            metrics: The current iteration metrics.
+            max_files: Maximum number of files to display (default 5).
+            max_path_length: Maximum path length before truncation (default 40).
+
+        Returns:
+            A Rich Panel containing file change information.
+        """
+        lines: list[Text] = []
+
+        # Collect files with their prefixes, taking most recent (last in list)
+        # Created files come first, then modified - order matches how they appear
+        file_entries: list[tuple[str, str]] = []
+
+        for path in metrics.files_created:
+            file_entries.append(("+", path))
+
+        for path in metrics.files_modified:
+            file_entries.append(("✎", path))
+
+        # Take the most recent files (last N entries)
+        recent_files = file_entries[-max_files:]
+
+        for prefix, path in recent_files:
+            line = Text()
+            if prefix == "+":
+                line.append(f"  {prefix} ", style="green bold")
+            else:
+                line.append(f"  {prefix} ", style="yellow")
+
+            # Truncate long paths, keeping the filename visible
+            display_path = self._truncate_path(path, max_path_length)
+            line.append(display_path, style="dim")
+            lines.append(line)
+
+        if not lines:
+            empty_line = Text()
+            empty_line.append("  No files changed yet", style="dim italic")
+            lines.append(empty_line)
+
+        content = Group(*lines)
+
+        return Panel(
+            content,
+            title="[dim]Files[/dim]",
+            border_style="dim",
+        )
+
+    def _truncate_path(self, path: str, max_length: int) -> str:
+        """Truncate a file path to fit within max_length.
+
+        Preserves the filename and as much of the path as possible.
+
+        Args:
+            path: The file path to truncate.
+            max_length: Maximum allowed length.
+
+        Returns:
+            The truncated path with ... if needed.
+        """
+        if len(path) <= max_length:
+            return path
+
+        # Split into directory and filename
+        parts = path.rsplit("/", 1)
+        if len(parts) == 1:
+            # No directory, just truncate the filename
+            return path[: max_length - 3] + "..."
+
+        directory, filename = parts
+
+        # Ensure filename fits, truncate directory if needed
+        if len(filename) >= max_length - 4:
+            # Filename alone is too long, truncate it
+            return "..." + filename[-(max_length - 3) :]
+
+        # Truncate directory to fit remaining space
+        remaining = max_length - len(filename) - 4  # 4 for ".../"
+        if remaining > 0:
+            return "..." + directory[-remaining:] + "/" + filename
+        else:
+            return ".../" + filename
 
     def update(self, metrics: IterationMetrics) -> None:
         """Update the display with new metrics.
