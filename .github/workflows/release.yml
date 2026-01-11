@@ -71,16 +71,96 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+          pip install pyinstaller
 
-      - name: Display platform info
+      - name: Build binary (Unix)
+        if: runner.os != 'Windows'
         run: |
-          echo "Platform: ${{ matrix.platform }}"
-          echo "OS: ${{ matrix.os }}"
-          echo "Arch: ${{ matrix.arch }}"
-          echo "Version: ${{ needs.prepare.outputs.version }}"
-          echo "Pre-release: ${{ needs.prepare.outputs.is_prerelease }}"
-          python --version
+          pyinstaller \
+            --onefile \
+            --name afk-${{ matrix.platform }} \
+            --clean \
+            --noconfirm \
+            src/afk/cli.py
 
-      # Placeholder for PyInstaller build step (added in gh-workflow-release-build)
-      - name: Build placeholder
-        run: echo "Build step will be added in subsequent task"
+      - name: Build binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          pyinstaller `
+            --onefile `
+            --name afk-${{ matrix.platform }} `
+            --clean `
+            --noconfirm `
+            src/afk/cli.py
+
+      - name: Rename Windows binary
+        if: runner.os == 'Windows'
+        run: |
+          Move-Item dist/afk-${{ matrix.platform }}.exe dist/afk-${{ matrix.platform }}.exe
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: afk-${{ matrix.platform }}
+          path: dist/afk-${{ matrix.platform }}*
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          
+          # Move binaries to release directory
+          for dir in artifacts/*/; do
+            cp "${dir}"* release/ 2>/dev/null || true
+          done
+          
+          # Make Unix binaries executable
+          chmod +x release/afk-linux-* release/afk-darwin-* 2>/dev/null || true
+          
+          # List what we have
+          ls -la release/
+
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > checksums.sha256
+          cat checksums.sha256
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
+          generate_release_notes: true
+          body: |
+            ## Installation
+            
+            ### macOS / Linux
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
+            ```
+            
+            ### Windows
+            ```powershell
+            irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
+            ```
+            
+            ### Verify checksums
+            Download `checksums.sha256` and verify:
+            ```bash
+            sha256sum -c checksums.sha256
+            ```

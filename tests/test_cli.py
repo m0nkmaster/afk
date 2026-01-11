@@ -1109,3 +1109,124 @@ class TestGoCommand:
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("feedback_mode") == "minimal"
+
+
+class TestUpdateCommand:
+    """Tests for update command."""
+
+    def test_update_help(self, cli_runner: CliRunner) -> None:
+        """Test update --help shows usage."""
+        result = cli_runner.invoke(main, ["update", "--help"])
+        assert result.exit_code == 0
+        assert "Update afk to the latest version" in result.output
+        assert "--beta" in result.output
+        assert "--check" in result.output
+
+    def test_update_check_already_up_to_date(self, cli_runner: CliRunner) -> None:
+        """Test update --check when already at latest version."""
+        import urllib.request
+
+        from afk import __version__
+
+        # Mock the API to return current version
+        mock_response = json.dumps(
+            {"tag_name": f"v{__version__}", "html_url": "https://example.com"}
+        )
+
+        with patch.object(urllib.request, "urlopen") as mock_urlopen:
+            mock_urlopen.return_value.__enter__.return_value.read.return_value = (
+                mock_response.encode()
+            )
+            result = cli_runner.invoke(main, ["update", "--check"])
+
+        assert result.exit_code == 0
+        assert "Already up to date" in result.output
+
+    def test_update_check_new_version_available(self, cli_runner: CliRunner) -> None:
+        """Test update --check when newer version exists."""
+        import urllib.request
+
+        mock_response = json.dumps(
+            {"tag_name": "v99.0.0", "html_url": "https://example.com/release"}
+        )
+
+        with patch.object(urllib.request, "urlopen") as mock_urlopen:
+            mock_urlopen.return_value.__enter__.return_value.read.return_value = (
+                mock_response.encode()
+            )
+            result = cli_runner.invoke(main, ["update", "--check"])
+
+        assert result.exit_code == 0
+        assert "New version available" in result.output
+        assert "v99.0.0" in result.output
+
+    def test_update_network_error(self, cli_runner: CliRunner) -> None:
+        """Test update handles network errors gracefully."""
+        import urllib.error
+        import urllib.request
+
+        with patch.object(urllib.request, "urlopen") as mock_urlopen:
+            mock_urlopen.side_effect = urllib.error.URLError("Connection refused")
+            result = cli_runner.invoke(main, ["update", "--check"])
+
+        assert result.exit_code != 0
+        assert "Failed to check for updates" in result.output
+
+    def test_update_beta_flag(self, cli_runner: CliRunner) -> None:
+        """Test update --beta fetches from all releases."""
+        import urllib.request
+
+        from afk import __version__
+
+        # Beta endpoint returns list of releases
+        mock_response = json.dumps(
+            [{"tag_name": f"v{__version__}", "html_url": "https://example.com"}]
+        )
+
+        with patch.object(urllib.request, "urlopen") as mock_urlopen:
+            mock_urlopen.return_value.__enter__.return_value.read.return_value = (
+                mock_response.encode()
+            )
+            result = cli_runner.invoke(main, ["update", "--beta", "--check"])
+
+        assert result.exit_code == 0
+
+
+class TestCompletionsCommand:
+    """Tests for completions command."""
+
+    def test_completions_help(self, cli_runner: CliRunner) -> None:
+        """Test completions --help shows usage."""
+        result = cli_runner.invoke(main, ["completions", "--help"])
+        assert result.exit_code == 0
+        assert "Generate shell completions" in result.output
+        assert "bash" in result.output
+        assert "zsh" in result.output
+        assert "fish" in result.output
+
+    def test_completions_bash(self, cli_runner: CliRunner) -> None:
+        """Test completions bash generates valid output."""
+        result = cli_runner.invoke(main, ["completions", "bash"])
+        assert result.exit_code == 0
+        # Bash completions contain this pattern
+        assert "_AFK_COMPLETE" in result.output or "complete" in result.output.lower()
+
+    def test_completions_zsh(self, cli_runner: CliRunner) -> None:
+        """Test completions zsh generates valid output."""
+        result = cli_runner.invoke(main, ["completions", "zsh"])
+        assert result.exit_code == 0
+        # Zsh completions contain function definitions
+        assert "_AFK_COMPLETE" in result.output or "#compdef" in result.output
+
+    def test_completions_fish(self, cli_runner: CliRunner) -> None:
+        """Test completions fish generates valid output."""
+        result = cli_runner.invoke(main, ["completions", "fish"])
+        assert result.exit_code == 0
+        # Fish completions have specific syntax
+        assert "complete" in result.output.lower()
+
+    def test_completions_invalid_shell(self, cli_runner: CliRunner) -> None:
+        """Test completions with invalid shell shows error."""
+        result = cli_runner.invoke(main, ["completions", "powershell"])
+        assert result.exit_code != 0
+        assert "Invalid value" in result.output or "powershell" in result.output

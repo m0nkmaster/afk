@@ -30,16 +30,29 @@ afk run 10                       # Run 10 iterations
 
 ## Installation
 
+### One-liner (recommended)
+
 ```bash
-# From source (recommended during development)
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
+```
+
+This installs a standalone binary — no Python required. Updates with `afk update`.
+
+### From source (development)
+
+```bash
 git clone https://github.com/m0nkmaster/afk.git && cd afk
 pip install -e ".[dev]"
+```
 
-# Or with pip (once published)
-pip install afk
+### With pip/pipx
 
-# Or with pipx (once published)
-pipx install afk
+```bash
+pip install afk      # or: pipx install afk
 ```
 
 ## Key Commands

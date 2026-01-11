@@ -1179,7 +1179,7 @@ def update(beta: bool, check: bool) -> None:
 
     from afk import __version__
 
-    REPO = "m0nkmaster/afk"
+    repo = "m0nkmaster/afk"
 
     def get_platform_binary() -> str:
         """Get the binary name for the current platform."""
@@ -1214,7 +1214,7 @@ def update(beta: bool, check: bool) -> None:
         """Get latest version and download URL."""
         import json
 
-        api_url = f"https://api.github.com/repos/{REPO}/releases"
+        api_url = f"https://api.github.com/repos/{repo}/releases"
 
         try:
             if beta:
@@ -1239,7 +1239,7 @@ def update(beta: bool, check: bool) -> None:
     def download_and_install(version: str) -> None:
         """Download and install the new version."""
         binary_name = get_platform_binary()
-        download_url = f"https://github.com/{REPO}/releases/download/{version}/{binary_name}"
+        download_url = f"https://github.com/{repo}/releases/download/{version}/{binary_name}"
 
         console.print(f"[cyan]Downloading {binary_name}...[/cyan]")
 
