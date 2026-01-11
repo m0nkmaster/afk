@@ -65,14 +65,29 @@ detect_os() {
 
 # Detect architecture
 detect_arch() {
-    local arch
+    local arch os
     arch="$(uname -m)"
+    os="$(uname -s)"
+    
     case "$arch" in
-        x86_64)  echo "x86_64" ;;
-        amd64)   echo "x86_64" ;;
-        arm64)   echo "arm64" ;;
-        aarch64) echo "arm64" ;;
-        *)       error "Unsupported architecture: $arch" ;;
+        x86_64|amd64)
+            # Intel Mac doesn't have a standalone binary - suggest pip
+            if [[ "$os" == "Darwin" ]]; then
+                warn "Intel Mac detected. Standalone binary not available."
+                echo ""
+                echo "Install via pip instead:"
+                echo "  pip install afk"
+                echo "  # or: pipx install afk"
+                exit 0
+            fi
+            echo "x86_64"
+            ;;
+        arm64|aarch64)
+            echo "arm64"
+            ;;
+        *)
+            error "Unsupported architecture: $arch"
+            ;;
     esac
 }
 

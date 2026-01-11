@@ -47,9 +47,8 @@ jobs:
             os: ubuntu-24.04-arm
             arch: arm64
 
-          - platform: darwin-x86_64
-            os: macos-15-large
-            arch: x86_64
+          # Note: darwin-x86_64 (Intel Mac) removed - requires paid runner
+          # Intel Mac users can install via pip/pipx instead
 
           - platform: darwin-arm64
             os: macos-latest
