@@ -1439,7 +1439,7 @@ class TestFeedbackDisplay:
         assert "Thinking" in output
 
     def test_build_activity_panel_shows_stalled_for_stalled_state(self) -> None:
-        """Test _build_activity_panel shows 'Stalled' text for stalled state."""
+        """Test _build_activity_panel shows stalled message for stalled state."""
         from rich.console import Console
 
         from afk.feedback import FeedbackDisplay
@@ -1454,7 +1454,7 @@ class TestFeedbackDisplay:
             console.print(panel)
 
         output = capture.get()
-        assert "Stalled" in output
+        assert "Connection may be stalled" in output
 
     def test_update_accepts_activity_state_parameter(self) -> None:
         """Test update() accepts activity_state parameter."""
@@ -1490,6 +1490,24 @@ class TestFeedbackDisplay:
         assert isinstance(bar_active, Text)
         assert isinstance(bar_thinking, Text)
         assert isinstance(bar_stalled, Text)
+
+    def test_build_minimal_bar_shows_stalled_message(self) -> None:
+        """Test _build_minimal_bar shows 'stalled?' indicator for stalled state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics()
+
+        bar = display._build_minimal_bar(metrics, ActivityState.STALLED)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(bar)
+
+        output = capture.get()
+        assert "stalled?" in output
 
     def test_activity_state_defaults_to_active(self) -> None:
         """Test activity_state parameter defaults to 'active'."""

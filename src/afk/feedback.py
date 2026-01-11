@@ -275,7 +275,7 @@ class FeedbackDisplay:
         # Determine spinner style and text based on activity state
         if activity_state == ActivityState.STALLED:
             spinner_style = "red bold"
-            state_text = "Stalled"
+            state_text = "Connection may be stalled..."
             state_style = "red bold"
         elif activity_state == ActivityState.THINKING:
             spinner_style = "yellow bold"
@@ -537,6 +537,7 @@ class FeedbackDisplay:
         spinner = get_spinner_frame("dots", self._spinner_frame)
         if activity_state == ActivityState.STALLED:
             bar.append(f"{spinner} ", style="red bold")
+            bar.append("stalled? ", style="red")
         elif activity_state == ActivityState.THINKING:
             bar.append(f"{spinner} ", style="yellow bold")
         else:
