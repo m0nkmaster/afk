@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import tomllib
 from pydantic import BaseModel, ConfigDict, Field
 
 from afk.config import AFK_DIR, AfkConfig
@@ -203,8 +204,6 @@ def _get_current_branch() -> str:
 
 def _get_project_name() -> str:
     """Get project name from current directory or pyproject.toml."""
-    import tomllib
-
     # Try pyproject.toml
     pyproject = Path("pyproject.toml")
     if pyproject.exists():
