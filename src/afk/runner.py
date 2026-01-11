@@ -587,6 +587,7 @@ class LoopController:
         timeout_override: int | None = None,
         on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
         resume: bool = False,
+        feedback_mode: str | None = None,
     ) -> RunResult:
         """Run the autonomous loop.
 
@@ -597,10 +598,26 @@ class LoopController:
             timeout_override: Override timeout in minutes
             on_iteration_complete: Callback after each iteration
             resume: If True, continue from last session
+            feedback_mode: Feedback display mode ('full', 'minimal', 'off')
 
         Returns:
             RunResult with session statistics
         """
+        # Configure feedback from parameter or config
+        effective_feedback_mode = feedback_mode or self.config.feedback.mode
+        feedback_enabled = (
+            self.config.feedback.enabled and effective_feedback_mode != "off"
+        )
+
+        # Recreate output handler with feedback settings
+        self.output = OutputHandler(
+            feedback_enabled=feedback_enabled,
+            feedback_mode=effective_feedback_mode,
+            watch_root=".",  # Watch current directory for file changes
+        )
+        # Update iteration runner to use the new output handler
+        self.iteration_runner = IterationRunner(self.config, self.output)
+
         start_time = datetime.now()
         timeout_minutes = timeout_override or self.config.limits.timeout_minutes
         timeout_delta = timedelta(minutes=timeout_minutes)
@@ -933,6 +950,7 @@ def run_loop(
     timeout_override: int | None = None,
     on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
     resume: bool = False,
+    feedback_mode: str | None = None,
 ) -> RunResult:
     """Run the autonomous afk loop.
 
@@ -946,6 +964,7 @@ def run_loop(
         timeout_override: Override timeout in minutes
         on_iteration_complete: Callback after each iteration
         resume: If True, continue from last session
+        feedback_mode: Feedback display mode ('full', 'minimal', 'off')
 
     Returns:
         RunResult with session statistics
@@ -957,6 +976,7 @@ def run_loop(
         timeout_override=timeout_override,
         on_iteration_complete=on_iteration_complete,
         resume=resume,
+        feedback_mode=feedback_mode,
     )
 
 

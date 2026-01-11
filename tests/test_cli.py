@@ -446,6 +446,99 @@ class TestRunCommand:
         result = cli_runner.invoke(main, ["run"])
         assert "No sources configured" in result.output
 
+    def test_run_help_shows_feedback_option(self, cli_runner: CliRunner) -> None:
+        """Test run --help shows --feedback option."""
+        result = cli_runner.invoke(main, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--feedback" in result.output
+
+    def test_run_feedback_flag_accepts_full(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test run --feedback full is accepted."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["run", "--feedback", "full"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "full"
+
+    def test_run_feedback_flag_accepts_minimal(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test run --feedback minimal is accepted."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["run", "--feedback", "minimal"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "minimal"
+
+    def test_run_feedback_flag_accepts_off(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test run --feedback off is accepted."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["run", "--feedback", "off"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "off"
+
+    def test_run_feedback_flag_invalid_choice(self, cli_runner: CliRunner) -> None:
+        """Test run --feedback with invalid choice fails."""
+        result = cli_runner.invoke(main, ["run", "--feedback", "invalid"])
+        assert result.exit_code != 0
+
+    def test_run_feedback_defaults_to_config(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test run uses config value when --feedback not specified."""
+        # Update config to have off feedback
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback"] = {"mode": "off", "enabled": True}
+        config_path.write_text(json.dumps(config))
+
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["run"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "off"
+
 
 class TestResumeCommand:
     """Tests for resume command."""
@@ -829,6 +922,7 @@ class TestGoCommand:
         result = cli_runner.invoke(main, ["go", "--help"])
         assert result.exit_code == 0
         assert "Quick start with zero config" in result.output
+        assert "--feedback" in result.output
 
     def test_go_no_sources(self, cli_runner: CliRunner, temp_project: Path) -> None:
         """Test go fails gracefully with no sources."""
@@ -927,3 +1021,91 @@ class TestGoCommand:
         assert "No task sources found" not in result.output
         # Should show dry run output
         assert result.exit_code == 0
+
+    def test_go_feedback_flag_accepts_full(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test go --feedback full is accepted."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["go", "--feedback", "full"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "full"
+
+    def test_go_feedback_flag_accepts_minimal(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test go --feedback minimal is accepted."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["go", "--feedback", "minimal"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "minimal"
+
+    def test_go_feedback_flag_accepts_off(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test go --feedback off is accepted."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["go", "--feedback", "off"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "off"
+
+    def test_go_feedback_flag_invalid_choice(self, cli_runner: CliRunner) -> None:
+        """Test go --feedback with invalid choice fails."""
+        result = cli_runner.invoke(main, ["go", "--feedback", "invalid"])
+        assert result.exit_code != 0
+        assert "Invalid value" in result.output or "invalid" in result.output.lower()
+
+    def test_go_feedback_defaults_to_config(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test go uses config value when --feedback not specified."""
+        # Update config to have minimal feedback
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback"] = {"mode": "minimal", "enabled": True}
+        config_path.write_text(json.dumps(config))
+
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["go"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("feedback_mode") == "minimal"

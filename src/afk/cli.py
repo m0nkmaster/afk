@@ -48,6 +48,12 @@ def main(ctx: click.Context) -> None:
 @click.argument("iterations_if_source", type=int, required=False)
 @click.option("--dry-run", "-n", is_flag=True, help="Show what would run without running")
 @click.option("--until-complete", "-u", is_flag=True, help="Run until all tasks complete")
+@click.option(
+    "--feedback",
+    type=click.Choice(["full", "minimal", "off"]),
+    default=None,
+    help="Feedback display mode (default: from config or 'full')",
+)
 @click.pass_context
 def go_command(
     ctx: click.Context,
@@ -55,6 +61,7 @@ def go_command(
     iterations_if_source: int | None,
     dry_run: bool,
     until_complete: bool,
+    feedback: str | None,
 ) -> None:
     """Quick start with zero config.
 
@@ -64,8 +71,11 @@ def go_command(
       afk go 20              # Auto-detect, run 20 iterations
       afk go -u              # Run until all tasks complete
       afk go TODO.md 5       # Use TODO.md as source, run 5 iterations
+      afk go --feedback off  # Run without feedback display
     """
-    _run_zero_config(ctx, iterations_or_source, iterations_if_source, dry_run, until_complete)
+    _run_zero_config(
+        ctx, iterations_or_source, iterations_if_source, dry_run, until_complete, feedback
+    )
 
 
 def _run_zero_config(
@@ -74,6 +84,7 @@ def _run_zero_config(
     iterations_if_source: int | None,
     dry_run: bool,
     until_complete: bool = False,
+    feedback_mode: str | None = None,
 ) -> None:
     """Handle zero-config invocation (afk go, afk go 10, afk go TODO.md 5)."""
     from afk.bootstrap import (
@@ -190,8 +201,13 @@ def _run_zero_config(
             console.print(f"    • {src.type}{path_info}")
         return
 
+    # Determine feedback mode: CLI flag > config > default
+    effective_feedback = feedback_mode or config.feedback.mode
+
     # Run the loop
-    LoopController(config).run(max_iterations=iterations, until_complete=until_complete)
+    LoopController(config).run(
+        max_iterations=iterations, until_complete=until_complete, feedback_mode=effective_feedback
+    )
 
 
 @main.command()
@@ -928,6 +944,12 @@ def start(ctx: click.Context, iterations: int, branch: str | None, yes: bool) ->
 @click.option("--timeout", "-t", type=int, help="Override timeout in minutes")
 @click.option("--branch", "-b", help="Create/checkout feature branch")
 @click.option("--continue", "-c", "resume_session", is_flag=True, help="Continue from last session")
+@click.option(
+    "--feedback",
+    type=click.Choice(["full", "minimal", "off"]),
+    default=None,
+    help="Feedback display mode (default: from config or 'full')",
+)
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -936,6 +958,7 @@ def run(
     timeout: int | None,
     branch: str | None,
     resume_session: bool,
+    feedback: str | None,
 ) -> None:
     """Run multiple iterations using configured AI CLI.
 
@@ -954,6 +977,8 @@ def run(
         afk run --timeout 60          # 60 minute timeout
 
         afk run --continue            # Resume from last session
+
+        afk run --feedback minimal    # Use minimal feedback bar
     """
     from afk.runner import LoopController
 
@@ -967,6 +992,9 @@ def run(
         console.print("[red]No sources configured.[/red] Run [cyan]afk source add[/cyan] first.")
         return
 
+    # Determine feedback mode: CLI flag > config > default
+    effective_feedback = feedback or config.feedback.mode
+
     # Run the autonomous loop
     LoopController(config).run(
         max_iterations=iterations,
@@ -974,6 +1002,7 @@ def run(
         until_complete=until_complete,
         timeout_override=timeout,
         resume=resume_session,
+        feedback_mode=effective_feedback,
     )
 
 
@@ -1124,6 +1153,199 @@ def archive_clear(ctx: click.Context, yes: bool) -> None:
 
     clear_session()
     console.print("[green]Session cleared.[/green]")
+
+
+@main.command()
+@click.option("--beta", is_flag=True, help="Update to beta channel (pre-releases)")
+@click.option("--check", is_flag=True, help="Check for updates without installing")
+def update(beta: bool, check: bool) -> None:
+    """Update afk to the latest version.
+
+    Downloads and installs the latest release from GitHub. By default,
+    only stable releases are considered. Use --beta to include pre-releases.
+
+    Examples:
+
+        afk update            # Update to latest stable
+
+        afk update --beta     # Update to latest beta
+
+        afk update --check    # Check for updates without installing
+    """
+    import platform
+    import sys
+    import tempfile
+    import urllib.request
+
+    from afk import __version__
+
+    REPO = "m0nkmaster/afk"
+
+    def get_platform_binary() -> str:
+        """Get the binary name for the current platform."""
+        system = platform.system().lower()
+        machine = platform.machine().lower()
+
+        if system == "darwin":
+            os_name = "darwin"
+        elif system == "linux":
+            os_name = "linux"
+        elif system == "windows":
+            os_name = "windows"
+        else:
+            console.print(f"[red]Unsupported OS: {system}[/red]")
+            sys.exit(1)
+
+        if machine in ("x86_64", "amd64"):
+            arch = "x86_64"
+        elif machine in ("arm64", "aarch64"):
+            arch = "arm64"
+        else:
+            console.print(f"[red]Unsupported architecture: {machine}[/red]")
+            sys.exit(1)
+
+        binary_name = f"afk-{os_name}-{arch}"
+        if system == "windows":
+            binary_name += ".exe"
+
+        return binary_name
+
+    def get_latest_version() -> tuple[str, str]:
+        """Get latest version and download URL."""
+        import json
+
+        api_url = f"https://api.github.com/repos/{REPO}/releases"
+
+        try:
+            if beta:
+                # Get all releases, including pre-releases
+                with urllib.request.urlopen(api_url, timeout=10) as response:
+                    releases = json.loads(response.read().decode())
+                    if not releases:
+                        console.print("[red]No releases found[/red]")
+                        sys.exit(1)
+                    latest = releases[0]
+            else:
+                # Get latest stable release
+                with urllib.request.urlopen(f"{api_url}/latest", timeout=10) as response:
+                    latest = json.loads(response.read().decode())
+
+            return latest["tag_name"], latest["html_url"]
+
+        except urllib.error.URLError as e:
+            console.print(f"[red]Failed to check for updates: {e}[/red]")
+            sys.exit(1)
+
+    def download_and_install(version: str) -> None:
+        """Download and install the new version."""
+        binary_name = get_platform_binary()
+        download_url = f"https://github.com/{REPO}/releases/download/{version}/{binary_name}"
+
+        console.print(f"[cyan]Downloading {binary_name}...[/cyan]")
+
+        try:
+            # Download to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".tmp") as tmp:
+                with urllib.request.urlopen(download_url, timeout=60) as response:
+                    tmp.write(response.read())
+                tmp_path = Path(tmp.name)
+
+            # Get current executable path
+            current_exe = Path(sys.executable)
+            if current_exe.name == "python" or current_exe.name.startswith("python"):
+                # Running from pip install, not standalone binary
+                console.print("[yellow]Running from Python installation.[/yellow]")
+                console.print("For standalone binary updates, reinstall with:")
+                console.print()
+                if platform.system().lower() == "windows":
+                    console.print(
+                        "  [cyan]irm https://raw.githubusercontent.com/"
+                        "m0nkmaster/afk/main/scripts/install.ps1 | iex[/cyan]"
+                    )
+                else:
+                    console.print(
+                        "  [cyan]curl -fsSL https://raw.githubusercontent.com/"
+                        "m0nkmaster/afk/main/scripts/install.sh | bash[/cyan]"
+                    )
+                tmp_path.unlink()
+                return
+
+            # Replace current binary
+            console.print("[cyan]Installing...[/cyan]")
+
+            if platform.system().lower() == "windows":
+                # Windows: rename current, move new, delete old
+                backup_path = current_exe.with_suffix(".old")
+                current_exe.rename(backup_path)
+                tmp_path.rename(current_exe)
+                backup_path.unlink()
+            else:
+                # Unix: just replace
+                import os
+                import stat
+
+                tmp_path.chmod(tmp_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                os.replace(str(tmp_path), str(current_exe))
+
+            console.print(f"[green]✓ Updated to {version}[/green]")
+
+        except urllib.error.URLError as e:
+            console.print(f"[red]Download failed: {e}[/red]")
+            sys.exit(1)
+        except OSError as e:
+            console.print(f"[red]Installation failed: {e}[/red]")
+            console.print("[dim]You may need to run with elevated privileges[/dim]")
+            sys.exit(1)
+
+    # Check for updates
+    console.print(f"[dim]Current version: {__version__}[/dim]")
+
+    latest_version, release_url = get_latest_version()
+    latest_version_clean = latest_version.lstrip("v")
+
+    if latest_version_clean == __version__:
+        console.print("[green]✓ Already up to date[/green]")
+        return
+
+    console.print(f"[cyan]New version available: {latest_version}[/cyan]")
+
+    if check:
+        console.print(f"[dim]Release: {release_url}[/dim]")
+        return
+
+    download_and_install(latest_version)
+
+
+@main.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]))
+def completions(shell: str) -> None:
+    """Generate shell completions.
+
+    Outputs completion script to stdout. Redirect to appropriate file
+    for your shell, or use the install script which does this automatically.
+
+    Examples:
+
+        afk completions bash > ~/.local/share/bash-completion/completions/afk
+
+        afk completions zsh > ~/.local/share/zsh/site-functions/_afk
+
+        afk completions fish > ~/.config/fish/completions/afk.fish
+    """
+    import sys
+
+    from click.shell_completion import get_completion_class
+
+    comp_cls = get_completion_class(shell)
+    if comp_cls is None:
+        console.print(f"[red]Unsupported shell: {shell}[/red]")
+        sys.exit(1)
+
+    # Create completion instance
+    comp = comp_cls(main, {}, "afk", "_AFK_COMPLETE")
+
+    # Output the completion script
+    click.echo(comp.source())
 
 
 if __name__ == "__main__":
