@@ -20,10 +20,11 @@ You are an autonomous coding agent working on a software project.
 3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create.
 4. Pick the **highest priority** user story where `passes: false`
 5. Implement that single user story according to its `acceptanceCriteria`
-6. Run quality checks (see below)
-7. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
-8. Update `.afk/prd.json` to set `passes: true` for the completed story
-9. Record learnings (see below)
+6. Run `afk verify` to check quality gates (see below)
+7. If verify fails, fix the issues and run `afk verify` again until it passes
+8. Once verify passes, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
+9. Update `.afk/prd.json` to set `passes: true` for the completed story
+10. Record learnings (see below)
 
 ## Key Files
 
@@ -42,13 +43,21 @@ You are an autonomous coding agent working on a software project.
 {% endif %}
 
 ## Quality Gates
+
+**IMPORTANT**: Run `afk verify` before marking any story complete. Do NOT set `passes: true` until verify passes.
+
+```bash
+afk verify           # Run all quality gates
+afk verify --verbose # Show failure details
+```
+
 {% if feedback_loops -%}
-Before marking complete, ALL must pass:
+Configured gates:
 {% for name, cmd in feedback_loops.items() -%}
-- `{{ cmd }}`
+- {{ name }}: `{{ cmd }}`
 {% endfor %}
 {% else -%}
-Run whatever quality checks your project requires (typecheck, lint, test).
+No gates configured. Run whatever quality checks your project requires (typecheck, lint, test).
 {% endif %}
 
 ## Recording Learnings
@@ -205,7 +214,7 @@ _MINIMAL_TEMPLATE = """\
 {{ stop_signal }}
 {% else -%}
 Read `.afk/progress.json` for learnings → `.afk/prd.json` for tasks → implement highest priority \
-`passes: false` story → run quality gates → set `passes: true` → commit → record learnings.
+`passes: false` story → run `afk verify` until it passes → set `passes: true` → commit → record learnings.
 
 If all stories pass, reply with: <promise>COMPLETE</promise>
 {% endif %}

@@ -688,7 +688,7 @@ class LoopController:
         )
 
     def _check_story_completion(self, old_prd: object) -> int:
-        """Check for newly completed stories and run quality gates."""
+        """Check for newly completed stories and update progress."""
         new_prd = load_prd()
 
         # Find stories that newly passed
@@ -709,16 +709,6 @@ class LoopController:
                     status="completed",
                     source=story.source,
                 )
-
-            self.output.info("Verifying quality gates...")
-            gate_result = run_quality_gates(self.config.feedback_loops)
-
-            if not gate_result.passed:
-                failed = ", ".join(gate_result.failed_gates)
-                self.output.warning(f"⚠ Quality gates failed: {failed}")
-                self.output.dim("AI may need to fix issues in next iteration.")
-            else:
-                self.output.success("✓ All quality gates passed")
 
             return len(newly_completed)
 

@@ -661,6 +661,68 @@ def done(ctx: click.Context, task_id: str, message: str | None) -> None:
 
 
 @main.command()
+@click.option("--verbose", "-v", is_flag=True, help="Show full output from failed gates")
+@click.pass_context
+def verify(ctx: click.Context, verbose: bool) -> None:
+    """Run quality gates and report results.
+
+    Runs all configured feedback loops (types, lint, test, build) and reports
+    pass/fail status. Use this before marking a story as complete.
+
+    Exit code 0 if all gates pass, 1 if any fail.
+
+    Examples:
+
+        afk verify                # Run all quality gates
+
+        afk verify --verbose      # Show full output from failures
+    """
+    from afk.runner import run_quality_gates
+
+    config: AfkConfig = ctx.obj["config"]
+
+    # Check if any gates are configured
+    fl = config.feedback_loops
+    has_gates = fl.types or fl.lint or fl.test or fl.build or fl.custom
+
+    if not has_gates:
+        console.print("[yellow]No quality gates configured.[/yellow]")
+        console.print("[dim]Add feedback_loops to .afk/config.json[/dim]")
+        ctx.exit(0)
+
+    console.print("[cyan]Running quality gates...[/cyan]")
+    result = run_quality_gates(config.feedback_loops, console)
+
+    if result.passed:
+        console.print()
+        console.print("[green]✓ All quality gates passed![/green]")
+        console.print("[dim]You can now mark the story as complete (set passes: true)[/dim]")
+        ctx.exit(0)
+    else:
+        console.print()
+        console.print(f"[red]✗ Quality gates failed: {', '.join(result.failed_gates)}[/red]")
+
+        if verbose:
+            for gate_name in result.failed_gates:
+                output = result.output.get(gate_name, "")
+                if output:
+                    console.print()
+                    console.print(f"[bold]{gate_name} output:[/bold]")
+                    # Limit output to avoid overwhelming the AI
+                    lines = output.strip().split("\n")
+                    if len(lines) > 50:
+                        console.print("\n".join(lines[:25]))
+                        console.print(f"[dim]... ({len(lines) - 50} lines omitted) ...[/dim]")
+                        console.print("\n".join(lines[-25:]))
+                    else:
+                        console.print(output)
+        else:
+            console.print("[dim]Run with --verbose to see failure details[/dim]")
+
+        ctx.exit(1)
+
+
+@main.command()
 @click.argument("task_id")
 @click.option("--message", "-m", help="Failure reason")
 @click.pass_context

@@ -280,6 +280,98 @@ class TestDoneCommand:
         assert "Task completed" in result.output
 
 
+class TestVerifyCommand:
+    """Tests for verify command."""
+
+    def test_verify_no_gates_configured(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test verify with no quality gates configured."""
+        # Update config to have no feedback_loops
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback_loops"] = {}
+        config_path.write_text(json.dumps(config))
+
+        result = cli_runner.invoke(main, ["verify"])
+        assert result.exit_code == 0
+        assert "No quality gates configured" in result.output
+
+    def test_verify_all_pass(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test verify when all gates pass."""
+        # Update config to have a simple passing gate
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback_loops"] = {"test": "true"}  # 'true' always exits 0
+        config_path.write_text(json.dumps(config))
+
+        result = cli_runner.invoke(main, ["verify"])
+        assert result.exit_code == 0
+        assert "All quality gates passed" in result.output
+
+    def test_verify_gate_fails(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test verify when a gate fails."""
+        # Update config to have a failing gate
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback_loops"] = {"lint": "false"}  # 'false' always exits 1
+        config_path.write_text(json.dumps(config))
+
+        result = cli_runner.invoke(main, ["verify"])
+        assert result.exit_code == 1
+        assert "Quality gates failed" in result.output
+        assert "lint" in result.output
+
+    def test_verify_verbose_shows_output(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test verify --verbose shows failure details."""
+        # Update config with a gate that outputs something
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback_loops"] = {"lint": "echo 'Error on line 42' && false"}
+        config_path.write_text(json.dumps(config))
+
+        result = cli_runner.invoke(main, ["verify", "--verbose"])
+        assert result.exit_code == 1
+        assert "lint output" in result.output
+        assert "Error on line 42" in result.output
+
+    def test_verify_multiple_gates(self, cli_runner: CliRunner, initialized_project: Path) -> None:
+        """Test verify runs multiple configured gates."""
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback_loops"] = {
+            "types": "true",
+            "lint": "true",
+            "test": "true",
+        }
+        config_path.write_text(json.dumps(config))
+
+        result = cli_runner.invoke(main, ["verify"])
+        assert result.exit_code == 0
+        assert "All quality gates passed" in result.output
+
+    def test_verify_partial_failure(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test verify reports which gates failed when some pass and some fail."""
+        config_path = initialized_project / ".afk" / "config.json"
+        config = json.loads(config_path.read_text())
+        config["feedback_loops"] = {
+            "types": "true",
+            "lint": "false",
+            "test": "true",
+        }
+        config_path.write_text(json.dumps(config))
+
+        result = cli_runner.invoke(main, ["verify"])
+        assert result.exit_code == 1
+        assert "lint" in result.output
+        # types and test should have passed
+        assert "types" not in result.output.split("failed")[1]  # not in the failure message
+
+
 class TestFailCommand:
     """Tests for fail command."""
 
@@ -311,29 +403,35 @@ class TestRunCommand:
 
     def test_run_starts_loop(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test run starts the loop."""
-        # Mock sync_prd to avoid subprocess calls
-        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import RunResult, StopReason
 
-        mock_prd = PrdDocument(
-            project="test",
-            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)],
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
         )
-        with patch("afk.runner.sync_prd", return_value=mock_prd):
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
             result = cli_runner.invoke(main, ["run"])
         assert result.exit_code == 0
-        assert "Starting afk loop" in result.output or "pending" in result.output
+        mock_loop.assert_called_once()
 
     def test_run_with_iterations(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test run with custom iteration count."""
-        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import RunResult, StopReason
 
-        mock_prd = PrdDocument(
-            project="test",
-            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)],
+        mock_result = RunResult(
+            iterations_completed=10,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
         )
-        with patch("afk.runner.sync_prd", return_value=mock_prd):
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
             result = cli_runner.invoke(main, ["run", "10"])
         assert result.exit_code == 0
+        # Verify iterations was passed correctly
+        call_kwargs = mock_loop.call_args.kwargs
+        assert call_kwargs.get("max_iterations") == 10
 
     def test_run_not_initialized(self, cli_runner: CliRunner, temp_project: Path) -> None:
         """Test run fails when not initialized."""
@@ -358,7 +456,7 @@ class TestResumeCommand:
         self, cli_runner: CliRunner, initialized_project: Path
     ) -> None:
         """Test resume continues from existing session."""
-        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import RunResult, StopReason
 
         # Create progress file with some iterations
         progress_file = initialized_project / ".afk" / "progress.json"
@@ -366,16 +464,18 @@ class TestResumeCommand:
             '{"iterations": 3, "tasks": {}, "started_at": "2026-01-10T10:00:00"}'
         )
 
-        mock_prd = PrdDocument(
-            project="test",
-            userStories=[
-                UserStory(id="task-1", title="Test", description="Test", passes=False)
-            ],
+        mock_result = RunResult(
+            iterations_completed=5,
+            tasks_completed=1,
+            stop_reason=StopReason.COMPLETE,
+            duration_seconds=10.0,
         )
-        with patch("afk.runner.sync_prd", return_value=mock_prd):
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
             result = cli_runner.invoke(main, ["resume"])
         assert result.exit_code == 0
-        assert "Resuming session" in result.output or "Session Complete" in result.output
+        # Verify resume was passed to run_loop
+        call_kwargs = mock_loop.call_args.kwargs
+        assert call_kwargs.get("resume") is True
 
     def test_resume_not_initialized(self, cli_runner: CliRunner, temp_project: Path) -> None:
         """Test resume fails when not initialized."""
@@ -395,32 +495,62 @@ class TestResumeCommand:
         self, cli_runner: CliRunner, initialized_project: Path
     ) -> None:
         """Test resume works even without existing session (starts fresh)."""
-        result = cli_runner.invoke(main, ["resume"])
+        from afk.runner import RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.NO_TASKS,
+            duration_seconds=1.0,
+        )
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+            result = cli_runner.invoke(main, ["resume"])
         assert result.exit_code == 0
-        # Should either warn about no session or just start
-        assert "No session to resume" in result.output or "Session Complete" in result.output
+        mock_loop.assert_called_once()
 
     def test_resume_with_iterations(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test resume with custom iteration count."""
+        from afk.runner import RunResult, StopReason
+
         progress_file = initialized_project / ".afk" / "progress.json"
         progress_file.write_text(
             '{"iterations": 2, "tasks": {}, "started_at": "2026-01-10T10:00:00"}'
         )
 
-        result = cli_runner.invoke(main, ["resume", "20"])
+        mock_result = RunResult(
+            iterations_completed=20,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=100.0,
+        )
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+            result = cli_runner.invoke(main, ["resume", "20"])
         assert result.exit_code == 0
-        assert "Max iterations: 20" in result.output
+        # Verify max_iterations was passed correctly
+        call_kwargs = mock_loop.call_args.kwargs
+        assert call_kwargs.get("max_iterations") == 20
 
     def test_run_with_continue_flag(self, cli_runner: CliRunner, initialized_project: Path) -> None:
-        """Test run --continue skips archiving."""
+        """Test run --continue passes resume=True to run_loop."""
+        from afk.runner import RunResult, StopReason
+
         progress_file = initialized_project / ".afk" / "progress.json"
         progress_file.write_text(
             '{"iterations": 2, "tasks": {}, "started_at": "2026-01-10T10:00:00"}'
         )
 
-        result = cli_runner.invoke(main, ["run", "--continue"])
+        mock_result = RunResult(
+            iterations_completed=3,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=10.0,
+        )
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
+            result = cli_runner.invoke(main, ["run", "--continue"])
         assert result.exit_code == 0
-        assert "Resuming session" in result.output or "Session Complete" in result.output
+        # Verify resume=True was passed
+        call_kwargs = mock_loop.call_args.kwargs
+        assert call_kwargs.get("resume") is True
 
 
 class TestPrdCommands:
@@ -679,17 +809,18 @@ class TestStartCommand:
 
     def test_start_runs_loop(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test start runs the loop when sources exist."""
-        from afk.prd_store import PrdDocument, UserStory
+        from afk.runner import RunResult, StopReason
 
-        mock_prd = PrdDocument(
-            project="test",
-            userStories=[
-                UserStory(id="task-1", title="Test", description="Test", passes=False)
-            ],
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
         )
-        with patch("afk.runner.sync_prd", return_value=mock_prd):
+        with patch("afk.runner.run_loop", return_value=mock_result) as mock_loop:
             result = cli_runner.invoke(main, ["start", "-y"])
         assert result.exit_code == 0
+        mock_loop.assert_called_once()
 
 
 class TestGoCommand:

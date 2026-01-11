@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  # Determine release type from tag
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    steps:
+      - name: Extract version info
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          
+          # Check if this is a pre-release (contains -, e.g., v1.0.0-beta.1)
+          if [[ "$TAG" == *-* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            os: ubuntu-latest
+            arch: x86_64
+
+          - platform: linux-arm64
+            os: ubuntu-24.04-arm
+            arch: arm64
+
+          - platform: darwin-x86_64
+            os: macos-13
+            arch: x86_64
+
+          - platform: darwin-arm64
+            os: macos-latest
+            arch: arm64
+
+          - platform: windows-x86_64
+            os: windows-latest
+            arch: x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Display platform info
+        run: |
+          echo "Platform: ${{ matrix.platform }}"
+          echo "OS: ${{ matrix.os }}"
+          echo "Arch: ${{ matrix.arch }}"
+          echo "Version: ${{ needs.prepare.outputs.version }}"
+          echo "Pre-release: ${{ needs.prepare.outputs.is_prerelease }}"
+          python --version
+
+      # Placeholder for PyInstaller build step (added in gh-workflow-release-build)
+      - name: Build placeholder
+        run: echo "Build step will be added in subsequent task"

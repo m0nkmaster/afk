@@ -1,0 +1,302 @@
+{
+  "tasks": [
+    {
+      "id": "gh-workflow-build-ci",
+      "category": "technical",
+      "description": "Create GitHub Actions CI workflow for running tests, lint, and type checks on PRs and main branch.",
+      "priority": 1,
+      "steps": [
+        "Step 1: Create .github/workflows/build.yml with jobs for pytest, ruff, and mypy",
+        "Step 2: Configure workflow to trigger on pull_request and push to main",
+        "Step 3: Verify workflow syntax is valid using act or manual review",
+        "Step 4: Commit and push to verify the workflow runs on GitHub"
+      ],
+      "passes": true
+    },
+    {
+      "id": "gh-workflow-release-trigger",
+      "category": "technical",
+      "description": "Create GitHub Actions release workflow that triggers on version tags and sets up the build matrix.",
+      "priority": 1,
+      "steps": [
+        "Step 1: Create .github/workflows/release.yml triggered by tags matching v*",
+        "Step 2: Configure matrix for 5 platforms: linux-x86_64, linux-arm64, darwin-x86_64, darwin-arm64, windows-x86_64",
+        "Step 3: Set up Python and install dependencies in each job",
+        "Step 4: Differentiate stable (v1.0.0) vs pre-release (v1.0.0-beta.1) tags"
+      ],
+      "passes": false
+    },
+    {
+      "id": "pyinstaller-config",
+      "category": "technical",
+      "description": "Add PyInstaller to dev dependencies and configure entry point for binary building.",
+      "priority": 1,
+      "steps": [
+        "Step 1: Add pyinstaller to dev dependencies in pyproject.toml",
+        "Step 2: Create PyInstaller spec file or configure pyproject.toml entry points",
+        "Step 3: Test local build with pyinstaller to produce a working binary",
+        "Step 4: Verify the binary runs and executes afk commands correctly"
+      ],
+      "passes": false
+    },
+    {
+      "id": "gh-workflow-release-build",
+      "category": "technical",
+      "description": "Add PyInstaller binary build step to release workflow for each platform.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Add PyInstaller build commands to each matrix job in release.yml",
+        "Step 2: Configure output binary names per platform (e.g., afk-linux-x86_64)",
+        "Step 3: Upload binaries as workflow artifacts for the release job",
+        "Step 4: Verify binaries are correctly named and uploaded"
+      ],
+      "passes": false
+    },
+    {
+      "id": "gh-workflow-release-checksum",
+      "category": "technical",
+      "description": "Generate SHA256 checksums for all release binaries.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Add checksum generation step after all binaries are built",
+        "Step 2: Create checksums.sha256 file with all binary hashes",
+        "Step 3: Upload checksums.sha256 as a release artifact",
+        "Step 4: Verify checksum file format matches standard sha256sum output"
+      ],
+      "passes": false
+    },
+    {
+      "id": "gh-workflow-release-publish",
+      "category": "technical",
+      "description": "Create GitHub Release with all binaries and checksums attached.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Add job to create GitHub Release using gh CLI or actions/create-release",
+        "Step 2: Upload all 5 binaries plus checksums.sha256 as release assets",
+        "Step 3: Mark stable releases as 'Latest' and beta releases as pre-release",
+        "Step 4: Generate release notes from commit history or changelog"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-unix-detect",
+      "category": "functional",
+      "description": "Create Unix install script with OS and architecture detection.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Create scripts/install.sh with shebang and set -e",
+        "Step 2: Detect OS (Linux/Darwin) using uname -s",
+        "Step 3: Detect architecture (x86_64/arm64) using uname -m",
+        "Step 4: Map to correct binary name (e.g., afk-darwin-arm64)",
+        "Step 5: Test detection on macOS and Linux environments"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-unix-download",
+      "category": "functional",
+      "description": "Add binary download and checksum verification to Unix install script.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Download binary from GitHub Releases using curl",
+        "Step 2: Download checksums.sha256 file",
+        "Step 3: Verify binary checksum using sha256sum or shasum",
+        "Step 4: Exit with error if checksum verification fails",
+        "Step 5: Support --beta flag to download from pre-release"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-unix-install",
+      "category": "functional",
+      "description": "Add binary installation to ~/.local/bin in Unix install script.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Create ~/.local/bin if it doesn't exist",
+        "Step 2: Copy binary to ~/.local/bin/afk with executable permissions",
+        "Step 3: Check if ~/.local/bin is in PATH and warn if not",
+        "Step 4: Print success message with next steps"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-windows-detect",
+      "category": "functional",
+      "description": "Create PowerShell install script with architecture detection.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Create scripts/install.ps1 with proper PowerShell headers",
+        "Step 2: Detect architecture using [System.Environment]::Is64BitOperatingSystem",
+        "Step 3: Set binary name to afk-windows-x86_64.exe",
+        "Step 4: Test detection on Windows environment"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-windows-download",
+      "category": "functional",
+      "description": "Add binary download and checksum verification to PowerShell install script.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Download binary from GitHub Releases using Invoke-WebRequest",
+        "Step 2: Download checksums.sha256 file",
+        "Step 3: Verify binary checksum using Get-FileHash",
+        "Step 4: Exit with error if checksum verification fails",
+        "Step 5: Support -Beta switch to download from pre-release"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-windows-install",
+      "category": "functional",
+      "description": "Add binary installation to %LOCALAPPDATA%\\afk\\bin in PowerShell script.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Create %LOCALAPPDATA%\\afk\\bin if it doesn't exist",
+        "Step 2: Copy binary to installation directory as afk.exe",
+        "Step 3: Add installation directory to user PATH if not present",
+        "Step 4: Print success message with next steps"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cli-completions-command",
+      "category": "functional",
+      "description": "Add afk completions command to generate shell completion scripts.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Add completions command to cli.py accepting shell argument (bash/zsh/fish)",
+        "Step 2: Use Click's shell completion generation for each shell type",
+        "Step 3: Output completion script to stdout",
+        "Step 4: Test completion generation for bash, zsh, and fish",
+        "Step 5: Verify generated completions work when sourced"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-unix-completions",
+      "category": "ux",
+      "description": "Add automatic shell completion setup to Unix install script.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Detect user's shell from $SHELL variable",
+        "Step 2: Run afk completions <shell> to generate completion script",
+        "Step 3: Install completions to appropriate location (~/.bash_completion.d, etc.)",
+        "Step 4: Add source command to shell config if needed",
+        "Step 5: Print instructions for reloading shell"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cli-update-check-version",
+      "category": "functional",
+      "description": "Add version checking against GitHub Releases API for afk update command.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Add update command skeleton to cli.py with --beta flag",
+        "Step 2: Query GitHub Releases API for latest release",
+        "Step 3: Compare current version (__version__) with latest release tag",
+        "Step 4: Report if update is available or already on latest",
+        "Step 5: Handle network errors gracefully"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cli-update-download-replace",
+      "category": "functional",
+      "description": "Add binary download and in-place replacement for afk update command.",
+      "priority": 3,
+      "steps": [
+        "Step 1: Detect current binary path using sys.executable or __file__",
+        "Step 2: Download new binary matching current OS/arch",
+        "Step 3: Verify checksum before replacement",
+        "Step 4: Replace current binary with atomic rename",
+        "Step 5: Report success and new version number"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cli-update-error-handling",
+      "category": "functional",
+      "description": "Add error handling and rollback for afk update command.",
+      "priority": 4,
+      "steps": [
+        "Step 1: Handle permission errors when replacing binary",
+        "Step 2: Handle checksum mismatch with clear error message",
+        "Step 3: Handle network timeouts and connection errors",
+        "Step 4: Preserve original binary if update fails mid-download",
+        "Step 5: Suggest running with elevated permissions if needed"
+      ],
+      "passes": false
+    },
+    {
+      "id": "readme-install-instructions",
+      "category": "ux",
+      "description": "Update README with new curl/irm install commands as primary installation method.",
+      "priority": 4,
+      "steps": [
+        "Step 1: Replace pipx/pip instructions with curl one-liner for Unix",
+        "Step 2: Add irm one-liner for Windows",
+        "Step 3: Include --beta flag documentation",
+        "Step 4: Move pip/pipx to 'Development Installation' section",
+        "Step 5: Verify all install commands are correct and match scripts"
+      ],
+      "passes": false
+    },
+    {
+      "id": "test-pyinstaller-local",
+      "category": "technical",
+      "description": "Test PyInstaller binary build locally before release.",
+      "priority": 4,
+      "steps": [
+        "Step 1: Build binary locally using pyinstaller",
+        "Step 2: Test binary runs and shows help",
+        "Step 3: Test binary executes core commands (go, next, explain)",
+        "Step 4: Verify binary includes all dependencies",
+        "Step 5: Check binary size is reasonable (<50MB)"
+      ],
+      "passes": false
+    },
+    {
+      "id": "release-beta-test",
+      "category": "technical",
+      "description": "Create first beta release to verify the entire release pipeline works.",
+      "priority": 5,
+      "steps": [
+        "Step 1: Create and push v0.2.0-beta.1 tag",
+        "Step 2: Verify GitHub Actions release workflow triggers",
+        "Step 3: Verify all 5 binaries are built successfully",
+        "Step 4: Verify checksums.sha256 is generated",
+        "Step 5: Test install scripts download and install from beta release",
+        "Step 6: Mark as pre-release in GitHub Releases"
+      ],
+      "passes": false
+    },
+    {
+      "id": "install-script-windows-completions",
+      "category": "ux",
+      "description": "Add PowerShell completion setup to Windows install script.",
+      "priority": 4,
+      "steps": [
+        "Step 1: Run afk completions powershell (if supported) or skip",
+        "Step 2: Add completion script to PowerShell profile",
+        "Step 3: Print instructions for restarting PowerShell",
+        "Step 4: Handle case where profile doesn't exist"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cli-version-command",
+      "category": "functional",
+      "description": "Ensure afk --version reports correct version for update comparison.",
+      "priority": 2,
+      "steps": [
+        "Step 1: Verify __version__ is defined in __init__.py",
+        "Step 2: Verify Click's version_option uses correct version",
+        "Step 3: Test afk --version outputs version in expected format",
+        "Step 4: Ensure version matches pyproject.toml version"
+      ],
+      "passes": false
+    }
+  ]
+}

@@ -11,7 +11,6 @@ from afk.runner import (
     COMPLETION_SIGNALS,
     IterationResult,
     IterationRunner,
-    QualityGateResult,
     RunResult,
     StopReason,
     _contains_completion_signal,
@@ -445,11 +444,7 @@ class TestTaskProgressTracking:
         controller = LoopController(config)
 
         with patch("afk.runner.load_prd", return_value=new_prd):
-            with patch("afk.runner.run_quality_gates") as mock_gates:
-                mock_gates.return_value = QualityGateResult(
-                    passed=True, failed_gates=[], output={}
-                )
-                completed_count = controller._check_story_completion(old_prd)
+            completed_count = controller._check_story_completion(old_prd)
 
         assert completed_count == 1
 
