@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.progress_bar import ProgressBar
 from rich.text import Text
 
-from afk.art import get_spinner_frame
+from afk.art import get_mascot, get_spinner_frame
 
 # Activity state thresholds (in seconds)
 ACTIVE_THRESHOLD = 2.0  # Less than 2s since last activity = Active
@@ -137,12 +137,13 @@ class FeedbackDisplay:
     during autonomous coding loops.
     """
 
-    def __init__(self, mode: Literal["full", "minimal"] = "full") -> None:
+    def __init__(self, mode: Literal["full", "minimal"] = "full", show_mascot: bool = True) -> None:
         """Initialise the feedback display.
 
         Args:
             mode: Display mode - 'full' for multi-panel display,
                   'minimal' for single-line status bar.
+            show_mascot: Whether to display the ASCII mascot panel.
         """
         self._console = Console()
         self._live: Live | None = None
@@ -152,6 +153,7 @@ class FeedbackDisplay:
         self._iteration_current: int = 0
         self._iteration_total: int = 0
         self._mode: Literal["full", "minimal"] = mode
+        self._show_mascot: bool = show_mascot
         self._task_id: str | None = None
         self._task_description: str | None = None
         self._progress: float = 0.0
@@ -230,6 +232,11 @@ class FeedbackDisplay:
                 header,
                 Text("Waiting for activity...", style="dim"),
             )
+
+        # Add mascot panel if enabled
+        if self._show_mascot:
+            mascot_panel = self._build_mascot_panel(activity_state)
+            content = Group(content, mascot_panel)
 
         # Add task panel as footer if task info available
         if self._task_id is not None:
@@ -369,6 +376,30 @@ class FeedbackDisplay:
         return Panel(
             content,
             title="[dim]Files[/dim]",
+            border_style="dim",
+        )
+
+    def _build_mascot_panel(self, activity_state: str = ActivityState.ACTIVE) -> Panel:
+        """Build the mascot panel showing ASCII art character.
+
+        Args:
+            activity_state: Current activity state to determine mascot pose.
+
+        Returns:
+            A Rich Panel containing the mascot ASCII art.
+        """
+        # Map activity state to mascot state
+        if activity_state == ActivityState.STALLED:
+            mascot_state = "error"
+        elif activity_state == ActivityState.THINKING:
+            mascot_state = "waiting"
+        else:
+            mascot_state = "working"
+
+        mascot_art = get_mascot(mascot_state)
+
+        return Panel(
+            Text(mascot_art, style="cyan"),
             border_style="dim",
         )
 
@@ -549,9 +580,7 @@ class FeedbackDisplay:
 
         # Files count
         files_count = (
-            len(metrics.files_modified)
-            + len(metrics.files_created)
-            + len(metrics.files_deleted)
+            len(metrics.files_modified) + len(metrics.files_created) + len(metrics.files_deleted)
         )
         bar.append(f"{files_count} files", style="blue")
 
@@ -565,9 +594,7 @@ class FeedbackDisplay:
 
         return bar
 
-    def show_gates_failed(
-        self, failed_gates: list[str], continuing: bool = True
-    ) -> None:
+    def show_gates_failed(self, failed_gates: list[str], continuing: bool = True) -> None:
         """Display visual feedback when quality gates fail.
 
         Shows an orange/red warning with the names of failed gates, and

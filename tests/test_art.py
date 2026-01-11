@@ -130,6 +130,4 @@ class TestGetMascot:
         for state in MASCOT_STATES:
             art = get_mascot(state)
             for char in art:
-                assert char in allowed, (
-                    f"Mascot {state} contains non-printable char: {repr(char)}"
-                )
+                assert char in allowed, f"Mascot {state} contains non-printable char: {repr(char)}"

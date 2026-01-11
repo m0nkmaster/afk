@@ -234,15 +234,12 @@ class TestArchiveSession:
         assert (result / "progress.json").exists()
         assert (result / "metadata.json").exists()
 
-    def test_copies_progress_and_prompt(
-        self, temp_afk_dir: Path, mock_subprocess_run: MagicMock
-    ) -> None:
-        """Test copies both progress and prompt files."""
+    def test_copies_progress_file(self, temp_afk_dir: Path, mock_subprocess_run: MagicMock) -> None:
+        """Test copies progress file."""
         config = AfkConfig(archive=ArchiveConfig(enabled=True, directory=".afk/archive"))
 
         # Create files
         (temp_afk_dir / "progress.json").write_text('{"iterations": 5}')
-        (temp_afk_dir / "prompt.md").write_text("# Prompt")
 
         mock_subprocess_run.return_value = MagicMock(returncode=0, stdout="main\n")
 
@@ -250,7 +247,6 @@ class TestArchiveSession:
 
         assert result is not None
         assert (result / "progress.json").exists()
-        assert (result / "prompt.md").exists()
 
 
 class TestClearSession:

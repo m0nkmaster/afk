@@ -146,7 +146,7 @@ def get_uncommitted_changes() -> bool:
 def archive_session(config: AfkConfig, reason: str = "manual") -> Path | None:
     """Archive current session files.
 
-    Archives progress.json and prompt.md to a timestamped directory.
+    Archives progress.json to a timestamped directory.
 
     Args:
         config: afk configuration
@@ -173,18 +173,14 @@ def archive_session(config: AfkConfig, reason: str = "manual") -> Path | None:
     if PROGRESS_FILE.exists():
         shutil.copy2(PROGRESS_FILE, archive_path / "progress.json")
 
-    # Copy prompt file if exists
-    prompt_path = Path(config.output.file_path)
-    if prompt_path.exists():
-        shutil.copy2(prompt_path, archive_path / "prompt.md")
-
     # Write metadata
+    import json
+
     metadata = {
         "archived_at": datetime.now().isoformat(),
         "branch": branch,
         "reason": reason,
     }
-    import json
 
     with open(archive_path / "metadata.json", "w") as f:
         json.dump(metadata, f, indent=2)

@@ -130,12 +130,6 @@ TASK_FILES = {
     "tasks.md": "markdown",
 }
 
-# Prompt files for single-prompt mode (ralf.sh style)
-PROMPT_FILES = [
-    "prompt.md",
-    "PROMPT.md",
-    "prompt.txt",
-]
 
 # Known AI CLI tools with metadata
 # Args are configured for autonomous (non-interactive) operation.
@@ -222,26 +216,6 @@ def _detect_sources(root: Path, available_tools: dict[str, bool]) -> list[Source
         sources.append(SourceConfig(type="json", path=str(prd_file.name)))
 
     return sources
-
-
-def detect_prompt_file(root: Path | None = None) -> Path | None:
-    """Detect a single prompt file for ralf.sh-style mode.
-
-    Args:
-        root: Project root directory (defaults to cwd)
-
-    Returns:
-        Path to prompt file if found, None otherwise
-    """
-    if root is None:
-        root = Path.cwd()
-
-    for filename in PROMPT_FILES:
-        path = root / filename
-        if path.exists():
-            return path
-
-    return None
 
 
 def infer_sources(root: Path | None = None) -> list[SourceConfig]:

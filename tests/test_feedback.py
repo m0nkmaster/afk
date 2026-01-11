@@ -307,9 +307,7 @@ class TestMetricsCollector:
         """Test state transitions at exactly ACTIVE_THRESHOLD."""
         collector = MetricsCollector()
         # Set last_activity to exactly at the threshold boundary
-        collector._metrics.last_activity = datetime.now() - timedelta(
-            seconds=ACTIVE_THRESHOLD
-        )
+        collector._metrics.last_activity = datetime.now() - timedelta(seconds=ACTIVE_THRESHOLD)
 
         state = collector.get_activity_state()
 
@@ -320,9 +318,7 @@ class TestMetricsCollector:
         """Test state transitions at exactly THINKING_THRESHOLD."""
         collector = MetricsCollector()
         # Set last_activity to exactly at the thinking threshold boundary
-        collector._metrics.last_activity = datetime.now() - timedelta(
-            seconds=THINKING_THRESHOLD
-        )
+        collector._metrics.last_activity = datetime.now() - timedelta(seconds=THINKING_THRESHOLD)
 
         state = collector.get_activity_state()
 
@@ -1631,3 +1627,143 @@ class TestFeedbackDisplay:
         assert "types" in output
         assert "lint" in output
         assert "test" in output
+
+    def test_show_mascot_defaults_to_true(self) -> None:
+        """Test FeedbackDisplay shows mascot by default."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        assert display._show_mascot is True
+
+    def test_show_mascot_can_be_disabled(self) -> None:
+        """Test FeedbackDisplay can disable mascot via parameter."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(show_mascot=False)
+
+        assert display._show_mascot is False
+
+    def test_build_mascot_panel_returns_panel(self) -> None:
+        """Test _build_mascot_panel returns a Rich Panel."""
+        from rich.panel import Panel
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        panel = display._build_mascot_panel()
+
+        assert isinstance(panel, Panel)
+
+    def test_build_mascot_panel_contains_mascot_art(self) -> None:
+        """Test _build_mascot_panel includes mascot ASCII art."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        panel = display._build_mascot_panel()
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Mascot art contains distinctive characters
+        assert "o_o" in output or "(" in output
+
+    def test_build_mascot_panel_shows_working_for_active_state(self) -> None:
+        """Test _build_mascot_panel shows working mascot for active state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        panel = display._build_mascot_panel(ActivityState.ACTIVE)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Working mascot has ( o_o) face
+        assert "o_o" in output
+
+    def test_build_mascot_panel_shows_waiting_for_thinking_state(self) -> None:
+        """Test _build_mascot_panel shows waiting mascot for thinking state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        panel = display._build_mascot_panel(ActivityState.THINKING)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Waiting mascot has (._.) face
+        assert "._." in output
+
+    def test_build_mascot_panel_shows_error_for_stalled_state(self) -> None:
+        """Test _build_mascot_panel shows error mascot for stalled state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+
+        panel = display._build_mascot_panel(ActivityState.STALLED)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Error mascot has (x_x) face
+        assert "x_x" in output
+
+    def test_build_panel_includes_mascot_when_enabled(self) -> None:
+        """Test _build_panel includes mascot panel when show_mascot=True."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(show_mascot=True)
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should contain mascot art
+        assert "o_o" in output
+
+    def test_build_panel_excludes_mascot_when_disabled(self) -> None:
+        """Test _build_panel excludes mascot panel when show_mascot=False."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(show_mascot=False)
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should NOT contain mascot art
+        assert "o_o" not in output
+        assert "._." not in output
+        assert "x_x" not in output

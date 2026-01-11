@@ -16,7 +16,6 @@ from afk.runner import (
     _contains_completion_signal,
     run_iteration,
     run_loop,
-    run_prompt_only,
 )
 
 
@@ -532,110 +531,6 @@ class TestCompletionSignals:
         assert _contains_completion_signal("Just some output") is False
 
 
-class TestRunPromptOnly:
-    """Tests for run_prompt_only function."""
-
-    def test_prompt_only_basic(self, temp_project: Path) -> None:
-        """Test basic prompt-only execution."""
-        prompt_file = temp_project / "prompt.md"
-        prompt_file.write_text("Do the thing\n")
-
-        config = AfkConfig(
-            ai_cli=AiCliConfig(command="echo", args=["test"]),
-        )
-
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.stdin = MagicMock()
-            # Streaming mock - return line then empty to end
-            mock_process.stdout.readline.side_effect = ["output\n", ""]
-            mock_process.returncode = 0
-            mock_popen.return_value = mock_process
-
-            result = run_prompt_only(
-                prompt_file=prompt_file,
-                config=config,
-                max_iterations=2,
-            )
-
-        assert result.iterations_completed == 2
-        assert result.stop_reason == StopReason.MAX_ITERATIONS
-
-    def test_prompt_only_completion_signal(self, temp_project: Path) -> None:
-        """Test prompt-only stops on completion signal."""
-        prompt_file = temp_project / "prompt.md"
-        prompt_file.write_text("Do the thing\n")
-
-        config = AfkConfig(
-            ai_cli=AiCliConfig(command="echo", args=[]),
-        )
-
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.stdin = MagicMock()
-            # Return completion signal in output
-            mock_process.stdout.readline.side_effect = [
-                "Done!\n",
-                "<promise>COMPLETE</promise>\n",
-                "",
-            ]
-            mock_process.returncode = 0
-            mock_popen.return_value = mock_process
-
-            result = run_prompt_only(
-                prompt_file=prompt_file,
-                config=config,
-                max_iterations=10,
-            )
-
-        assert result.iterations_completed == 1
-        assert result.stop_reason == StopReason.COMPLETE
-
-    def test_prompt_only_ai_error(self, temp_project: Path) -> None:
-        """Test prompt-only handles AI CLI errors."""
-        prompt_file = temp_project / "prompt.md"
-        prompt_file.write_text("Do the thing\n")
-
-        config = AfkConfig(
-            ai_cli=AiCliConfig(command="echo", args=[]),
-        )
-
-        with patch("subprocess.Popen") as mock_popen:
-            mock_process = MagicMock()
-            mock_process.stdin = MagicMock()
-            mock_process.stdout.readline.side_effect = ["error\n", ""]
-            mock_process.returncode = 1
-            mock_popen.return_value = mock_process
-
-            result = run_prompt_only(
-                prompt_file=prompt_file,
-                config=config,
-                max_iterations=5,
-            )
-
-        assert result.stop_reason == StopReason.AI_ERROR
-
-    def test_prompt_only_cli_not_found(self, temp_project: Path) -> None:
-        """Test prompt-only handles missing CLI."""
-        prompt_file = temp_project / "prompt.md"
-        prompt_file.write_text("Do the thing\n")
-
-        config = AfkConfig(
-            ai_cli=AiCliConfig(command="nonexistent-cli", args=[]),
-        )
-
-        with patch("subprocess.Popen") as mock_popen:
-            mock_popen.side_effect = FileNotFoundError()
-
-            result = run_prompt_only(
-                prompt_file=prompt_file,
-                config=config,
-                max_iterations=5,
-            )
-
-        assert result.stop_reason == StopReason.AI_ERROR
-
-
 class TestOutputHandlerFileWatcherIntegration:
     """Tests for OutputHandler file watcher integration."""
 
@@ -749,9 +644,7 @@ class TestOutputHandlerFileWatcherIntegration:
 
         assert str(test_file) in all_files
 
-    def test_stream_line_deduplicates_parsed_and_watched_changes(
-        self, tmp_path: Path
-    ) -> None:
+    def test_stream_line_deduplicates_parsed_and_watched_changes(self, tmp_path: Path) -> None:
         """Test that files from parsed output are not double-counted from watcher."""
         import time
 
@@ -969,9 +862,7 @@ class TestOutputHandlerFeedbackIntegration:
 class TestRunQualityGatesIntegration:
     """Tests for run_quality_gates feedback integration."""
 
-    def test_run_quality_gates_calls_show_gates_failed_on_failure(
-        self, temp_afk_dir: Path
-    ) -> None:
+    def test_run_quality_gates_calls_show_gates_failed_on_failure(self, temp_afk_dir: Path) -> None:
         """Test run_quality_gates calls show_gates_failed when gates fail."""
         from afk.config import FeedbackLoopsConfig
         from afk.runner import OutputHandler, run_quality_gates
@@ -992,9 +883,7 @@ class TestRunQualityGatesIntegration:
         assert "types" in result.failed_gates
         mock_show.assert_called_once_with(["types"], continuing=True)
 
-    def test_run_quality_gates_no_show_gates_failed_on_success(
-        self, temp_afk_dir: Path
-    ) -> None:
+    def test_run_quality_gates_no_show_gates_failed_on_success(self, temp_afk_dir: Path) -> None:
         """Test run_quality_gates doesn't call show_gates_failed when all pass."""
         from afk.config import FeedbackLoopsConfig
         from afk.runner import OutputHandler, run_quality_gates

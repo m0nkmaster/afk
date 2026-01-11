@@ -539,6 +539,51 @@ class TestRunCommand:
         call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("feedback_mode") == "off"
 
+    def test_run_help_shows_no_mascot_option(self, cli_runner: CliRunner) -> None:
+        """Test run --help shows --no-mascot option."""
+        result = cli_runner.invoke(main, ["run", "--help"])
+        assert result.exit_code == 0
+        assert "--no-mascot" in result.output
+
+    def test_run_no_mascot_flag_passes_show_mascot_false(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test run --no-mascot passes show_mascot=False to runner."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["run", "--no-mascot"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("show_mascot") is False
+
+    def test_run_mascot_defaults_to_config(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test run uses config value when --no-mascot not specified."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["run"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        # Default config has show_mascot=True
+        assert call_kwargs.get("show_mascot") is True
+
 
 class TestResumeCommand:
     """Tests for resume command."""
@@ -1109,6 +1154,51 @@ class TestGoCommand:
         mock_run.assert_called_once()
         call_kwargs = mock_run.call_args.kwargs
         assert call_kwargs.get("feedback_mode") == "minimal"
+
+    def test_go_help_shows_no_mascot_option(self, cli_runner: CliRunner) -> None:
+        """Test go --help shows --no-mascot option."""
+        result = cli_runner.invoke(main, ["go", "--help"])
+        assert result.exit_code == 0
+        assert "--no-mascot" in result.output
+
+    def test_go_no_mascot_flag_passes_show_mascot_false(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test go --no-mascot passes show_mascot=False to runner."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["go", "--no-mascot"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        assert call_kwargs.get("show_mascot") is False
+
+    def test_go_mascot_defaults_to_config(
+        self, cli_runner: CliRunner, initialized_project: Path
+    ) -> None:
+        """Test go uses config value when --no-mascot not specified."""
+        from afk.runner import LoopController, RunResult, StopReason
+
+        mock_result = RunResult(
+            iterations_completed=1,
+            tasks_completed=0,
+            stop_reason=StopReason.MAX_ITERATIONS,
+            duration_seconds=1.0,
+        )
+        with patch.object(LoopController, "run", return_value=mock_result) as mock_run:
+            result = cli_runner.invoke(main, ["go"])
+        assert result.exit_code == 0
+        mock_run.assert_called_once()
+        call_kwargs = mock_run.call_args.kwargs
+        # Default config has show_mascot=True
+        assert call_kwargs.get("show_mascot") is True
 
 
 class TestUpdateCommand:

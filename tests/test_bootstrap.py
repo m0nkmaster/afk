@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 from afk.bootstrap import (
     AI_CLIS,
     CONTEXT_FILES,
-    PROMPT_FILES,
     STACKS,
     TASK_FILES,
     AiCliInfo,
@@ -24,7 +23,6 @@ from afk.bootstrap import (
     _is_github_repo,
     analyse_project,
     detect_available_ai_clis,
-    detect_prompt_file,
     ensure_ai_cli_configured,
     generate_config,
     infer_config,
@@ -684,47 +682,6 @@ class TestEnsureAiCliConfigured:
             assert exc_info.value.code == 1
         finally:
             os.chdir(old_cwd)
-
-
-class TestPromptFiles:
-    """Tests for prompt file definitions."""
-
-    def test_prompt_files_defined(self) -> None:
-        """Test that prompt files are defined."""
-        assert "prompt.md" in PROMPT_FILES
-        assert "PROMPT.md" in PROMPT_FILES
-
-
-class TestDetectPromptFile:
-    """Tests for detect_prompt_file function."""
-
-    def test_no_prompt_file(self, temp_project: Path) -> None:
-        """Test when no prompt file exists."""
-        result = detect_prompt_file(temp_project)
-        assert result is None
-
-    def test_prompt_md(self, temp_project: Path) -> None:
-        """Test detecting prompt.md."""
-        (temp_project / "prompt.md").write_text("# Do the thing\n")
-        result = detect_prompt_file(temp_project)
-        assert result is not None
-        assert result.name == "prompt.md"
-
-    def test_uppercase_prompt(self, temp_project: Path) -> None:
-        """Test detecting PROMPT.md (case-insensitive filesystems may normalise)."""
-        (temp_project / "PROMPT.md").write_text("# Do the thing\n")
-        result = detect_prompt_file(temp_project)
-        assert result is not None
-        # macOS has case-insensitive filesystem, so accept either
-        assert result.name.lower() == "prompt.md"
-
-    def test_priority_order(self, temp_project: Path) -> None:
-        """Test that lowercase prompt.md takes priority."""
-        (temp_project / "prompt.md").write_text("lower\n")
-        (temp_project / "PROMPT.md").write_text("upper\n")
-        result = detect_prompt_file(temp_project)
-        assert result is not None
-        assert result.name == "prompt.md"
 
 
 class TestInferSources:

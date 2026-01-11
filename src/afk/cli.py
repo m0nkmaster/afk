@@ -54,6 +54,7 @@ def main(ctx: click.Context) -> None:
     default=None,
     help="Feedback display mode (default: from config or 'full')",
 )
+@click.option("--no-mascot", is_flag=True, help="Disable ASCII mascot in feedback display")
 @click.pass_context
 def go_command(
     ctx: click.Context,
@@ -62,6 +63,7 @@ def go_command(
     dry_run: bool,
     until_complete: bool,
     feedback: str | None,
+    no_mascot: bool,
 ) -> None:
     """Quick start with zero config.
 
@@ -72,9 +74,16 @@ def go_command(
       afk go -u              # Run until all tasks complete
       afk go TODO.md 5       # Use TODO.md as source, run 5 iterations
       afk go --feedback off  # Run without feedback display
+      afk go --no-mascot     # Run without mascot display
     """
     _run_zero_config(
-        ctx, iterations_or_source, iterations_if_source, dry_run, until_complete, feedback
+        ctx,
+        iterations_or_source,
+        iterations_if_source,
+        dry_run,
+        until_complete,
+        feedback,
+        no_mascot,
     )
 
 
@@ -85,10 +94,10 @@ def _run_zero_config(
     dry_run: bool,
     until_complete: bool = False,
     feedback_mode: str | None = None,
+    no_mascot: bool = False,
 ) -> None:
     """Handle zero-config invocation (afk go, afk go 10, afk go TODO.md 5)."""
     from afk.bootstrap import (
-        detect_prompt_file,
         ensure_ai_cli_configured,
         infer_config,
         infer_sources,
@@ -154,40 +163,19 @@ def _run_zero_config(
 
         existing_prd = load_prd()
         if not existing_prd.user_stories:
-            # No sources AND no PRD - check for prompt file (ralf.sh mode)
-            prompt_file = detect_prompt_file()
-            if prompt_file:
-                from afk.runner import run_prompt_only
-
-                if dry_run:
-                    console.print(Panel.fit("[bold]Dry Run (Prompt-only)[/bold]", title="afk"))
-                    console.print()
-                    console.print(f"  [cyan]Prompt file:[/cyan] {prompt_file.name}")
-                    console.print(f"  [cyan]Iterations:[/cyan] {iterations}")
-                    console.print(f"  [cyan]AI CLI:[/cyan] {config.ai_cli.command}")
-                    return
-
-                run_prompt_only(
-                    prompt_file=prompt_file,
-                    config=config,
-                    max_iterations=iterations,
-                )
-                return
-            else:
-                console.print("[red]No task sources found.[/red]")
-                console.print()
-                console.print("To get started, either:")
-                console.print()
-                console.print("  [bold]Parse a PRD:[/bold]")
-                console.print("    [cyan]afk prd parse requirements.md[/cyan]")
-                console.print("    [dim]Creates .afk/prd.json from your requirements doc[/dim]")
-                console.print()
-                console.print("  [bold]Or create a task file:[/bold]")
-                console.print("    • [cyan]TODO.md[/cyan] - Markdown checklist")
-                console.print("    • [cyan]tasks.json[/cyan] - JSON task file")
-                console.print("    • [cyan]prompt.md[/cyan] - Single prompt (ralf.sh style)")
-                console.print("    • [cyan].beads/[/cyan] - Beads issue tracker")
-                ctx.exit(1)
+            console.print("[red]No task sources found.[/red]")
+            console.print()
+            console.print("To get started, either:")
+            console.print()
+            console.print("  [bold]Parse a PRD:[/bold]")
+            console.print("    [cyan]afk prd parse requirements.md[/cyan]")
+            console.print("    [dim]Creates .afk/prd.json from your requirements doc[/dim]")
+            console.print()
+            console.print("  [bold]Or create a task file:[/bold]")
+            console.print("    • [cyan]TODO.md[/cyan] - Markdown checklist")
+            console.print("    • [cyan]tasks.json[/cyan] - JSON task file")
+            console.print("    • [cyan].beads/[/cyan] - Beads issue tracker")
+            ctx.exit(1)
 
     if dry_run:
         console.print(Panel.fit("[bold]Dry Run[/bold]", title="afk"))
@@ -204,9 +192,15 @@ def _run_zero_config(
     # Determine feedback mode: CLI flag > config > default
     effective_feedback = feedback_mode or config.feedback.mode
 
+    # Determine mascot visibility: CLI flag > config
+    show_mascot = not no_mascot and config.feedback.show_mascot
+
     # Run the loop
     LoopController(config).run(
-        max_iterations=iterations, until_complete=until_complete, feedback_mode=effective_feedback
+        max_iterations=iterations,
+        until_complete=until_complete,
+        feedback_mode=effective_feedback,
+        show_mascot=show_mascot,
     )
 
 
@@ -950,6 +944,7 @@ def start(ctx: click.Context, iterations: int, branch: str | None, yes: bool) ->
     default=None,
     help="Feedback display mode (default: from config or 'full')",
 )
+@click.option("--no-mascot", is_flag=True, help="Disable ASCII mascot in feedback display")
 @click.pass_context
 def run(
     ctx: click.Context,
@@ -959,6 +954,7 @@ def run(
     branch: str | None,
     resume_session: bool,
     feedback: str | None,
+    no_mascot: bool,
 ) -> None:
     """Run multiple iterations using configured AI CLI.
 
@@ -979,6 +975,8 @@ def run(
         afk run --continue            # Resume from last session
 
         afk run --feedback minimal    # Use minimal feedback bar
+
+        afk run --no-mascot           # Run without mascot display
     """
     from afk.runner import LoopController
 
@@ -995,6 +993,9 @@ def run(
     # Determine feedback mode: CLI flag > config > default
     effective_feedback = feedback or config.feedback.mode
 
+    # Determine mascot visibility: CLI flag > config
+    show_mascot = not no_mascot and config.feedback.show_mascot
+
     # Run the autonomous loop
     LoopController(config).run(
         max_iterations=iterations,
@@ -1003,6 +1004,7 @@ def run(
         timeout_override=timeout,
         resume=resume_session,
         feedback_mode=effective_feedback,
+        show_mascot=show_mascot,
     )
 
 
@@ -1067,8 +1069,7 @@ def archive() -> None:
 def archive_create(ctx: click.Context, reason: str) -> None:
     """Archive current session.
 
-    Saves progress.json and prompt.md to a timestamped directory
-    for later reference or recovery.
+    Saves progress.json to a timestamped directory for later reference or recovery.
     """
     from afk.git_ops import archive_session
 

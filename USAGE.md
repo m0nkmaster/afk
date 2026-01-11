@@ -462,10 +462,8 @@ ls .afk/archive/           # Previous sessions
 ├── config.json      # Configuration
 ├── prd.json         # Current task list (source of truth)
 ├── progress.json    # Session state (iterations, task status, per-task learnings)
-├── prompt.md        # Generated prompt (if using file output)
 └── archive/         # Previous sessions
     └── 2025-01-11_12-30-00_main_complete/
-        ├── prd.json
         ├── progress.json
         └── metadata.json
 

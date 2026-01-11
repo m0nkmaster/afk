@@ -114,6 +114,7 @@ class OutputHandler:
         feedback_mode: str = "full",
         watch_root: str | Path | None = None,
         watch_ignore_patterns: list[str] | None = None,
+        show_mascot: bool = True,
     ) -> None:
         """Initialise output handler.
 
@@ -124,6 +125,7 @@ class OutputHandler:
             feedback_mode: Feedback display mode ('full', 'minimal', 'off')
             watch_root: Root directory to watch for file changes (enables FileWatcher)
             watch_ignore_patterns: Glob patterns to ignore in file watching
+            show_mascot: Whether to display ASCII mascot in feedback display
         """
         self.console = console or Console()
         self.signals = completion_signals or COMPLETION_SIGNALS
@@ -131,9 +133,12 @@ class OutputHandler:
         self._collector = MetricsCollector()
         self._feedback_enabled = feedback_enabled and feedback_mode != "off"
         self._feedback_mode = feedback_mode
+        self._show_mascot = show_mascot
         self._feedback: FeedbackDisplay | None = None
         if self._feedback_enabled:
-            self._feedback = FeedbackDisplay()
+            # Cast mode to Literal type for FeedbackDisplay
+            mode = "minimal" if feedback_mode == "minimal" else "full"
+            self._feedback = FeedbackDisplay(mode=mode, show_mascot=show_mascot)  # type: ignore[arg-type]
         # FileWatcher for backup file change detection
         self._file_watcher: FileWatcher | None = None
         if watch_root is not None:
@@ -321,23 +326,6 @@ class OutputHandler:
             )
         )
 
-    def prompt_only_panel(
-        self,
-        prompt_name: str,
-        ai_cli: str,
-        max_iterations: int,
-    ) -> None:
-        """Display prompt-only mode panel."""
-        self.console.print(
-            Panel.fit(
-                f"[bold]Prompt-only mode[/bold]\n\n"
-                f"Prompt: [cyan]{prompt_name}[/cyan]\n"
-                f"AI CLI: [cyan]{ai_cli}[/cyan]\n"
-                f"Max iterations: [cyan]{max_iterations}[/cyan]",
-                title="afk",
-            )
-        )
-
     def session_complete_panel(
         self,
         iterations: int,
@@ -358,23 +346,6 @@ class OutputHandler:
             content += f"\nArchived to: [dim]{archived_to}[/dim]"
 
         self.console.print(Panel.fit(content, title="afk"))
-
-    def session_complete_panel_simple(
-        self,
-        iterations: int,
-        duration: float,
-        stop_reason: StopReason,
-    ) -> None:
-        """Display simple session complete panel (for prompt-only mode)."""
-        self.console.print(
-            Panel.fit(
-                f"[bold]Session Complete[/bold]\n\n"
-                f"Iterations: [cyan]{iterations}[/cyan]\n"
-                f"Duration: [cyan]{duration:.1f}s[/cyan]\n"
-                f"Reason: [cyan]{stop_reason.value}[/cyan]",
-                title="afk",
-            )
-        )
 
 
 # =============================================================================
@@ -427,28 +398,6 @@ class IterationRunner:
         self.output.command_info(cmd)
 
         return self._execute_command(cmd, prompt, on_output, stream)
-
-    def run_with_static_prompt(
-        self,
-        iteration: int,
-        max_iterations: int,
-        prompt_content: str,
-    ) -> tuple[IterationResult, bool]:
-        """Run iteration with static prompt content (prompt-only mode).
-
-        Args:
-            iteration: Current iteration number
-            max_iterations: Total iterations for display
-            prompt_content: Static prompt content
-
-        Returns:
-            Tuple of (IterationResult, completion_detected)
-        """
-        cmd = [self.config.ai_cli.command] + self.config.ai_cli.args
-
-        self.output.iteration_header(iteration, max_iterations)
-
-        return self._execute_with_completion_detection(cmd, prompt_content)
 
     def _execute_command(
         self,
@@ -513,68 +462,6 @@ class IterationRunner:
         except Exception as e:
             return IterationResult(success=False, error=str(e))
 
-    def _execute_with_completion_detection(
-        self,
-        cmd: list[str],
-        prompt_content: str,
-    ) -> tuple[IterationResult, bool]:
-        """Execute command and detect completion signal."""
-        try:
-            # Pass prompt as final argument (universal across AI CLIs)
-            full_cmd = cmd + [prompt_content]
-
-            process = subprocess.Popen(
-                full_cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-
-            output_buffer: list[str] = []
-            completion_detected = False
-
-            if process.stdout:
-                for line in iter(process.stdout.readline, ""):
-                    self.output.stream_line(line)
-                    output_buffer.append(line)
-
-                    if self.output.contains_completion_signal(line):
-                        self.output.completion_detected()
-                        completion_detected = True
-                        process.terminate()
-                        break
-
-            if completion_detected:
-                return IterationResult(success=True, output="".join(output_buffer)), True
-
-            process.wait()
-
-            if process.returncode != 0:
-                return (
-                    IterationResult(
-                        success=False,
-                        error=f"AI CLI exited with code {process.returncode}",
-                        output="".join(output_buffer),
-                    ),
-                    False,
-                )
-
-            return IterationResult(success=True, output="".join(output_buffer)), False
-
-        except subprocess.TimeoutExpired:
-            process.kill()
-            return IterationResult(success=False, error="Iteration timed out"), False
-        except FileNotFoundError:
-            return (
-                IterationResult(
-                    success=False,
-                    error=f"AI CLI not found: {self.config.ai_cli.command}",
-                ),
-                False,
-            )
-
 
 # =============================================================================
 # LoopController - Loop management, limits, archiving
@@ -606,6 +493,7 @@ class LoopController:
         on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
         resume: bool = False,
         feedback_mode: str | None = None,
+        show_mascot: bool | None = None,
     ) -> RunResult:
         """Run the autonomous loop.
 
@@ -617,14 +505,18 @@ class LoopController:
             on_iteration_complete: Callback after each iteration
             resume: If True, continue from last session
             feedback_mode: Feedback display mode ('full', 'minimal', 'off')
+            show_mascot: Whether to display ASCII mascot (default: from config)
 
         Returns:
             RunResult with session statistics
         """
         # Configure feedback from parameter or config
         effective_feedback_mode = feedback_mode or self.config.feedback.mode
-        feedback_enabled = (
-            self.config.feedback.enabled and effective_feedback_mode != "off"
+        feedback_enabled = self.config.feedback.enabled and effective_feedback_mode != "off"
+
+        # Determine mascot visibility from parameter or config
+        effective_show_mascot = (
+            show_mascot if show_mascot is not None else self.config.feedback.show_mascot
         )
 
         # Recreate output handler with feedback settings
@@ -632,6 +524,7 @@ class LoopController:
             feedback_enabled=feedback_enabled,
             feedback_mode=effective_feedback_mode,
             watch_root=".",  # Watch current directory for file changes
+            show_mascot=effective_show_mascot,
         )
         # Update iteration runner to use the new output handler
         self.iteration_runner = IterationRunner(self.config, self.output)
@@ -977,6 +870,7 @@ def run_loop(
     on_iteration_complete: Callable[[int, IterationResult], None] | None = None,
     resume: bool = False,
     feedback_mode: str | None = None,
+    show_mascot: bool | None = None,
 ) -> RunResult:
     """Run the autonomous afk loop.
 
@@ -991,6 +885,7 @@ def run_loop(
         on_iteration_complete: Callback after each iteration
         resume: If True, continue from last session
         feedback_mode: Feedback display mode ('full', 'minimal', 'off')
+        show_mascot: Whether to display ASCII mascot (default: from config)
 
     Returns:
         RunResult with session statistics
@@ -1003,6 +898,7 @@ def run_loop(
         on_iteration_complete=on_iteration_complete,
         resume=resume,
         feedback_mode=feedback_mode,
+        show_mascot=show_mascot,
     )
 
 
@@ -1034,91 +930,3 @@ def _contains_completion_signal(text: str | None) -> bool:
     if not text:
         return False
     return any(signal in text for signal in COMPLETION_SIGNALS)
-
-
-def run_prompt_only(
-    prompt_file: Path,
-    config: AfkConfig,
-    max_iterations: int = 10,
-    timeout_minutes: int | None = None,
-) -> RunResult:
-    """Run in prompt-only mode (ralf.sh style).
-
-    This is a simpler mode that just pipes a static prompt to the AI CLI
-    each iteration, checking for completion signals in the output.
-
-    Args:
-        prompt_file: Path to the prompt file
-        config: afk configuration
-        max_iterations: Maximum number of iterations
-        timeout_minutes: Override timeout in minutes
-
-    Returns:
-        RunResult with session statistics
-    """
-    output = OutputHandler()
-    runner = IterationRunner(config, output)
-
-    start_time = datetime.now()
-    timeout = timeout_minutes or config.limits.timeout_minutes
-    timeout_delta = timedelta(minutes=timeout)
-
-    prompt_content = prompt_file.read_text()
-
-    output.prompt_only_panel(
-        prompt_name=prompt_file.name,
-        ai_cli=config.ai_cli.command,
-        max_iterations=max_iterations,
-    )
-
-    iterations_completed = 0
-    stop_reason = StopReason.COMPLETE
-
-    try:
-        for iteration in range(1, max_iterations + 1):
-            elapsed = datetime.now() - start_time
-            if elapsed > timeout_delta:
-                stop_reason = StopReason.TIMEOUT
-                output.warning(f"Timeout reached ({timeout} minutes)")
-                break
-
-            result, completion_detected = runner.run_with_static_prompt(
-                iteration, max_iterations, prompt_content
-            )
-
-            if completion_detected:
-                stop_reason = StopReason.COMPLETE
-                iterations_completed = iteration
-                break
-
-            if not result.success:
-                output.error(result.error or "Unknown error")
-                stop_reason = StopReason.AI_ERROR
-                break
-
-            iterations_completed = iteration
-            time.sleep(1)
-
-        else:
-            stop_reason = StopReason.MAX_ITERATIONS
-            output.warning(f"Max iterations reached ({max_iterations})")
-
-    except KeyboardInterrupt:
-        stop_reason = StopReason.USER_INTERRUPT
-        output.warning("Interrupted by user")
-
-    duration = (datetime.now() - start_time).total_seconds()
-
-    output.session_complete_panel_simple(
-        iterations=iterations_completed,
-        duration=duration,
-        stop_reason=stop_reason,
-    )
-
-    return RunResult(
-        iterations_completed=iterations_completed,
-        tasks_completed=0,
-        stop_reason=stop_reason,
-        duration_seconds=duration,
-        archived_to=None,
-    )
