@@ -1,6 +1,6 @@
 """Tests for ASCII art spinners and mascots."""
 
-from afk.art import SPINNERS, get_spinner_frame
+from afk.art import MASCOT_STATES, SPINNERS, get_mascot, get_spinner_frame
 
 
 class TestSpinners:
@@ -63,3 +63,73 @@ class TestGetSpinnerFrame:
             # Also test cycling
             frame = get_spinner_frame(name, len(SPINNERS[name]))
             assert frame == SPINNERS[name][0]  # Should wrap
+
+
+class TestMascotStates:
+    """Tests for mascot state definitions."""
+
+    def test_mascot_states_contains_required_states(self) -> None:
+        """MASCOT_STATES should contain working, success, error, waiting."""
+        required_states = ["working", "success", "error", "waiting", "celebration"]
+        for state in required_states:
+            assert state in MASCOT_STATES, f"Missing mascot state: {state}"
+
+    def test_mascot_states_are_non_empty_strings(self) -> None:
+        """Each mascot state should be a non-empty string."""
+        for state, art in MASCOT_STATES.items():
+            assert isinstance(art, str), f"Mascot {state} is not a string"
+            assert len(art) > 0, f"Mascot {state} is empty"
+
+    def test_mascot_states_contain_expected_characters(self) -> None:
+        """Mascot art should contain expected face/body characters."""
+        # Working should have neutral face
+        assert "o_o" in MASCOT_STATES["working"]
+
+        # Success should have happy face
+        assert "^o^" in MASCOT_STATES["success"]
+
+        # Error should have X eyes
+        assert "x_x" in MASCOT_STATES["error"]
+
+        # Waiting should have dot eyes
+        assert "._." in MASCOT_STATES["waiting"]
+
+        # Celebration should have happy face and stars
+        assert "^o^" in MASCOT_STATES["celebration"]
+        assert "*" in MASCOT_STATES["celebration"]
+
+
+class TestGetMascot:
+    """Tests for get_mascot helper function."""
+
+    def test_get_mascot_returns_art_for_each_state(self) -> None:
+        """get_mascot should return art for all defined states."""
+        for state in MASCOT_STATES:
+            art = get_mascot(state)
+            assert art == MASCOT_STATES[state]
+
+    def test_get_mascot_unknown_state_returns_default(self) -> None:
+        """Unknown state should return working mascot as default."""
+        art = get_mascot("nonexistent")
+        assert art == MASCOT_STATES["working"]
+
+    def test_get_mascot_art_is_multiline(self) -> None:
+        """Mascot art should span multiple lines for terminal display."""
+        for state in MASCOT_STATES:
+            art = get_mascot(state)
+            lines = art.split("\n")
+            assert len(lines) >= 2, f"Mascot {state} should have multiple lines"
+
+    def test_get_mascot_art_renders_in_terminal(self) -> None:
+        """Mascot art should contain only printable ASCII characters."""
+        import string
+
+        # Allow printable ASCII, backslash, newlines, and common symbols
+        allowed = set(string.printable)
+
+        for state in MASCOT_STATES:
+            art = get_mascot(state)
+            for char in art:
+                assert char in allowed, (
+                    f"Mascot {state} contains non-printable char: {repr(char)}"
+                )
