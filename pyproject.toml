@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "afk"
-version = "0.3.0"
+version = "0.3.1"
 description = "Autonomous AI coding loops - Ralph Wiggum style"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Code Generators",
 ]
 dependencies = [
@@ -39,7 +40,7 @@ dev = [
     "pytest-cov>=4.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "pyinstaller>=6.0.0",
+    "nuitka>=2.0.0",
 ]
 
 [project.scripts]

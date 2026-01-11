@@ -70,32 +70,41 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install pyinstaller
 
-      - name: Build binary (Unix)
+      # Linux: Install C compiler (usually present, but ensure patchelf for Nuitka)
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y patchelf ccache
+
+      # macOS: Xcode command line tools should be present
+      - name: Install build dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install ccache || true
+
+      - name: Build with Nuitka (Unix)
         if: runner.os != 'Windows'
         run: |
-          pyinstaller \
+          python -m nuitka \
+            --standalone \
             --onefile \
-            --name afk-${{ matrix.platform }} \
-            --clean \
-            --noconfirm \
+            --output-filename=afk-${{ matrix.platform }} \
+            --assume-yes-for-downloads \
+            --output-dir=dist \
             src/afk/cli.py
 
-      - name: Build binary (Windows)
+      - name: Build with Nuitka (Windows)
         if: runner.os == 'Windows'
         run: |
-          pyinstaller `
+          python -m nuitka `
+            --standalone `
             --onefile `
-            --name afk-${{ matrix.platform }} `
-            --clean `
-            --noconfirm `
+            --output-filename=afk-${{ matrix.platform }}.exe `
+            --assume-yes-for-downloads `
+            --output-dir=dist `
             src/afk/cli.py
-
-      - name: Rename Windows binary
-        if: runner.os == 'Windows'
-        run: |
-          Move-Item dist/afk-${{ matrix.platform }}.exe dist/afk-${{ matrix.platform }}.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -156,6 +165,11 @@ jobs:
             ### Windows
             ```powershell
             irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
+            ```
+            
+            ### Via pip/pipx (fastest startup)
+            ```bash
+            pipx install afk
             ```
             
             ### Verify checksums
