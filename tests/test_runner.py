@@ -631,3 +631,122 @@ class TestRunPromptOnly:
             )
 
         assert result.stop_reason == StopReason.AI_ERROR
+
+
+class TestOutputHandlerFeedbackIntegration:
+    """Tests for OutputHandler feedback display integration."""
+
+    def test_feedback_disabled_by_default(self) -> None:
+        """Test feedback is disabled by default."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler()
+
+        assert handler._feedback_enabled is False
+        assert handler._feedback is None
+
+    def test_feedback_enabled_creates_display(self) -> None:
+        """Test enabling feedback creates a FeedbackDisplay instance."""
+        from afk.feedback import FeedbackDisplay
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+
+        assert handler._feedback_enabled is True
+        assert handler._feedback is not None
+        assert isinstance(handler._feedback, FeedbackDisplay)
+
+    def test_feedback_mode_off_disables_feedback(self) -> None:
+        """Test feedback_mode='off' disables feedback even if enabled=True."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True, feedback_mode="off")
+
+        assert handler._feedback_enabled is False
+        assert handler._feedback is None
+
+    def test_feedback_property_returns_display(self) -> None:
+        """Test feedback property provides access to the display."""
+        from afk.feedback import FeedbackDisplay
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+
+        assert handler.feedback is not None
+        assert isinstance(handler.feedback, FeedbackDisplay)
+
+    def test_feedback_property_returns_none_when_disabled(self) -> None:
+        """Test feedback property returns None when disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        assert handler.feedback is None
+
+    def test_start_feedback_calls_display_start(self) -> None:
+        """Test start_feedback() calls the display's start method."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        # Mock the start method
+        with patch.object(handler._feedback, "start") as mock_start:
+            handler.start_feedback()
+
+        mock_start.assert_called_once()
+
+    def test_start_feedback_noop_when_disabled(self) -> None:
+        """Test start_feedback() is a no-op when feedback is disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        # Should not raise, even with no display
+        handler.start_feedback()
+
+    def test_stop_feedback_calls_display_stop(self) -> None:
+        """Test stop_feedback() calls the display's stop method."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        with patch.object(handler._feedback, "stop") as mock_stop:
+            handler.stop_feedback()
+
+        mock_stop.assert_called_once()
+
+    def test_stop_feedback_noop_when_disabled(self) -> None:
+        """Test stop_feedback() is a no-op when feedback is disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        # Should not raise, even with no display
+        handler.stop_feedback()
+
+    def test_stream_line_updates_feedback(self) -> None:
+        """Test stream_line() updates feedback display with metrics."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        with patch.object(handler._feedback, "update") as mock_update:
+            handler.stream_line("Write file: test.py\n")
+
+        # Should have called update with current metrics
+        mock_update.assert_called()
+        call_args = mock_update.call_args
+        metrics = call_args[0][0]  # First positional argument
+        assert metrics is handler.metrics_collector.metrics
+
+    def test_stream_line_no_update_when_disabled(self) -> None:
+        """Test stream_line() doesn't update feedback when disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        # Should not raise, even with no display
+        handler.stream_line("Write file: test.py\n")

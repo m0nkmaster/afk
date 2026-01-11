@@ -23,7 +23,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from afk.config import AfkConfig, FeedbackLoopsConfig
-from afk.feedback import MetricsCollector
+from afk.feedback import FeedbackDisplay, MetricsCollector
 from afk.git_ops import archive_session, clear_session, create_branch
 from afk.output_parser import (
     ErrorEvent,
@@ -109,17 +109,26 @@ class OutputHandler:
         self,
         console: Console | None = None,
         completion_signals: list[str] | None = None,
+        feedback_enabled: bool = False,
+        feedback_mode: str = "full",
     ) -> None:
         """Initialise output handler.
 
         Args:
             console: Rich Console instance (creates default if None)
             completion_signals: Signals to detect for early termination
+            feedback_enabled: Whether to show real-time feedback display
+            feedback_mode: Feedback display mode ('full', 'minimal', 'off')
         """
         self.console = console or Console()
         self.signals = completion_signals or COMPLETION_SIGNALS
         self._parser = OutputParser()
         self._collector = MetricsCollector()
+        self._feedback_enabled = feedback_enabled and feedback_mode != "off"
+        self._feedback_mode = feedback_mode
+        self._feedback: FeedbackDisplay | None = None
+        if self._feedback_enabled:
+            self._feedback = FeedbackDisplay()
 
     @property
     def metrics_collector(self) -> MetricsCollector:
@@ -130,6 +139,27 @@ class OutputHandler:
     def output_parser(self) -> OutputParser:
         """Access the output parser for external use if needed."""
         return self._parser
+
+    @property
+    def feedback(self) -> FeedbackDisplay | None:
+        """Access the feedback display if enabled."""
+        return self._feedback
+
+    def start_feedback(self) -> None:
+        """Start the feedback display if enabled.
+
+        Should be called when an iteration begins.
+        """
+        if self._feedback is not None:
+            self._feedback.start()
+
+    def stop_feedback(self) -> None:
+        """Stop the feedback display if enabled.
+
+        Should be called when an iteration completes.
+        """
+        if self._feedback is not None:
+            self._feedback.stop()
 
     def contains_completion_signal(self, output: str | None) -> bool:
         """Check if output contains any completion signal."""
@@ -154,7 +184,7 @@ class OutputHandler:
 
         Parses the line through OutputParser and records any detected
         events (tool calls, file changes, errors, warnings) in the
-        MetricsCollector.
+        MetricsCollector. Updates the feedback display if enabled.
 
         Args:
             line: A line of output from the AI CLI.
@@ -174,6 +204,10 @@ class OutputHandler:
             elif isinstance(event, WarningEvent):
                 self._collector.metrics.warnings.append(event.warning_message)
                 self._collector.metrics.last_activity = datetime.now()
+
+        # Update feedback display with current metrics
+        if self._feedback is not None:
+            self._feedback.update(self._collector.metrics)
 
     def completion_detected(self) -> None:
         """Display completion signal detected message."""
