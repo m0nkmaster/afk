@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from afk.feedback import IterationMetrics, MetricsCollector
+from afk.feedback import (
+    ACTIVE_THRESHOLD,
+    THINKING_THRESHOLD,
+    ActivityState,
+    IterationMetrics,
+    MetricsCollector,
+)
 
 
 class TestIterationMetrics:
@@ -258,6 +264,83 @@ class TestMetricsCollector:
         assert collector.metrics.files_deleted == []
         # But last_activity should still be updated
         assert collector.metrics.last_activity is not None
+
+    def test_get_activity_state_returns_active_when_no_activity(self) -> None:
+        """Test get_activity_state returns 'active' when no activity recorded."""
+        collector = MetricsCollector()
+
+        state = collector.get_activity_state()
+
+        assert state == ActivityState.ACTIVE
+
+    def test_get_activity_state_returns_active_for_recent_activity(self) -> None:
+        """Test get_activity_state returns 'active' for activity within threshold."""
+        collector = MetricsCollector()
+        # Set last_activity to just now
+        collector._metrics.last_activity = datetime.now()
+
+        state = collector.get_activity_state()
+
+        assert state == ActivityState.ACTIVE
+
+    def test_get_activity_state_returns_thinking_for_medium_delay(self) -> None:
+        """Test get_activity_state returns 'thinking' for 2-10s delay."""
+        collector = MetricsCollector()
+        # Set last_activity to 5 seconds ago (between ACTIVE and THINKING thresholds)
+        collector._metrics.last_activity = datetime.now() - timedelta(seconds=5)
+
+        state = collector.get_activity_state()
+
+        assert state == ActivityState.THINKING
+
+    def test_get_activity_state_returns_stalled_for_long_delay(self) -> None:
+        """Test get_activity_state returns 'stalled' for >10s delay."""
+        collector = MetricsCollector()
+        # Set last_activity to 15 seconds ago (beyond THINKING threshold)
+        collector._metrics.last_activity = datetime.now() - timedelta(seconds=15)
+
+        state = collector.get_activity_state()
+
+        assert state == ActivityState.STALLED
+
+    def test_get_activity_state_boundary_at_active_threshold(self) -> None:
+        """Test state transitions at exactly ACTIVE_THRESHOLD."""
+        collector = MetricsCollector()
+        # Set last_activity to exactly at the threshold boundary
+        collector._metrics.last_activity = datetime.now() - timedelta(
+            seconds=ACTIVE_THRESHOLD
+        )
+
+        state = collector.get_activity_state()
+
+        # At exactly 2s, should be 'thinking' (>= threshold)
+        assert state == ActivityState.THINKING
+
+    def test_get_activity_state_boundary_at_thinking_threshold(self) -> None:
+        """Test state transitions at exactly THINKING_THRESHOLD."""
+        collector = MetricsCollector()
+        # Set last_activity to exactly at the thinking threshold boundary
+        collector._metrics.last_activity = datetime.now() - timedelta(
+            seconds=THINKING_THRESHOLD
+        )
+
+        state = collector.get_activity_state()
+
+        # At exactly 10s, should be 'stalled' (>= threshold)
+        assert state == ActivityState.STALLED
+
+    def test_activity_state_updates_after_new_activity(self) -> None:
+        """Test activity state returns to 'active' after new activity."""
+        collector = MetricsCollector()
+        # Set old activity
+        collector._metrics.last_activity = datetime.now() - timedelta(seconds=15)
+        assert collector.get_activity_state() == ActivityState.STALLED
+
+        # Record new activity
+        collector.record_tool_call("test_tool")
+
+        # Should now be active
+        assert collector.get_activity_state() == ActivityState.ACTIVE
 
 
 class TestFeedbackDisplay:
@@ -1318,3 +1401,112 @@ class TestFeedbackDisplay:
         output = capture.get()
         # "Task" panel title should not appear
         assert "Task" not in output or output.count("Task") == 0
+
+    def test_build_activity_panel_shows_working_for_active_state(self) -> None:
+        """Test _build_activity_panel shows 'Working' text for active state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        panel = display._build_activity_panel(metrics, ActivityState.ACTIVE)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Working" in output
+
+    def test_build_activity_panel_shows_thinking_for_thinking_state(self) -> None:
+        """Test _build_activity_panel shows 'Thinking' text for thinking state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        panel = display._build_activity_panel(metrics, ActivityState.THINKING)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Thinking" in output
+
+    def test_build_activity_panel_shows_stalled_for_stalled_state(self) -> None:
+        """Test _build_activity_panel shows 'Stalled' text for stalled state."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        panel = display._build_activity_panel(metrics, ActivityState.STALLED)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        assert "Stalled" in output
+
+    def test_update_accepts_activity_state_parameter(self) -> None:
+        """Test update() accepts activity_state parameter."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            metrics = IterationMetrics()
+            # Should not raise
+            display.update(metrics, activity_state=ActivityState.THINKING)
+            display.update(metrics, activity_state=ActivityState.STALLED)
+            display.update(metrics, activity_state=ActivityState.ACTIVE)
+        finally:
+            display.stop()
+
+    def test_build_minimal_bar_shows_spinner_for_stalled_state(self) -> None:
+        """Test _build_minimal_bar uses different spinner style for stalled state."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay(mode="minimal")
+        metrics = IterationMetrics()
+
+        # Get bars for different states - we mainly check they don't crash
+        bar_active = display._build_minimal_bar(metrics, ActivityState.ACTIVE)
+        bar_thinking = display._build_minimal_bar(metrics, ActivityState.THINKING)
+        bar_stalled = display._build_minimal_bar(metrics, ActivityState.STALLED)
+
+        # All should be Text objects
+        from rich.text import Text
+
+        assert isinstance(bar_active, Text)
+        assert isinstance(bar_thinking, Text)
+        assert isinstance(bar_stalled, Text)
+
+    def test_activity_state_defaults_to_active(self) -> None:
+        """Test activity_state parameter defaults to 'active'."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        metrics = IterationMetrics()
+
+        # Call without activity_state parameter
+        panel = display._build_activity_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Default should show "Working"
+        assert "Working" in output

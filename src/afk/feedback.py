@@ -14,6 +14,18 @@ from rich.text import Text
 
 from afk.art import get_spinner_frame
 
+# Activity state thresholds (in seconds)
+ACTIVE_THRESHOLD = 2.0  # Less than 2s since last activity = Active
+THINKING_THRESHOLD = 10.0  # 2-10s = Thinking, >10s = Stalled
+
+
+class ActivityState:
+    """Constants for activity states."""
+
+    ACTIVE = "active"
+    THINKING = "thinking"
+    STALLED = "stalled"
+
 
 @dataclass
 class IterationMetrics:
@@ -97,6 +109,25 @@ class MetricsCollector:
         """Clear all accumulated metrics and start fresh."""
         self._metrics = IterationMetrics()
 
+    def get_activity_state(self) -> str:
+        """Determine the current activity state based on time since last activity.
+
+        Returns:
+            Activity state: 'active' (<2s), 'thinking' (2-10s), or 'stalled' (>10s).
+            Returns 'active' if no activity has been recorded yet.
+        """
+        if self._metrics.last_activity is None:
+            return ActivityState.ACTIVE
+
+        elapsed = (datetime.now() - self._metrics.last_activity).total_seconds()
+
+        if elapsed < ACTIVE_THRESHOLD:
+            return ActivityState.ACTIVE
+        elif elapsed < THINKING_THRESHOLD:
+            return ActivityState.THINKING
+        else:
+            return ActivityState.STALLED
+
 
 class FeedbackDisplay:
     """Real-time feedback display using Rich Live panel.
@@ -159,11 +190,16 @@ class FeedbackDisplay:
             self._live.stop()
             self._started = False
 
-    def _build_panel(self, metrics: IterationMetrics | None = None) -> Panel:
+    def _build_panel(
+        self,
+        metrics: IterationMetrics | None = None,
+        activity_state: str = ActivityState.ACTIVE,
+    ) -> Panel:
         """Build the main display panel.
 
         Args:
             metrics: Optional iteration metrics to display.
+            activity_state: Current activity state ('active', 'thinking', 'stalled').
 
         Returns:
             A Rich renderable containing the feedback display.
@@ -186,7 +222,7 @@ class FeedbackDisplay:
             header.append(f"  {elapsed}", style="dim")
 
         if metrics is not None:
-            activity_panel = self._build_activity_panel(metrics)
+            activity_panel = self._build_activity_panel(metrics, activity_state)
             files_panel = self._build_files_panel(metrics)
             content = Group(header, activity_panel, files_panel)
         else:
@@ -221,11 +257,14 @@ class FeedbackDisplay:
         seconds = total_seconds % 60
         return f"{minutes:02d}:{seconds:02d}"
 
-    def _build_activity_panel(self, metrics: IterationMetrics) -> Panel:
+    def _build_activity_panel(
+        self, metrics: IterationMetrics, activity_state: str = ActivityState.ACTIVE
+    ) -> Panel:
         """Build the activity panel showing spinner, tool calls, and line changes.
 
         Args:
             metrics: The current iteration metrics.
+            activity_state: Current activity state ('active', 'thinking', 'stalled').
 
         Returns:
             A Rich Panel containing activity information.
@@ -233,10 +272,24 @@ class FeedbackDisplay:
         # Get current spinner frame
         spinner = get_spinner_frame("dots", self._spinner_frame)
 
+        # Determine spinner style and text based on activity state
+        if activity_state == ActivityState.STALLED:
+            spinner_style = "red bold"
+            state_text = "Stalled"
+            state_style = "red bold"
+        elif activity_state == ActivityState.THINKING:
+            spinner_style = "yellow bold"
+            state_text = "Thinking"
+            state_style = "yellow bold"
+        else:
+            spinner_style = "cyan bold"
+            state_text = "Working"
+            state_style = "bold"
+
         # Build activity text
         activity = Text()
-        activity.append(f"{spinner} ", style="cyan bold")
-        activity.append("Working", style="bold")
+        activity.append(f"{spinner} ", style=spinner_style)
+        activity.append(state_text, style=state_style)
 
         # Tool calls line
         tools_line = Text()
@@ -414,6 +467,7 @@ class FeedbackDisplay:
         task_id: str | None = None,
         task_description: str | None = None,
         progress: float = 0.0,
+        activity_state: str = ActivityState.ACTIVE,
     ) -> None:
         """Update the display with new metrics.
 
@@ -424,6 +478,7 @@ class FeedbackDisplay:
             task_id: ID of the current task being worked on.
             task_description: Description of the current task.
             progress: Task completion percentage (0.0 to 1.0).
+            activity_state: Current activity state ('active', 'thinking', 'stalled').
         """
         # Update iteration tracking
         self._iteration_current = iteration_current
@@ -442,17 +497,20 @@ class FeedbackDisplay:
 
         # Rebuild and update the display using appropriate mode
         if self._mode == "minimal":
-            self._live.update(self._build_minimal_bar(metrics))
+            self._live.update(self._build_minimal_bar(metrics, activity_state))
         else:
-            self._live.update(self._build_panel(metrics))
+            self._live.update(self._build_panel(metrics, activity_state))
 
-    def _build_minimal_bar(self, metrics: IterationMetrics) -> Text:
+    def _build_minimal_bar(
+        self, metrics: IterationMetrics, activity_state: str = ActivityState.ACTIVE
+    ) -> Text:
         """Build the minimal mode single-line status bar.
 
         Format: ◉ afk [x/y] mm:ss │ ⣾ N calls │ N files │ +N/-N
 
         Args:
             metrics: The current iteration metrics.
+            activity_state: Current activity state ('active', 'thinking', 'stalled').
 
         Returns:
             A Rich Text object containing the status bar.
@@ -475,9 +533,14 @@ class FeedbackDisplay:
         # Separator
         bar.append(" │ ", style="dim")
 
-        # Spinner and calls
+        # Spinner with colour based on activity state
         spinner = get_spinner_frame("dots", self._spinner_frame)
-        bar.append(f"{spinner} ", style="cyan bold")
+        if activity_state == ActivityState.STALLED:
+            bar.append(f"{spinner} ", style="red bold")
+        elif activity_state == ActivityState.THINKING:
+            bar.append(f"{spinner} ", style="yellow bold")
+        else:
+            bar.append(f"{spinner} ", style="cyan bold")
         bar.append(f"{metrics.tool_calls} calls", style="yellow")
 
         # Separator
