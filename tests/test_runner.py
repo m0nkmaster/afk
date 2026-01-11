@@ -793,6 +793,51 @@ class TestOutputHandlerFeedbackIntegration:
         # Should not raise, even with no display
         handler.stop_feedback()
 
+    def test_feedback_lifecycle_start_stream_stop(self) -> None:
+        """Test complete feedback lifecycle: start, stream lines, stop."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        with patch.object(handler._feedback, "start") as mock_start:
+            with patch.object(handler._feedback, "update") as mock_update:
+                with patch.object(handler._feedback, "stop") as mock_stop:
+                    # Start feedback for iteration
+                    handler.start_feedback()
+                    mock_start.assert_called_once()
+
+                    # Stream some lines during iteration
+                    handler.stream_line("Calling tool: write_file\n")
+                    handler.stream_line("Edited src/main.py\n")
+                    assert mock_update.call_count >= 2
+
+                    # Stop feedback after iteration
+                    handler.stop_feedback()
+                    mock_stop.assert_called_once()
+
+    def test_feedback_reset_between_iterations(self) -> None:
+        """Test feedback state is reset between iteration starts."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        # Simulate first iteration
+        handler.start_feedback()
+        handler.stream_line("Edited file1.py\n")
+        handler.stop_feedback()
+
+        # Record metrics from first iteration
+        first_modified = len(handler.metrics_collector.metrics.files_modified)
+        assert first_modified > 0
+
+        # Simulate second iteration - recorded_paths should be cleared
+        handler.start_feedback()
+        assert len(handler._recorded_paths) == 0
+
+        handler.stop_feedback()
+
     def test_stream_line_updates_feedback(self) -> None:
         """Test stream_line() updates feedback display with metrics."""
         from afk.runner import OutputHandler
@@ -808,6 +853,42 @@ class TestOutputHandlerFeedbackIntegration:
         call_args = mock_update.call_args
         metrics = call_args[0][0]  # First positional argument
         assert metrics is handler.metrics_collector.metrics
+
+    def test_stream_line_parses_tool_call_and_records_metrics(self) -> None:
+        """Test stream_line() parses tool calls and records them in metrics."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+
+        # Claude Code style tool call
+        handler.stream_line("Calling tool: write_file\n")
+
+        metrics = handler.metrics_collector.metrics
+        assert metrics.tool_calls > 0
+
+    def test_stream_line_parses_file_change_and_records_metrics(self) -> None:
+        """Test stream_line() parses file changes and records them in metrics."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+
+        # Cursor style file edit pattern
+        handler.stream_line("Edited src/example.py\n")
+
+        metrics = handler.metrics_collector.metrics
+        assert len(metrics.files_modified) > 0
+        assert "src/example.py" in metrics.files_modified
+
+    def test_stream_line_parses_error_and_records_metrics(self) -> None:
+        """Test stream_line() parses errors and records them in metrics."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+
+        handler.stream_line("Error: Something went wrong\n")
+
+        metrics = handler.metrics_collector.metrics
+        assert len(metrics.errors) > 0
 
     def test_stream_line_no_update_when_disabled(self) -> None:
         """Test stream_line() doesn't update feedback when disabled."""
