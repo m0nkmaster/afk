@@ -727,3 +727,120 @@ class TestFeedbackDisplay:
         # Tool counts should be different in each output
         assert "1" in output1
         assert "10" in output2
+
+    def test_update_with_iteration_info(self) -> None:
+        """Test update() accepts iteration_current and iteration_total."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            metrics = IterationMetrics()
+            display.update(metrics, iteration_current=3, iteration_total=10)
+
+            # Should store the iteration info for header display
+            assert display._iteration_current == 3
+            assert display._iteration_total == 10
+        finally:
+            display.stop()
+
+    def test_build_panel_shows_iteration_count(self) -> None:
+        """Test _build_panel header includes iteration x/y format."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._iteration_current = 5
+        display._iteration_total = 20
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should show "Iteration 5/20" or similar format
+        assert "5/20" in output or ("5" in output and "20" in output)
+
+    def test_start_time_tracking(self) -> None:
+        """Test start() sets start_time for elapsed time calculation."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        assert display._start_time is None
+
+        display.start()
+
+        try:
+            assert display._start_time is not None
+            assert isinstance(display._start_time, datetime)
+        finally:
+            display.stop()
+
+    def test_build_panel_shows_elapsed_time(self) -> None:
+        """Test _build_panel header includes elapsed time in mm:ss format."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        # Manually set start_time for predictable test
+        display._start_time = datetime.now()
+        display._iteration_current = 1
+        display._iteration_total = 5
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=80)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should contain time in format like "00:00" or "0:00"
+        assert ":" in output  # Time separator should be present
+
+    def test_header_format(self) -> None:
+        """Test header follows expected format: ◉ afk running ... Iteration x/y mm:ss."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display._start_time = datetime.now()
+        display._iteration_current = 2
+        display._iteration_total = 8
+        metrics = IterationMetrics()
+
+        panel = display._build_panel(metrics)
+
+        console = Console(force_terminal=True, width=100)
+        with console.capture() as capture:
+            console.print(panel)
+
+        output = capture.get()
+        # Should contain key elements
+        assert "afk" in output.lower()
+        assert "2/8" in output or "2 / 8" in output
+
+    def test_update_without_iteration_params_uses_defaults(self) -> None:
+        """Test update() works without iteration parameters using defaults."""
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        display.start()
+
+        try:
+            metrics = IterationMetrics()
+            # Call update without iteration params - should not crash
+            display.update(metrics)
+
+            # Defaults should be 0/0 or similar
+            assert display._iteration_current == 0
+            assert display._iteration_total == 0
+        finally:
+            display.stop()

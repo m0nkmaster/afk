@@ -110,6 +110,9 @@ class FeedbackDisplay:
         self._live: Live | None = None
         self._started = False
         self._spinner_frame: int = 0
+        self._start_time: datetime | None = None
+        self._iteration_current: int = 0
+        self._iteration_total: int = 0
 
     def start(self) -> None:
         """Start the live display context.
@@ -120,6 +123,7 @@ class FeedbackDisplay:
         if self._started:
             return
 
+        self._start_time = datetime.now()
         self._live = Live(
             self._build_panel(),
             console=self._console,
@@ -153,6 +157,18 @@ class FeedbackDisplay:
         header.append("afk", style="bold cyan")
         header.append(" running...", style="dim")
 
+        # Add iteration info and elapsed time if available
+        if self._iteration_total > 0:
+            header.append(
+                f"  Iteration {self._iteration_current}/{self._iteration_total}",
+                style="cyan",
+            )
+
+        # Add elapsed time
+        elapsed = self._format_elapsed_time()
+        if elapsed:
+            header.append(f"  {elapsed}", style="dim")
+
         if metrics is not None:
             activity_panel = self._build_activity_panel(metrics)
             files_panel = self._build_files_panel(metrics)
@@ -168,6 +184,21 @@ class FeedbackDisplay:
             title="[bold]afk[/bold]",
             border_style="cyan",
         )
+
+    def _format_elapsed_time(self) -> str:
+        """Format elapsed time since start as mm:ss.
+
+        Returns:
+            Formatted time string, or empty string if start_time not set.
+        """
+        if self._start_time is None:
+            return ""
+
+        elapsed = datetime.now() - self._start_time
+        total_seconds = int(elapsed.total_seconds())
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        return f"{minutes:02d}:{seconds:02d}"
 
     def _build_activity_panel(self, metrics: IterationMetrics) -> Panel:
         """Build the activity panel showing spinner, tool calls, and line changes.
@@ -304,12 +335,23 @@ class FeedbackDisplay:
         else:
             return ".../" + filename
 
-    def update(self, metrics: IterationMetrics) -> None:
+    def update(
+        self,
+        metrics: IterationMetrics,
+        iteration_current: int = 0,
+        iteration_total: int = 0,
+    ) -> None:
         """Update the display with new metrics.
 
         Args:
             metrics: The current iteration metrics.
+            iteration_current: Current iteration number (1-indexed).
+            iteration_total: Total number of iterations planned.
         """
+        # Update iteration tracking
+        self._iteration_current = iteration_current
+        self._iteration_total = iteration_total
+
         if self._live is None or not self._started:
             return
 
