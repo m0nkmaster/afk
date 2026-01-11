@@ -77,6 +77,17 @@ class ArchiveConfig(BaseModel):
     on_branch_change: bool = True
 
 
+class FeedbackConfig(BaseModel):
+    """Configuration for feedback display settings."""
+
+    enabled: bool = True
+    mode: Literal["full", "minimal", "off"] = "full"
+    show_files: bool = True
+    show_metrics: bool = True
+    show_mascot: bool = True
+    refresh_rate: float = 0.1
+
+
 class AfkConfig(BaseModel):
     """Main configuration for afk."""
 
@@ -88,6 +99,7 @@ class AfkConfig(BaseModel):
     prompt: PromptConfig = Field(default_factory=PromptConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     archive: ArchiveConfig = Field(default_factory=ArchiveConfig)
+    feedback: FeedbackConfig = Field(default_factory=FeedbackConfig)
 
     @classmethod
     def load(cls, path: Path | None = None) -> AfkConfig:

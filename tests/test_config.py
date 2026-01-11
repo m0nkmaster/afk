@@ -14,6 +14,7 @@ from afk.config import (
     AfkConfig,
     AiCliConfig,
     ArchiveConfig,
+    FeedbackConfig,
     FeedbackLoopsConfig,
     GitConfig,
     LimitsConfig,
@@ -183,6 +184,7 @@ class TestAfkConfig:
         assert isinstance(config.prompt, PromptConfig)
         assert isinstance(config.git, GitConfig)
         assert isinstance(config.archive, ArchiveConfig)
+        assert isinstance(config.feedback, FeedbackConfig)
 
     def test_load_missing_file(self, temp_project: Path) -> None:
         """Test loading returns defaults when file doesn't exist."""
@@ -300,6 +302,56 @@ class TestArchiveConfig:
         assert config.enabled is False
         assert config.directory == ".archive"
         assert config.on_branch_change is False
+
+
+class TestFeedbackConfig:
+    """Tests for FeedbackConfig model."""
+
+    def test_defaults(self) -> None:
+        """Test default values are sensible."""
+        config = FeedbackConfig()
+        assert config.enabled is True
+        assert config.mode == "full"
+        assert config.show_files is True
+        assert config.show_metrics is True
+        assert config.show_mascot is True
+        assert config.refresh_rate == 0.1
+
+    def test_minimal_mode(self) -> None:
+        """Test minimal mode configuration."""
+        config = FeedbackConfig(mode="minimal")
+        assert config.mode == "minimal"
+
+    def test_off_mode(self) -> None:
+        """Test off mode configuration."""
+        config = FeedbackConfig(mode="off")
+        assert config.mode == "off"
+
+    def test_disabled(self) -> None:
+        """Test feedback disabled."""
+        config = FeedbackConfig(enabled=False)
+        assert config.enabled is False
+
+    def test_custom_refresh_rate(self) -> None:
+        """Test custom refresh rate."""
+        config = FeedbackConfig(refresh_rate=0.5)
+        assert config.refresh_rate == 0.5
+
+    def test_hide_panels(self) -> None:
+        """Test hiding individual panels."""
+        config = FeedbackConfig(
+            show_files=False,
+            show_metrics=False,
+            show_mascot=False,
+        )
+        assert config.show_files is False
+        assert config.show_metrics is False
+        assert config.show_mascot is False
+
+    def test_invalid_mode_rejected(self) -> None:
+        """Test that invalid mode values are rejected."""
+        with pytest.raises(Exception):
+            FeedbackConfig(mode="invalid")  # type: ignore[arg-type]
 
 
 class TestModulePaths:
