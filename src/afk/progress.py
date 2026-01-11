@@ -23,6 +23,8 @@ class TaskProgress(BaseModel):
     failure_count: int = 0
     commits: list[str] = Field(default_factory=list)
     message: str | None = None
+    learnings: list[str] = Field(default_factory=list)
+    """Short-term learnings specific to this task, discovered during this session."""
 
 
 class SessionProgress(BaseModel):
@@ -106,6 +108,32 @@ class SessionProgress(BaseModel):
         if not self.tasks:
             return False
         return all(t.status in ("completed", "skipped") for t in self.tasks.values())
+
+    def add_learning(self, task_id: str, learning: str, source: str = "unknown") -> None:
+        """Add a learning to a specific task.
+
+        Args:
+            task_id: The task ID to add the learning to
+            learning: The learning content
+            source: Source of the task (used if task doesn't exist yet)
+        """
+        if task_id not in self.tasks:
+            self.tasks[task_id] = TaskProgress(id=task_id, source=source)
+
+        self.tasks[task_id].learnings.append(learning)
+        self.save()
+
+    def get_all_learnings(self) -> dict[str, list[str]]:
+        """Get all learnings grouped by task ID.
+
+        Returns:
+            Dict mapping task IDs to their learnings lists
+        """
+        return {
+            task_id: task.learnings
+            for task_id, task in self.tasks.items()
+            if task.learnings
+        }
 
 
 def mark_complete(task_id: str, message: str | None = None) -> bool:

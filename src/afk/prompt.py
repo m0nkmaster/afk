@@ -5,7 +5,6 @@ from __future__ import annotations
 from jinja2 import BaseLoader, Environment
 
 from afk.config import AfkConfig
-from afk.learnings import get_recent_learnings
 from afk.prd_store import all_stories_complete, get_pending_stories, load_prd
 from afk.progress import SessionProgress
 
@@ -16,27 +15,24 @@ You are an autonomous coding agent working on a software project.
 
 ## Your Task
 
-1. Read the PRD at `.afk/prd.json`
-2. Check you're on the correct branch from PRD `branchName`. If not, check it out or create from main.
-3. Pick the **highest priority** user story where `passes: false`
-4. Implement that single user story according to its `acceptanceCriteria`
-5. Run quality checks (see below)
-6. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
-7. Update `.afk/prd.json` to set `passes: true` for the completed story
-8. Record learnings (see below)
+1. Read `.afk/progress.json` for session state and prior learnings
+2. Read `.afk/prd.json` for the task list
+3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create.
+4. Pick the **highest priority** user story where `passes: false`
+5. Implement that single user story according to its `acceptanceCriteria`
+6. Run quality checks (see below)
+7. If checks pass, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
+8. Update `.afk/prd.json` to set `passes: true` for the completed story
+9. Record learnings (see below)
 
-## Context Files
+## Key Files
+
+- `.afk/progress.json` - Session state with per-task learnings (short-term memory)
+- `.afk/prd.json` - Task list with priorities and acceptance criteria
+- `AGENTS.md` - Project-wide conventions and patterns (long-term memory)
 {% for file in context_files -%}
-@{{ file }}
+- `{{ file }}`
 {% endfor %}
-{% if learnings %}
-
-## Session Learnings
-
-Previous discoveries from this session (read carefully to avoid repeating mistakes):
-
-{{ learnings }}
-{% endif %}
 
 ## Progress
 - Iteration: {{ iteration }}/{{ max_iterations }}
@@ -55,16 +51,39 @@ Before marking complete, ALL must pass:
 Run whatever quality checks your project requires (typecheck, lint, test).
 {% endif %}
 
-## Record Learnings
+## Recording Learnings
 
-After completing a story, record useful discoveries:
+As you work, record discoveries appropriately:
 
-1. **Append to `.afk/learnings.txt`**:
-   - Patterns discovered ("this codebase uses X for Y")
-   - Gotchas encountered ("don't forget to update Z when changing W")
-   - Useful context ("the settings panel is in component X")
+### Short-term: `.afk/progress.json`
 
-2. **Update AGENTS.md** if you discovered conventions, patterns, or gotchas that would help future sessions.
+Add task-specific learnings to the `learnings` array for that task's entry:
+- Gotchas specific to this task
+- Context needed for related work
+- Why certain approaches didn't work
+
+Example structure:
+```json
+{
+  "tasks": {
+    "auth-login": {
+      "learnings": [
+        "OAuth tokens stored in secure cookies, not localStorage",
+        "Must call refreshToken before API requests if >30min old"
+      ]
+    }
+  }
+}
+```
+
+### Long-term: `AGENTS.md`
+
+Update `AGENTS.md` for discoveries that benefit future sessions:
+- Project conventions and patterns
+- Architectural decisions
+- Gotchas that affect the whole codebase
+
+If working deep in a subfolder with its own concerns, create a local `AGENTS.md` there instead.
 
 {% for instruction in custom_instructions -%}
 - {{ instruction }}
@@ -77,7 +96,7 @@ After completing a user story, check if ALL stories have `passes: true` in `.afk
 If ALL stories are complete and passing, reply with:
 <promise>COMPLETE</promise>
 
-If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+If there are still stories with `passes: false`, end your response normally.
 
 {% if bootstrap -%}
 ## Autonomous Loop
@@ -99,7 +118,7 @@ def generate_prompt(
     limit_override: int | None = None,
 ) -> str:
     """Generate the prompt for the next iteration.
-    
+
     Note: Limit checking is handled by the loop controller, not here.
     This function only checks for story completion to include the stop signal.
     """
@@ -142,9 +161,6 @@ def generate_prompt(
     env = Environment(loader=BaseLoader())
     template = env.from_string(template_str)
 
-    # Load recent learnings
-    learnings = get_recent_learnings(max_chars=2000)
-
     # Get next story for context
     next_story = pending_stories[0] if pending_stories else None
 
@@ -159,7 +175,6 @@ def generate_prompt(
         "custom_instructions": config.prompt.instructions,
         "bootstrap": bootstrap,
         "stop_signal": stop_signal,
-        "learnings": learnings,
     }
 
     return template.render(**context)
@@ -189,12 +204,8 @@ _MINIMAL_TEMPLATE = """\
 {% if stop_signal -%}
 {{ stop_signal }}
 {% else -%}
-{% if learnings -%}
-## Learnings
-{{ learnings }}
-
-{% endif -%}
-Read `.afk/prd.json` → pick highest priority story where `passes: false` → implement according to `acceptanceCriteria` → run quality gates → set `passes: true` → commit.
+Read `.afk/progress.json` for learnings → `.afk/prd.json` for tasks → implement highest priority \
+`passes: false` story → run quality gates → set `passes: true` → commit → record learnings.
 
 If all stories pass, reply with: <promise>COMPLETE</promise>
 {% endif %}

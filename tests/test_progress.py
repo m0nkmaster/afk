@@ -28,6 +28,7 @@ class TestTaskProgress:
         assert task.failure_count == 0
         assert task.commits == []
         assert task.message is None
+        assert task.learnings == []
 
     def test_all_fields(self) -> None:
         """Test all fields populated."""
@@ -190,6 +191,53 @@ class TestSessionProgress:
         session.tasks["t1"] = TaskProgress(id="t1", source="test", status="completed")
         session.tasks["t2"] = TaskProgress(id="t2", source="test", status="pending")
         assert session.is_complete() is False
+
+    def test_add_learning_new_task(self, temp_afk_dir: Path) -> None:
+        """Test adding a learning creates task if needed."""
+        progress_path = temp_afk_dir / "progress.json"
+        session = SessionProgress()
+        session.save(progress_path)
+
+        session.add_learning("new-task", "Discovered pattern X", source="test")
+
+        assert "new-task" in session.tasks
+        assert session.tasks["new-task"].learnings == ["Discovered pattern X"]
+
+    def test_add_learning_existing_task(self, temp_afk_dir: Path) -> None:
+        """Test adding a learning to existing task appends."""
+        progress_path = temp_afk_dir / "progress.json"
+        session = SessionProgress()
+        session.tasks["task-1"] = TaskProgress(id="task-1", source="test")
+        session.tasks["task-1"].learnings = ["First learning"]
+        session.save(progress_path)
+
+        session.add_learning("task-1", "Second learning")
+
+        assert session.tasks["task-1"].learnings == ["First learning", "Second learning"]
+
+    def test_get_all_learnings(self) -> None:
+        """Test getting all learnings grouped by task."""
+        session = SessionProgress()
+        session.tasks["t1"] = TaskProgress(id="t1", source="test")
+        session.tasks["t1"].learnings = ["Learning A", "Learning B"]
+        session.tasks["t2"] = TaskProgress(id="t2", source="test")
+        session.tasks["t2"].learnings = ["Learning C"]
+        session.tasks["t3"] = TaskProgress(id="t3", source="test")
+        # t3 has no learnings
+
+        all_learnings = session.get_all_learnings()
+
+        assert len(all_learnings) == 2  # t3 excluded
+        assert all_learnings["t1"] == ["Learning A", "Learning B"]
+        assert all_learnings["t2"] == ["Learning C"]
+
+    def test_get_all_learnings_empty(self) -> None:
+        """Test getting learnings when none exist."""
+        session = SessionProgress()
+        session.tasks["t1"] = TaskProgress(id="t1", source="test")
+
+        all_learnings = session.get_all_learnings()
+        assert all_learnings == {}
 
 
 class TestMarkComplete:

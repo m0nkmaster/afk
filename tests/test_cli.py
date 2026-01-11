@@ -597,31 +597,6 @@ class TestArchiveCommands:
         assert "No active session" in result.output
 
 
-class TestLearnCommand:
-    """Tests for learn command."""
-
-    def test_learn_records_learning(self, cli_runner: CliRunner, initialized_project: Path) -> None:
-        """Test learn records a learning."""
-        result = cli_runner.invoke(main, ["learn", "This is a discovery"])
-        assert result.exit_code == 0
-        assert "Learning recorded" in result.output
-
-        # Verify it was saved
-        learnings_file = initialized_project / ".afk" / "learnings.txt"
-        assert learnings_file.exists()
-        assert "This is a discovery" in learnings_file.read_text()
-
-    def test_learn_with_task_id(self, cli_runner: CliRunner, initialized_project: Path) -> None:
-        """Test learn with associated task ID."""
-        result = cli_runner.invoke(main, ["learn", "Gotcha found", "--task", "auth-login"])
-        assert result.exit_code == 0
-
-        learnings_file = initialized_project / ".afk" / "learnings.txt"
-        content = learnings_file.read_text()
-        assert "[auth-login]" in content
-        assert "Gotcha found" in content
-
-
 class TestResetCommand:
     """Tests for reset command."""
 
@@ -671,8 +646,11 @@ class TestExplainCommand:
 
     def test_explain_verbose(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test explain with --verbose flag."""
-        # Add a learning first
-        cli_runner.invoke(main, ["learn", "Test learning"])
+        # Add a learning to a task via progress.json
+        from afk.progress import SessionProgress
+
+        progress = SessionProgress.load()
+        progress.add_learning("task-1", "Test learning", source="test")
 
         result = cli_runner.invoke(main, ["explain", "-v"])
         assert result.exit_code == 0

@@ -118,7 +118,6 @@ class AfkConfig(BaseModel):
 AFK_DIR = Path(".afk")
 CONFIG_FILE = AFK_DIR / "config.json"
 PROGRESS_FILE = AFK_DIR / "progress.json"
-LEARNINGS_FILE = AFK_DIR / "learnings.txt"
 PROMPT_FILE = AFK_DIR / "prompt.md"
 PRD_FILE = AFK_DIR / "prd.json"
 ARCHIVE_DIR = AFK_DIR / "archive"

@@ -84,8 +84,7 @@ src/afk/
 ├── cli.py           # Click CLI - commands and argument handling
 ├── config.py        # Pydantic models for .afk/config.json
 ├── bootstrap.py     # Project analysis and auto-configuration
-├── progress.py      # Session and task progress tracking
-├── learnings.py     # Append-only learnings file management
+├── progress.py      # Session and task progress tracking (includes per-task learnings)
 ├── prompt.py        # Jinja2 prompt generation
 ├── output.py        # Output handlers (clipboard, file, stdout)
 ├── prd.py           # PRD parsing prompt generation
@@ -103,12 +102,12 @@ src/afk/
 
 - **Config**: All settings in `.afk/config.json`, loaded via Pydantic models
 - **PRD File**: `.afk/prd.json` is the working task list; used directly if no sources configured
-- **Progress**: Session state in `.afk/progress.json`, tracks iterations and task status
-- **Learnings**: Append-only discoveries in `.afk/learnings.txt`, survives session clears
+- **Progress**: Session state in `.afk/progress.json`, tracks iterations, task status, and per-task learnings (short-term memory)
+- **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
 - **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into prd.json
 - **Prompts**: Jinja2 templates, customizable via config
 - **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
-- **Fresh Context**: Each iteration gets clean context; memory persists via git + progress + learnings
+- **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
 - **Archiving**: Sessions archived on completion, branch change, or manually
 
@@ -120,7 +119,6 @@ afk go 20              # Run 20 iterations
 afk start              # Init if needed + run loop
 afk run N              # Run N iterations
 afk explain            # Debug current loop state
-afk learn "discovery"  # Record a learning
 afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task

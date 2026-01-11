@@ -10,7 +10,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from afk import __version__
-from afk.config import AFK_DIR, CONFIG_FILE, LEARNINGS_FILE, AfkConfig
+from afk.config import AFK_DIR, CONFIG_FILE, AfkConfig
 
 console = Console()
 
@@ -673,31 +673,6 @@ def fail(ctx: click.Context, task_id: str, message: str | None) -> None:
 
 
 @main.command()
-@click.argument("content")
-@click.option("--task", "-t", help="Associate learning with a task ID")
-def learn(content: str, task: str | None) -> None:
-    """Record a learning for future iterations.
-
-    Learnings persist across sessions and are included in every prompt.
-    Use this to record patterns, gotchas, and discoveries.
-
-    Examples:
-
-        afk learn "This codebase uses factory pattern for services"
-
-        afk learn "Must run migrations before tests" --task db-setup
-    """
-    from afk.learnings import append_learning
-
-    append_learning(content, task_id=task)
-    console.print("[green]Learning recorded.[/green]")
-
-    if LEARNINGS_FILE.exists():
-        line_count = len(LEARNINGS_FILE.read_text().strip().split("\n"))
-        console.print(f"[dim]Total learnings: {line_count} lines[/dim]")
-
-
-@main.command()
 @click.argument("task_id")
 @click.pass_context
 def reset(ctx: click.Context, task_id: str) -> None:
@@ -740,7 +715,6 @@ def explain(ctx: click.Context, verbose: bool) -> None:
 
     Shows what task would be selected next, why, and session statistics.
     """
-    from afk.learnings import load_learnings
     from afk.prd_store import UserStory, load_prd
     from afk.progress import SessionProgress
     from afk.sources import aggregate_tasks
@@ -803,15 +777,19 @@ def explain(ctx: click.Context, verbose: bool) -> None:
     else:
         console.print("  [green]All tasks complete![/green]")
 
-    # Learnings
-    learnings = load_learnings()
-    if learnings:
+    # Task learnings
+    all_learnings = progress.get_all_learnings()
+    if all_learnings:
         console.print()
-        console.print(f"  [cyan]Learnings:[/cyan] {len(learnings)} chars")
+        total_learnings = sum(len(items) for items in all_learnings.values())
+        console.print(
+            f"  [cyan]Learnings:[/cyan] {total_learnings} across {len(all_learnings)} tasks"
+        )
         if verbose:
-            console.print()
-            recent = learnings[-500:] if len(learnings) > 500 else learnings
-            console.print(Panel(recent, title="Recent Learnings"))
+            for task_id, task_learnings in all_learnings.items():
+                console.print(f"    [bold]{task_id}:[/bold]")
+                for learning in task_learnings:
+                    console.print(f"      - {learning}")
 
     # Failed tasks detail
     if verbose and failed_tasks:

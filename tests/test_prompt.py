@@ -85,13 +85,14 @@ class TestGeneratePrompt:
     def test_prompt_includes_context_files(self, temp_afk_dir: Path) -> None:
         """Test that context files are included in prompt."""
         config = AfkConfig(
-            prompt=PromptConfig(context_files=["AGENTS.md", "README.md"]),
+            prompt=PromptConfig(context_files=["README.md", "docs/CONTRIBUTING.md"]),
         )
         config.save()
 
         prompt = generate_prompt(config)
-        assert "@AGENTS.md" in prompt
-        assert "@README.md" in prompt
+        # Context files are listed in Key Files section with backtick format
+        assert "`README.md`" in prompt
+        assert "`docs/CONTRIBUTING.md`" in prompt
 
     def test_prompt_includes_feedback_loops(self, temp_afk_dir: Path) -> None:
         """Test that feedback loops are included."""
@@ -199,7 +200,7 @@ class TestGeneratePrompt:
 
     def test_no_stop_signal_for_limits(self, temp_afk_dir: Path) -> None:
         """Test that prompt does NOT include limit signals.
-        
+
         Limit checking is handled by the loop controller, not the prompt.
         This follows the Ralph pattern where the harness controls iterations
         and the AI only knows about task completion.
@@ -280,7 +281,7 @@ class TestDefaultTemplate:
 
     def test_template_has_required_sections(self) -> None:
         """Test template has all required sections."""
-        assert "## Context Files" in DEFAULT_TEMPLATE
+        assert "## Key Files" in DEFAULT_TEMPLATE
         assert "## Your Task" in DEFAULT_TEMPLATE
         assert "## Progress" in DEFAULT_TEMPLATE
         assert "prd.json" in DEFAULT_TEMPLATE
@@ -296,7 +297,14 @@ class TestDefaultTemplate:
         assert "## STOP" in DEFAULT_TEMPLATE
 
     def test_template_follows_ralph_pattern(self) -> None:
-        """Test template instructs AI to read prd.json directly."""
-        assert "Read the PRD at `.afk/prd.json`" in DEFAULT_TEMPLATE
+        """Test template instructs AI to read prd.json and progress.json directly."""
+        assert "`.afk/prd.json`" in DEFAULT_TEMPLATE
+        assert "`.afk/progress.json`" in DEFAULT_TEMPLATE
         assert "`passes: true`" in DEFAULT_TEMPLATE
         assert "<promise>COMPLETE</promise>" in DEFAULT_TEMPLATE
+
+    def test_template_has_learnings_instructions(self) -> None:
+        """Test template instructs AI on recording learnings."""
+        assert "## Recording Learnings" in DEFAULT_TEMPLATE
+        assert "progress.json" in DEFAULT_TEMPLATE
+        assert "AGENTS.md" in DEFAULT_TEMPLATE

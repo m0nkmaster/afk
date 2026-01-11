@@ -67,9 +67,8 @@ A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs yo
 **Key principle**: Each iteration spawns a **fresh AI instance** with clean context. Memory persists only through:
 
 - **Git history** - Commits from previous iterations
-- **learnings.txt** - Append-only discoveries and gotchas
-- **progress.json** - Which tasks are done
-- **AGENTS.md** - Long-term project knowledge
+- **progress.json** - Task status and per-task learnings (short-term memory)
+- **AGENTS.md** - Project-wide conventions and patterns (long-term memory)
 
 ## Quick Start
 
@@ -131,13 +130,6 @@ afk done <task-id>         # Mark task complete
 afk done <id> -m "msg"     # With completion message
 afk fail <task-id>         # Mark task failed
 afk reset <task-id>        # Reset stuck task to pending
-```
-
-### Learnings
-
-```bash
-afk learn "discovery"      # Record a learning
-afk learn "gotcha" -t id   # Associate with task
 ```
 
 ### Debugging
@@ -262,9 +254,10 @@ pytest -x
 ### Inspect files
 
 ```bash
-cat .afk/progress.json     # Task completion state
-cat .afk/learnings.txt     # Session discoveries
+cat .afk/progress.json     # Task status and per-task learnings
 cat .afk/config.json       # Configuration
+cat .afk/prd.json          # Current task list
+cat AGENTS.md              # Long-term project knowledge
 ls .afk/archive/           # Previous sessions
 ```
 
