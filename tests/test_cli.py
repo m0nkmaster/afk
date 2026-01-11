@@ -352,9 +352,7 @@ class TestVerifyCommand:
         assert result.exit_code == 0
         assert "All quality gates passed" in result.output
 
-    def test_verify_partial_failure(
-        self, cli_runner: CliRunner, initialized_project: Path
-    ) -> None:
+    def test_verify_partial_failure(self, cli_runner: CliRunner, initialized_project: Path) -> None:
         """Test verify reports which gates failed when some pass and some fail."""
         config_path = initialized_project / ".afk" / "config.json"
         config = json.loads(config_path.read_text())

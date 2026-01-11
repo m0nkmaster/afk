@@ -59,12 +59,7 @@ class PrdDocument:
         - items (legacy)
         """
         # Support multiple key names for stories
-        story_data = (
-            data.get("userStories")
-            or data.get("tasks")
-            or data.get("items")
-            or []
-        )
+        story_data = data.get("userStories") or data.get("tasks") or data.get("items") or []
 
         stories = []
         for item in story_data:

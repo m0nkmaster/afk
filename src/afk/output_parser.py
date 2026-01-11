@@ -126,17 +126,13 @@ class OutputParser:
     # Python Traceback header
     _TRACEBACK_HEADER = re.compile(r"Traceback \(most recent call last\):")
     # Python exception types (e.g., ValueError: message)
-    _PYTHON_EXCEPTION = re.compile(
-        r"([A-Z][a-zA-Z]*(?:Error|Exception)):\s*(.+)"
-    )
+    _PYTHON_EXCEPTION = re.compile(r"([A-Z][a-zA-Z]*(?:Error|Exception)):\s*(.+)")
 
     # Warning patterns - detect various warning indicators
     # Generic Warning: prefix (case insensitive)
     _WARNING_PREFIX = re.compile(r"(?:^|[\[\]\s])(?:Warning|WARNING):\s*(.+)", re.IGNORECASE)
     # Python warning types (e.g., DeprecationWarning: message)
-    _PYTHON_WARNING = re.compile(
-        r"([A-Z][a-zA-Z]*Warning):\s*(.+)"
-    )
+    _PYTHON_WARNING = re.compile(r"([A-Z][a-zA-Z]*Warning):\s*(.+)")
 
     def parse(self, line: str) -> list[Event]:
         """Parse a line of AI output and return detected events.

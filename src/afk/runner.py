@@ -23,7 +23,15 @@ from rich.console import Console
 from rich.panel import Panel
 
 from afk.config import AfkConfig, FeedbackLoopsConfig
+from afk.feedback import MetricsCollector
 from afk.git_ops import archive_session, clear_session, create_branch
+from afk.output_parser import (
+    ErrorEvent,
+    FileChangeEvent,
+    OutputParser,
+    ToolCallEvent,
+    WarningEvent,
+)
 from afk.prd_store import (
     PrdDocument,
     UserStory,
@@ -93,6 +101,8 @@ class OutputHandler:
     """Handles console output and completion signal detection.
 
     Encapsulates all Rich console interactions and signal detection logic.
+    Also integrates OutputParser and MetricsCollector for real-time
+    metrics tracking during iteration output streaming.
     """
 
     def __init__(
@@ -108,6 +118,18 @@ class OutputHandler:
         """
         self.console = console or Console()
         self.signals = completion_signals or COMPLETION_SIGNALS
+        self._parser = OutputParser()
+        self._collector = MetricsCollector()
+
+    @property
+    def metrics_collector(self) -> MetricsCollector:
+        """Access the metrics collector for reading accumulated metrics."""
+        return self._collector
+
+    @property
+    def output_parser(self) -> OutputParser:
+        """Access the output parser for external use if needed."""
+        return self._parser
 
     def contains_completion_signal(self, output: str | None) -> bool:
         """Check if output contains any completion signal."""
@@ -128,8 +150,30 @@ class OutputHandler:
         self.console.print()
 
     def stream_line(self, line: str) -> None:
-        """Output a streamed line."""
+        """Output a streamed line and parse for metrics events.
+
+        Parses the line through OutputParser and records any detected
+        events (tool calls, file changes, errors, warnings) in the
+        MetricsCollector.
+
+        Args:
+            line: A line of output from the AI CLI.
+        """
         self.console.print(line, end="")
+
+        # Parse line and record events in metrics collector
+        events = self._parser.parse(line)
+        for event in events:
+            if isinstance(event, ToolCallEvent):
+                self._collector.record_tool_call(event.tool_name)
+            elif isinstance(event, FileChangeEvent):
+                self._collector.record_file_change(event.file_path, event.change_type)
+            elif isinstance(event, ErrorEvent):
+                self._collector.metrics.errors.append(event.error_message)
+                self._collector.metrics.last_activity = datetime.now()
+            elif isinstance(event, WarningEvent):
+                self._collector.metrics.warnings.append(event.warning_message)
+                self._collector.metrics.last_activity = datetime.now()
 
     def completion_detected(self) -> None:
         """Display completion signal detected message."""
@@ -702,8 +746,7 @@ class LoopController:
         # Find stories that newly passed
         old_passed_ids = {s.id for s in old_prd.userStories if s.passes}
         newly_completed = [
-            s for s in new_prd.userStories
-            if s.passes and s.id not in old_passed_ids
+            s for s in new_prd.userStories if s.passes and s.id not in old_passed_ids
         ]
 
         if newly_completed:

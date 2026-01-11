@@ -224,9 +224,7 @@ class FeedbackDisplay:
 
         # Files touched count (modified + created + deleted)
         files_touched = (
-            len(metrics.files_modified)
-            + len(metrics.files_created)
-            + len(metrics.files_deleted)
+            len(metrics.files_modified) + len(metrics.files_created) + len(metrics.files_deleted)
         )
         files_line = Text()
         files_line.append("  Files: ", style="dim")

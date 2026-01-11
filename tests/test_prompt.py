@@ -125,9 +125,7 @@ class TestGeneratePrompt:
 
         # Need pending stories to not get AFK_COMPLETE
         prd = PrdDocument(
-            userStories=[
-                UserStory(id="task-1", title="Test", description="Test", passes=False)
-            ]
+            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
         )
         save_prd(prd)
 
@@ -210,9 +208,7 @@ class TestGeneratePrompt:
 
         # Need pending stories
         prd = PrdDocument(
-            userStories=[
-                UserStory(id="task-1", title="Test", description="Test", passes=False)
-            ]
+            userStories=[UserStory(id="task-1", title="Test", description="Test", passes=False)]
         )
         save_prd(prd)
 
@@ -236,9 +232,7 @@ class TestGeneratePrompt:
 
         # All stories passed
         prd = PrdDocument(
-            userStories=[
-                UserStory(id="task-1", title="Done", description="Done", passes=True)
-            ]
+            userStories=[UserStory(id="task-1", title="Done", description="Done", passes=True)]
         )
         save_prd(prd)
 

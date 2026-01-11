@@ -236,9 +236,7 @@ class TestSyncPrd:
         task_ids = [s.id for s in result.userStories]
         assert "old-task" not in task_ids
 
-    def test_sync_preserves_prd_when_sources_return_empty(
-        self, temp_project: Path
-    ) -> None:
+    def test_sync_preserves_prd_when_sources_return_empty(self, temp_project: Path) -> None:
         """Test that sync_prd doesn't wipe PRD when sources return nothing.
 
         This protects against the case where user has a PRD but sources
@@ -283,9 +281,7 @@ class TestMarkStoryComplete:
 
         (temp_project / ".afk").mkdir(parents=True)
         prd = PrdDocument(
-            userStories=[
-                UserStory(id="task-1", title="Task", description="Do thing", passes=False)
-            ]
+            userStories=[UserStory(id="task-1", title="Task", description="Do thing", passes=False)]
         )
         save_prd(prd)
 

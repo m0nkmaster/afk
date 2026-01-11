@@ -129,11 +129,7 @@ class SessionProgress(BaseModel):
         Returns:
             Dict mapping task IDs to their learnings lists
         """
-        return {
-            task_id: task.learnings
-            for task_id, task in self.tasks.items()
-            if task.learnings
-        }
+        return {task_id: task.learnings for task_id, task in self.tasks.items() if task.learnings}
 
 
 def mark_complete(task_id: str, message: str | None = None) -> bool:
