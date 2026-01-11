@@ -764,3 +764,22 @@ class FeedbackDisplay:
         self._console.print()  # Add spacing
         self._console.print(panel)
         time.sleep(0.5)  # Brief pause for celebration
+
+    def show_gates_passed(self, gates: list[str]) -> None:
+        """Display visual feedback when quality gates pass successfully.
+
+        Shows green checkmarks for each passing gate with brief animation.
+
+        Args:
+            gates: List of names of gates that passed.
+        """
+        import time
+
+        # Build the success message with animated checkmarks
+        for gate in gates:
+            line = Text()
+            line.append("  ✓ ", style="green bold")
+            line.append(gate, style="green")
+            line.append(" passed", style="dim")
+            self._console.print(line)
+            time.sleep(0.1)  # Brief pause between checkmarks for animation effect

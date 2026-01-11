@@ -922,6 +922,124 @@ class TestRunQualityGatesIntegration:
 
         mock_show.assert_called_once_with(["lint"], continuing=False)
 
+    def test_run_quality_gates_calls_show_gates_passed_on_success(self, temp_afk_dir: Path) -> None:
+        """Test run_quality_gates calls show_gates_passed when all gates pass."""
+        from afk.config import FeedbackLoopsConfig
+        from afk.runner import OutputHandler, run_quality_gates
+
+        feedback_loops = FeedbackLoopsConfig(
+            types="exit 0",  # Always passes
+            lint="exit 0",  # Always passes
+        )
+        handler = OutputHandler(feedback_enabled=True)
+
+        with patch.object(handler, "show_gates_passed") as mock_show:
+            result = run_quality_gates(
+                feedback_loops,
+                output_handler=handler,
+                continuing=True,
+            )
+
+        assert result.passed
+        mock_show.assert_called_once()
+        # Check that both gate names are passed
+        call_args = mock_show.call_args[0][0]
+        assert "types" in call_args
+        assert "lint" in call_args
+
+    def test_run_quality_gates_no_show_gates_passed_on_failure(self, temp_afk_dir: Path) -> None:
+        """Test run_quality_gates doesn't call show_gates_passed when gates fail."""
+        from afk.config import FeedbackLoopsConfig
+        from afk.runner import OutputHandler, run_quality_gates
+
+        feedback_loops = FeedbackLoopsConfig(
+            types="exit 1",  # Always fails
+        )
+        handler = OutputHandler(feedback_enabled=True)
+
+        with patch.object(handler, "show_gates_passed") as mock_show:
+            result = run_quality_gates(
+                feedback_loops,
+                output_handler=handler,
+                continuing=True,
+            )
+
+        assert not result.passed
+        mock_show.assert_not_called()
+
+    def test_run_quality_gates_no_feedback_for_empty_gates(self, temp_afk_dir: Path) -> None:
+        """Test run_quality_gates doesn't call show_gates_passed when no gates configured."""
+        from afk.config import FeedbackLoopsConfig
+        from afk.runner import OutputHandler, run_quality_gates
+
+        feedback_loops = FeedbackLoopsConfig()  # No gates configured
+        handler = OutputHandler(feedback_enabled=True)
+
+        with patch.object(handler, "show_gates_passed") as mock_show:
+            result = run_quality_gates(
+                feedback_loops,
+                output_handler=handler,
+                continuing=True,
+            )
+
+        assert result.passed
+        mock_show.assert_not_called()
+
+
+class TestOutputHandlerGatesPassed:
+    """Tests for OutputHandler show_gates_passed feature."""
+
+    def test_show_gates_passed_uses_feedback_display(self) -> None:
+        """Test show_gates_passed() calls feedback display when enabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=True)
+        assert handler._feedback is not None
+
+        with patch.object(handler._feedback, "show_gates_passed") as mock_show:
+            handler.show_gates_passed(["types", "lint"])
+
+        mock_show.assert_called_once_with(["types", "lint"])
+
+    def test_show_gates_passed_fallback_to_console(self) -> None:
+        """Test show_gates_passed() uses console when feedback disabled."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_gates_passed(["types", "lint"])
+
+        # Should print once per gate
+        assert mock_print.call_count == 2
+        all_calls = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "types" in all_calls
+        assert "lint" in all_calls
+
+    def test_show_gates_passed_fallback_includes_checkmark(self) -> None:
+        """Test show_gates_passed() fallback includes checkmark."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_gates_passed(["test"])
+
+        all_calls = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "✓" in all_calls
+
+    def test_show_gates_passed_fallback_includes_passed_text(self) -> None:
+        """Test show_gates_passed() fallback includes 'passed' text."""
+        from afk.runner import OutputHandler
+
+        handler = OutputHandler(feedback_enabled=False)
+
+        with patch.object(handler.console, "print") as mock_print:
+            handler.show_gates_passed(["build"])
+
+        all_calls = " ".join(str(call) for call in mock_print.call_args_list)
+        assert "passed" in all_calls
+
 
 class TestOutputHandlerCelebration:
     """Tests for OutputHandler celebration feature."""

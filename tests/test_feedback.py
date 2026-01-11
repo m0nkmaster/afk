@@ -2113,3 +2113,110 @@ class TestFeedbackDisplaySessionComplete:
         output = capture.get()
         assert "1m" in output
         assert "30s" in output
+
+
+class TestFeedbackDisplayGatesPassed:
+    """Tests for FeedbackDisplay show_gates_passed feature."""
+
+    def test_show_gates_passed_displays_checkmarks(self) -> None:
+        """Test show_gates_passed displays checkmark for each gate."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_passed(["types", "lint"])
+
+        output = capture.get()
+        assert "✓" in output
+        # Should have at least 2 checkmarks (one per gate)
+        assert output.count("✓") >= 2
+
+    def test_show_gates_passed_displays_gate_names(self) -> None:
+        """Test show_gates_passed displays each gate name."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_passed(["types", "lint", "test"])
+
+        output = capture.get()
+        assert "types" in output
+        assert "lint" in output
+        assert "test" in output
+
+    def test_show_gates_passed_includes_passed_text(self) -> None:
+        """Test show_gates_passed includes 'passed' text."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_passed(["types"])
+
+        output = capture.get()
+        assert "passed" in output
+
+    def test_show_gates_passed_with_single_gate(self) -> None:
+        """Test show_gates_passed works with a single gate."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_passed(["build"])
+
+        output = capture.get()
+        assert "build" in output
+        assert "✓" in output
+
+    def test_show_gates_passed_with_empty_list(self) -> None:
+        """Test show_gates_passed handles empty list gracefully."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_passed([])
+
+        output = capture.get()
+        # Should not crash, output may be empty or minimal
+        assert output is not None
+
+    def test_show_gates_passed_with_custom_gate_names(self) -> None:
+        """Test show_gates_passed works with custom gate names."""
+        from rich.console import Console
+
+        from afk.feedback import FeedbackDisplay
+
+        display = FeedbackDisplay()
+        console = Console(force_terminal=True, width=80)
+        display._console = console
+
+        with console.capture() as capture:
+            display.show_gates_passed(["security-scan", "e2e-tests"])
+
+        output = capture.get()
+        assert "security-scan" in output
+        assert "e2e-tests" in output

@@ -347,6 +347,21 @@ class OutputHandler:
             self.console.print(f"  Time: [cyan]{minutes}m {seconds}s[/cyan]")
             self.console.print()
 
+    def show_gates_passed(self, gates: list[str]) -> None:
+        """Display visual feedback when quality gates pass successfully.
+
+        Uses FeedbackDisplay if available, otherwise falls back to console output.
+
+        Args:
+            gates: List of names of gates that passed.
+        """
+        if self._feedback is not None:
+            self._feedback.show_gates_passed(gates)
+        else:
+            # Fallback: print simple success message to console
+            for gate in gates:
+                self.console.print(f"  [green]✓[/green] {gate} passed")
+
     def loop_start_panel(
         self,
         ai_cli: str,
@@ -896,9 +911,12 @@ def run_quality_gates(
             outputs[name] = str(e)
             output.console.print("[red]error[/red]")
 
-    # Show visual feedback for failed gates
+    # Show visual feedback for gate results
     if failed_gates:
         output.show_gates_failed(failed_gates, continuing=continuing)
+    elif gates:
+        # All gates passed - show success feedback
+        output.show_gates_passed(list(gates.keys()))
 
     return QualityGateResult(
         passed=len(failed_gates) == 0,
