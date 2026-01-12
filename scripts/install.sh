@@ -71,15 +71,6 @@ detect_arch() {
     
     case "$arch" in
         x86_64|amd64)
-            # Intel Mac doesn't have a standalone binary - suggest pip
-            if [[ "$os" == "Darwin" ]]; then
-                warn "Intel Mac detected. Standalone binary not available."
-                echo ""
-                echo "Install via pip instead:"
-                echo "  pip install afk"
-                echo "  # or: pipx install afk"
-                exit 0
-            fi
             echo "x86_64"
             ;;
         arm64|aarch64)
