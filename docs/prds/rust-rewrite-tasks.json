@@ -1,0 +1,1199 @@
+{
+  "project": "afk-rust-rewrite",
+  "branchName": "feature/rust-rewrite",
+  "description": "Complete rewrite of afk CLI from Python to Rust for improved performance and distribution",
+  "tasks": [
+    {
+      "id": "rust-001-project-scaffold",
+      "category": "technical",
+      "description": "Create Rust project scaffold with Cargo workspace, directory structure, and initial dependencies",
+      "priority": 1,
+      "steps": [
+        "Create Cargo.toml with workspace configuration",
+        "Create src/main.rs with minimal clap CLI (version, help only)",
+        "Create src/lib.rs for library exports",
+        "Create module directories: cli, config, prd, progress, sources, prompt, runner, feedback, watcher, parser, git, bootstrap",
+        "Add core dependencies: clap, serde, serde_json, tokio, anyhow, thiserror",
+        "Verify `cargo build` succeeds",
+        "Verify `cargo run -- --version` displays version",
+        "Verify `cargo run -- --help` shows help"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-002-config-models",
+      "category": "technical",
+      "description": "Implement Serde models for .afk/config.json with load/save functionality",
+      "priority": 1,
+      "steps": [
+        "Create config/models.rs with all config structs (AfkConfig, SourceConfig, FeedbackLoopsConfig, etc.)",
+        "Add serde derive macros with rename_all = camelCase where needed",
+        "Implement AfkConfig::load() from .afk/config.json",
+        "Implement AfkConfig::save() to .afk/config.json",
+        "Handle missing file gracefully (return defaults)",
+        "Write unit tests for load/save round-trip",
+        "Test with real config.json from Python version"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-003-prd-models",
+      "category": "technical",
+      "description": "Implement Serde models for .afk/prd.json (UserStory, PrdDocument)",
+      "priority": 1,
+      "steps": [
+        "Create prd/models.rs with UserStory and PrdDocument structs",
+        "Support both camelCase (JSON) and snake_case field aliases",
+        "Support multiple key names: userStories, tasks, items",
+        "Implement PrdDocument::load() and ::save()",
+        "Implement get_pending_stories(), get_next_story(), all_stories_complete()",
+        "Implement mark_story_complete()",
+        "Write unit tests",
+        "Test with real prd.json from Python version"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-004-progress-models",
+      "category": "technical",
+      "description": "Implement Serde models for .afk/progress.json (TaskProgress, SessionProgress)",
+      "priority": 1,
+      "steps": [
+        "Create progress/models.rs with TaskProgress and SessionProgress structs",
+        "Implement SessionProgress::load() and ::save()",
+        "Implement increment_iteration(), get_task(), set_task_status()",
+        "Implement get_pending_tasks(), get_completed_tasks(), is_complete()",
+        "Implement add_learning(), get_all_learnings()",
+        "Write unit tests",
+        "Test with real progress.json from Python version"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-005-cli-skeleton",
+      "category": "technical",
+      "description": "Set up clap CLI structure with all command definitions (no implementations yet)",
+      "priority": 1,
+      "steps": [
+        "Define main Cli struct with subcommands enum",
+        "Add GoCommand with iterations_or_source, dry_run, until_complete, feedback, no_mascot",
+        "Add RunCommand with iterations, until_complete, timeout, branch, continue, feedback, no_mascot",
+        "Add InitCommand with dry_run, force, yes",
+        "Add StatusCommand",
+        "Add SourceCommand subgroup (add, list, remove)",
+        "Add PrdCommand subgroup (parse, sync, show)",
+        "Add SyncCommand, NextCommand, ExplainCommand, VerifyCommand",
+        "Add DoneCommand, FailCommand, ResetCommand",
+        "Add ArchiveCommand subgroup (create, list, clear)",
+        "Add UpdateCommand, CompletionsCommand",
+        "Add StartCommand, ResumeCommand",
+        "Verify help text for all commands",
+        "Stub implementations that print 'not implemented'"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-006-source-json",
+      "category": "functional",
+      "description": "Implement JSON PRD task source adapter",
+      "priority": 1,
+      "steps": [
+        "Create sources/json.rs",
+        "Implement load_json_tasks(path) -> Vec<UserStory>",
+        "Support full afk format with tasks array",
+        "Support simple array format",
+        "Support userStories and items key names",
+        "Skip tasks where passes: true",
+        "Map priority strings to integers",
+        "Generate IDs from title if missing",
+        "Write unit tests with sample JSON files"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-007-source-markdown",
+      "category": "functional",
+      "description": "Implement Markdown checklist task source adapter",
+      "priority": 1,
+      "steps": [
+        "Create sources/markdown.rs",
+        "Implement load_markdown_tasks(path) -> Vec<UserStory>",
+        "Parse checkbox pattern: - [ ] or - [x]",
+        "Skip checked items ([x])",
+        "Extract priority tags: [HIGH], [LOW], [P0], etc.",
+        "Extract explicit IDs: task-id: description",
+        "Generate IDs from description if none",
+        "Try default paths if none specified (TODO.md, tasks.md, etc.)",
+        "Write unit tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-008-source-beads",
+      "category": "functional",
+      "description": "Implement Beads task source adapter (subprocess to bd CLI)",
+      "priority": 1,
+      "steps": [
+        "Create sources/beads.rs",
+        "Implement load_beads_tasks() -> Vec<UserStory>",
+        "Run 'bd ready --json' subprocess",
+        "Parse JSON output into UserStory vec",
+        "Fall back to text parsing if JSON fails",
+        "Map beads priority to 1-5 scale",
+        "Extract acceptance criteria from description",
+        "Implement close_beads_issue(id) for sync-back",
+        "Handle bd not installed gracefully",
+        "Write unit tests with mock subprocess"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-009-source-github",
+      "category": "functional",
+      "description": "Implement GitHub Issues task source adapter (subprocess to gh CLI)",
+      "priority": 2,
+      "steps": [
+        "Create sources/github.rs",
+        "Implement load_github_tasks(repo, labels) -> Vec<UserStory>",
+        "Run 'gh issue list --json number,title,body,labels,state' subprocess",
+        "Filter to open issues only",
+        "Parse JSON output into UserStory vec",
+        "Infer priority from labels",
+        "Extract acceptance criteria from body",
+        "Handle gh not installed gracefully",
+        "Write unit tests with mock subprocess"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-010-source-aggregation",
+      "category": "functional",
+      "description": "Implement task source aggregation and dispatcher",
+      "priority": 1,
+      "steps": [
+        "Create sources/mod.rs",
+        "Implement aggregate_tasks(sources) -> Vec<UserStory>",
+        "Dispatch to appropriate loader based on source type",
+        "Concatenate results from all sources",
+        "Handle errors from individual sources gracefully",
+        "Write integration tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-011-source-commands",
+      "category": "functional",
+      "description": "Implement 'afk source add/list/remove' commands",
+      "priority": 1,
+      "steps": [
+        "Implement source_add command in cli/commands/source.rs",
+        "Validate source type (beads, json, markdown, github)",
+        "Validate path exists for file-based sources",
+        "Save updated config",
+        "Implement source_list command",
+        "Implement source_remove command (1-indexed)",
+        "Write integration tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-012-prd-sync",
+      "category": "functional",
+      "description": "Implement PRD sync from sources to .afk/prd.json",
+      "priority": 1,
+      "steps": [
+        "Create prd/store.rs",
+        "Implement sync_prd(config, branch_name) -> PrdDocument",
+        "Load existing PRD to preserve passes status",
+        "If no sources but PRD has stories, return as-is",
+        "Aggregate tasks from all sources",
+        "Safety check: don't wipe populated PRD with empty sync",
+        "Preserve passes status for matching IDs",
+        "Sort by priority",
+        "Get project name from pyproject.toml or Cargo.toml or directory",
+        "Get current branch from git",
+        "Save PRD with lastSynced timestamp",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-013-prd-commands",
+      "category": "functional",
+      "description": "Implement 'afk prd sync' and 'afk prd show' commands",
+      "priority": 1,
+      "steps": [
+        "Implement prd_sync command in cli/commands/prd.rs",
+        "Support --branch option",
+        "Display sync results (total, pending, complete)",
+        "Implement prd_show command",
+        "Display table with ID, Priority, Title, AC count, Status",
+        "Support --pending flag to filter",
+        "Show branch name and lastSynced at bottom",
+        "Write integration tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-014-prompt-template",
+      "category": "functional",
+      "description": "Implement prompt template engine with Tera",
+      "priority": 1,
+      "steps": [
+        "Add tera dependency",
+        "Create prompt/template.rs",
+        "Define DEFAULT_TEMPLATE constant (exact copy from Python)",
+        "Implement _get_template(config) -> String",
+        "Support custom_path loading",
+        "Test template renders correctly with Tera"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-015-prompt-generation",
+      "category": "functional",
+      "description": "Implement generate_prompt() function",
+      "priority": 1,
+      "steps": [
+        "Create prompt/mod.rs",
+        "Implement generate_prompt(config, bootstrap, limit_override) -> String",
+        "Load progress and PRD",
+        "Calculate pending/completed counts",
+        "Check all_stories_complete for stop signal",
+        "Increment iteration via progress.increment_iteration()",
+        "Build feedback_loops dict (filter None values)",
+        "Populate template context (iteration, max_iterations, completed_count, etc.)",
+        "Render template with Tera",
+        "Snapshot test output against Python version"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-016-prd-parse",
+      "category": "functional",
+      "description": "Implement 'afk prd parse' command with PRD parsing prompt",
+      "priority": 1,
+      "steps": [
+        "Define PRD_PARSE_TEMPLATE constant (exact copy from Python)",
+        "Implement generate_prd_prompt(content, output_path) -> String",
+        "Implement load_prd_file(path) -> String",
+        "Implement prd_parse command in cli/commands/prd.rs",
+        "Support --output, --copy, --file, --stdout options",
+        "Implement output modes (clipboard, file, stdout)",
+        "Add arboard dependency for clipboard",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-017-next-command",
+      "category": "functional",
+      "description": "Implement 'afk next' command to preview prompts",
+      "priority": 2,
+      "steps": [
+        "Implement next command in cli/commands/",
+        "Support --copy, --file, --stdout options",
+        "Support --bootstrap flag",
+        "Support --limit override",
+        "Generate and output prompt",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-018-output-helpers",
+      "category": "technical",
+      "description": "Implement output helpers for clipboard, file, stdout",
+      "priority": 1,
+      "steps": [
+        "Create cli/output.rs",
+        "Implement output_prompt(prompt, mode, config)",
+        "Implement copy_to_clipboard(text) with arboard",
+        "Implement write_to_file(text, path)",
+        "Implement print_to_stdout(text)",
+        "Handle clipboard errors gracefully with fallback to stdout",
+        "Add console colours for status messages",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-019-iteration-runner",
+      "category": "functional",
+      "description": "Implement IterationRunner for spawning AI CLI and streaming output",
+      "priority": 1,
+      "steps": [
+        "Create runner/iteration.rs",
+        "Define IterationResult struct (success, task_id, error, output)",
+        "Implement IterationRunner with config and output handler",
+        "Implement run(iteration, prompt) -> IterationResult",
+        "Build command from ai_cli.command and ai_cli.args",
+        "Spawn subprocess with stdin devnull, stdout piped, stderr merged",
+        "Stream stdout line-by-line",
+        "Check for completion signals in each line",
+        "Terminate subprocess on completion signal",
+        "Handle timeout",
+        "Handle process not found error",
+        "Return IterationResult with output buffer",
+        "Write tests with mock subprocess"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-020-output-handler",
+      "category": "functional",
+      "description": "Implement OutputHandler for console output and signal detection",
+      "priority": 1,
+      "steps": [
+        "Create runner/output_handler.rs",
+        "Define COMPLETION_SIGNALS constant",
+        "Implement OutputHandler with console, signals",
+        "Implement contains_completion_signal(output) -> bool",
+        "Implement iteration_header(iteration, max)",
+        "Implement command_info(cmd)",
+        "Implement stream_line(line)",
+        "Implement completion_detected()",
+        "Implement error(), warning(), success(), info(), dim() helpers",
+        "Implement loop_start_panel()",
+        "Implement session_complete_panel()",
+        "Use console crate for colours",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-021-loop-controller",
+      "category": "functional",
+      "description": "Implement LoopController for managing the autonomous loop",
+      "priority": 1,
+      "steps": [
+        "Create runner/controller.rs",
+        "Define RunResult struct (iterations_completed, tasks_completed, stop_reason, duration, archived_to)",
+        "Define StopReason enum (Complete, MaxIterations, Timeout, NoTasks, UserInterrupt, AiError)",
+        "Implement LoopController with config, output, iteration_runner",
+        "Implement run(max_iterations, branch, until_complete, timeout_override, resume, feedback_mode, show_mascot)",
+        "Handle branching if configured",
+        "Handle session archive/resume",
+        "Sync PRD before loop",
+        "Display loop start panel",
+        "Main loop: check stop conditions, check PRD completion, check limits, run iteration",
+        "Track tasks completed in session",
+        "Handle KeyboardInterrupt (Ctrl+C)",
+        "Archive session on exit",
+        "Display session complete panel",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-022-run-command",
+      "category": "functional",
+      "description": "Implement 'afk run' command",
+      "priority": 1,
+      "steps": [
+        "Implement run command in cli/commands/run.rs",
+        "Parse all options (iterations, until_complete, timeout, branch, continue, feedback, no_mascot)",
+        "Validate afk is initialised",
+        "Validate sources are configured",
+        "Determine effective feedback mode",
+        "Call LoopController.run()",
+        "Write integration tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-023-quality-gates",
+      "category": "functional",
+      "description": "Implement quality gate runner",
+      "priority": 1,
+      "steps": [
+        "Create runner/quality_gates.rs",
+        "Define QualityGateResult struct (passed, failed_gates, output)",
+        "Implement run_quality_gates(feedback_loops, console) -> QualityGateResult",
+        "Collect gates from types, lint, test, build, custom",
+        "Run each gate as shell command",
+        "Capture stdout and stderr",
+        "Track pass/fail status",
+        "Handle timeout (5 min default)",
+        "Display progress (Running gate... ✓/✗)",
+        "Return aggregated result",
+        "Write tests with mock commands"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-024-verify-command",
+      "category": "functional",
+      "description": "Implement 'afk verify' command",
+      "priority": 1,
+      "steps": [
+        "Implement verify command in cli/commands/verify.rs",
+        "Check if any gates are configured",
+        "Run quality gates",
+        "Display pass/fail status",
+        "Support --verbose flag for full output",
+        "Exit 0 if all pass, 1 if any fail",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-025-git-operations",
+      "category": "functional",
+      "description": "Implement git operations (branch, commit, status)",
+      "priority": 1,
+      "steps": [
+        "Create git/ops.rs",
+        "Implement is_git_repo() -> bool",
+        "Implement get_current_branch() -> Option<String>",
+        "Implement create_branch(name, config) -> bool",
+        "Implement auto_commit(task_id, message, config) -> bool",
+        "Implement get_staged_files() -> Vec<String>",
+        "Implement get_uncommitted_changes() -> bool",
+        "All functions use git subprocess",
+        "Write tests with test repository"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-026-session-archive",
+      "category": "functional",
+      "description": "Implement session archiving functionality",
+      "priority": 2,
+      "steps": [
+        "Add archive_session(config, reason) -> Option<PathBuf>",
+        "Create timestamped archive directory",
+        "Sanitise branch name for filesystem",
+        "Copy progress.json to archive",
+        "Write metadata.json with archived_at, branch, reason",
+        "Implement clear_session() to delete progress.json",
+        "Implement should_archive_on_branch_change()",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-027-archive-commands",
+      "category": "functional",
+      "description": "Implement 'afk archive' commands (create, list, clear)",
+      "priority": 2,
+      "steps": [
+        "Implement archive_create command with --reason option",
+        "Implement archive_list command",
+        "Display table with archive name, date, reason",
+        "Show last 20 archives",
+        "Implement archive_clear command",
+        "Archive first, then clear",
+        "Support --yes flag to skip confirmation",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-028-output-parser-patterns",
+      "category": "functional",
+      "description": "Implement output parsing regex patterns for AI CLI detection",
+      "priority": 2,
+      "steps": [
+        "Create parser/patterns.rs",
+        "Define Claude patterns: Calling tool, Writing to, Reading",
+        "Define Cursor patterns: ⏺ ToolName(, Edited, Created, Deleted",
+        "Define Aider patterns: /add, /drop, /undo, /commit, Applied edit, Wrote",
+        "Define error patterns: Error:, Exception:, Traceback",
+        "Define warning patterns: Warning:, DeprecationWarning:",
+        "All patterns as compiled Regex (lazy_static or OnceCell)",
+        "Write unit tests for each pattern"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-029-output-parser-events",
+      "category": "functional",
+      "description": "Implement output parser events and parser",
+      "priority": 2,
+      "steps": [
+        "Create parser/mod.rs",
+        "Define EventType enum (ToolCall, FileChange, Error, Warning)",
+        "Define Event structs: ToolCallEvent, FileChangeEvent, ErrorEvent, WarningEvent",
+        "Implement OutputParser struct",
+        "Implement parse(line) -> Vec<Event>",
+        "Check all patterns, collect matching events",
+        "Handle empty lines",
+        "Write unit tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-030-metrics-collector",
+      "category": "functional",
+      "description": "Implement MetricsCollector for iteration metrics",
+      "priority": 2,
+      "steps": [
+        "Create feedback/metrics.rs",
+        "Define IterationMetrics struct (tool_calls, files_modified, files_created, files_deleted, lines_added, lines_removed, errors, warnings, last_activity)",
+        "Implement MetricsCollector with metrics field",
+        "Implement record_tool_call(tool_name)",
+        "Implement record_file_change(path, change_type)",
+        "Implement reset()",
+        "Implement get_activity_state() -> active/thinking/stalled",
+        "Define activity thresholds (2s active, 10s thinking, else stalled)",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-031-art-module",
+      "category": "functional",
+      "description": "Implement ASCII art spinners and mascots",
+      "priority": 2,
+      "steps": [
+        "Create feedback/art.rs",
+        "Define SPINNERS map with dots, arrows, bounce, pulse sequences",
+        "Define MASCOT_STATES map with working, success, error, waiting, celebration ASCII art",
+        "Implement get_spinner_frame(name, index) -> char",
+        "Implement get_mascot(state) -> &str",
+        "Handle wrapping of spinner index",
+        "Handle unknown spinner/state with fallback",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-032-feedback-display-minimal",
+      "category": "functional",
+      "description": "Implement minimal mode feedback display (single-line status bar)",
+      "priority": 2,
+      "steps": [
+        "Create feedback/display.rs",
+        "Define FeedbackDisplay struct with mode, console, start_time, etc.",
+        "Implement minimal mode: ◉ afk [x/y] mm:ss │ ⣾ N calls │ N files │ +N/-N",
+        "Spinner colour based on activity state (green/yellow/red)",
+        "Use indicatif or console for terminal control",
+        "Implement update(metrics, iteration_current, iteration_total, task_id, activity_state)",
+        "Use carriage return to overwrite line",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-033-feedback-display-full",
+      "category": "functional",
+      "description": "Implement full mode feedback display (multi-panel)",
+      "priority": 2,
+      "steps": [
+        "Extend FeedbackDisplay for full mode",
+        "Build activity panel with spinner, tool calls, files, lines",
+        "Build files panel showing recent modified/created files",
+        "Build mascot panel with ASCII art",
+        "Build task panel with task ID, description, progress bar",
+        "Implement start() to begin live update",
+        "Implement stop() to end live update",
+        "Use indicatif multi-progress or simple print with clear",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-034-feedback-celebrations",
+      "category": "functional",
+      "description": "Implement celebration animations for task/session completion",
+      "priority": 3,
+      "steps": [
+        "Implement show_celebration(task_id) in FeedbackDisplay",
+        "Display celebration mascot with stars",
+        "Show 'Task Complete!' message",
+        "Brief animation pause (0.5s)",
+        "Implement show_session_complete(tasks, iterations, duration)",
+        "Display full celebration with statistics",
+        "Implement show_gates_passed(gates) with checkmark animation",
+        "Implement show_gates_failed(gates, continuing)",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-035-file-watcher",
+      "category": "functional",
+      "description": "Implement file system watcher using notify crate",
+      "priority": 2,
+      "steps": [
+        "Add notify dependency",
+        "Create watcher/file_watcher.rs",
+        "Define FileChange struct (path, change_type, timestamp)",
+        "Implement FileWatcher with root, ignore_patterns, observer",
+        "Default ignore patterns: .git, __pycache__, node_modules, .venv, .afk",
+        "Implement start() to begin watching",
+        "Implement stop() to end watching",
+        "Implement get_changes() -> Vec<FileChange>",
+        "Handle created, modified, deleted events",
+        "Ignore directories, only track files",
+        "Filter by ignore patterns using glob matching",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-036-integrate-feedback-runner",
+      "category": "functional",
+      "description": "Integrate feedback display, file watcher, and output parser with runner",
+      "priority": 2,
+      "steps": [
+        "Update OutputHandler to hold FeedbackDisplay, FileWatcher, OutputParser, MetricsCollector",
+        "Implement start_feedback() to start display and watcher",
+        "Implement stop_feedback() to stop display and watcher, poll final changes",
+        "Update stream_line() to parse line, record events, poll watcher, update display",
+        "Pass iteration context to stream_line (iteration number, task info)",
+        "Deduplicate file changes from parser vs watcher",
+        "Update IterationRunner to use new OutputHandler",
+        "Write integration tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-037-go-command",
+      "category": "functional",
+      "description": "Implement 'afk go' zero-config command",
+      "priority": 1,
+      "steps": [
+        "Implement go command in cli/commands/go.rs",
+        "Parse iterations_or_source argument (int or path)",
+        "Infer config if not exists",
+        "Ensure AI CLI is configured (first-run experience)",
+        "Handle explicit source file path",
+        "Infer sources if none configured",
+        "Check for existing .afk/prd.json with stories",
+        "Handle no sources found with helpful error",
+        "Support --dry-run, --until-complete, --feedback, --no-mascot",
+        "Call LoopController.run()",
+        "Write integration tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-038-bootstrap-detect",
+      "category": "functional",
+      "description": "Implement project analysis and auto-detection",
+      "priority": 1,
+      "steps": [
+        "Create bootstrap/detect.rs",
+        "Define ProjectStack struct (name, config_file, feedback_loops)",
+        "Define BootstrapResult struct (stack, sources, context_files, available_tools, warnings)",
+        "Define AI_CLIS list with command, name, args, description, install_url",
+        "Implement command_exists(cmd) using which crate",
+        "Implement detect_stack(root) for pyproject.toml, package.json, Cargo.toml, go.mod, etc.",
+        "Implement detect_sources(root, tools) for beads, json, markdown",
+        "Implement detect_context_files(root) for AGENTS.md, README.md, etc.",
+        "Implement detect_tools() for bd, gh, claude, agent, codex, etc.",
+        "Implement detect_ai_cli(tools) with priority order",
+        "Implement analyse_project(root) -> BootstrapResult",
+        "Implement generate_config(result) -> AfkConfig",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-039-first-run-experience",
+      "category": "functional",
+      "description": "Implement first-run AI CLI selection prompt",
+      "priority": 1,
+      "steps": [
+        "Implement detect_available_ai_clis() -> Vec<AiCliInfo>",
+        "Implement prompt_ai_cli_selection(available, console) -> Option<AiCliConfig>",
+        "Display welcome message and detected tools",
+        "Prompt user to select (1-N)",
+        "Save selection to config",
+        "Display confirmation",
+        "Handle no CLIs available with install instructions",
+        "Implement ensure_ai_cli_configured(config, console) -> AiCliConfig",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-040-init-command",
+      "category": "functional",
+      "description": "Implement 'afk init' command",
+      "priority": 1,
+      "steps": [
+        "Implement init command in cli/commands/init.rs",
+        "Check for existing config (warn unless --force)",
+        "Run analyse_project()",
+        "Display analysis results (stack, tools, sources, context files, warnings)",
+        "Support --dry-run flag",
+        "Prompt for confirmation unless --yes",
+        "Generate and save config",
+        "Display next steps",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-041-infer-helpers",
+      "category": "functional",
+      "description": "Implement infer_sources() and infer_config() for zero-config mode",
+      "priority": 1,
+      "steps": [
+        "Implement infer_sources(root) -> Vec<SourceConfig>",
+        "Detect sources without requiring config file",
+        "Implement infer_config(root) -> AfkConfig",
+        "If config exists, load and return",
+        "Otherwise, run analyse_project and generate_config",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-042-status-command",
+      "category": "functional",
+      "description": "Implement 'afk status' command",
+      "priority": 2,
+      "steps": [
+        "Implement status command in cli/commands/status.rs",
+        "Display sources table",
+        "Display limits table",
+        "Display git integration table",
+        "Display archiving table",
+        "Handle not initialised error",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-043-explain-command",
+      "category": "functional",
+      "description": "Implement 'afk explain' command",
+      "priority": 1,
+      "steps": [
+        "Implement explain command in cli/commands/explain.rs",
+        "Load progress and PRD",
+        "Display session info (iterations, started_at)",
+        "Display task breakdown (total, completed, pending, failed, skipped)",
+        "Display next task info (ID, priority, title)",
+        "Display learnings count (with --verbose show details)",
+        "Display failed tasks (with --verbose show messages)",
+        "Handle not initialised error",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-044-done-fail-reset",
+      "category": "functional",
+      "description": "Implement 'afk done', 'afk fail', 'afk reset' commands",
+      "priority": 1,
+      "steps": [
+        "Implement done command with task_id, optional --message",
+        "Call mark_complete() to update progress and PRD",
+        "Handle beads sync-back",
+        "Implement fail command with task_id, optional --message",
+        "Implement reset command to clear failures and set pending",
+        "Handle task not found errors",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-045-start-resume",
+      "category": "functional",
+      "description": "Implement 'afk start' and 'afk resume' commands",
+      "priority": 2,
+      "steps": [
+        "Implement start command (init if needed + run)",
+        "Support --branch, --yes flags",
+        "Check for sources, show help if none",
+        "Prompt for confirmation unless --yes",
+        "Implement resume command (continue from last session)",
+        "Support iterations, --until-complete, --timeout",
+        "Set resume=true flag to LoopController",
+        "Handle no session to resume",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-046-sync-command",
+      "category": "functional",
+      "description": "Implement 'afk sync' command (alias for prd sync)",
+      "priority": 2,
+      "steps": [
+        "Implement sync command",
+        "Delegate to prd_sync logic",
+        "Support --branch option",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-047-self-update",
+      "category": "functional",
+      "description": "Implement 'afk update' self-update command",
+      "priority": 2,
+      "steps": [
+        "Add reqwest dependency with blocking feature",
+        "Implement get_platform_binary() -> platform-specific binary name",
+        "Implement get_latest_version() from GitHub API",
+        "Support --beta flag for pre-releases",
+        "Support --check flag for check without install",
+        "Compare versions to detect if update needed",
+        "Download binary to temp file",
+        "Replace current executable (handle Windows file locking)",
+        "Display success message",
+        "Handle running from pip install (show install script instead)",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-048-completions",
+      "category": "functional",
+      "description": "Implement 'afk completions' command for shell completions",
+      "priority": 3,
+      "steps": [
+        "Use clap's built-in completion generation",
+        "Support bash, zsh, fish",
+        "Output to stdout for redirection",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-049-limits-check",
+      "category": "functional",
+      "description": "Implement limit checking for iterations and failures",
+      "priority": 1,
+      "steps": [
+        "Create progress/limits.rs",
+        "Implement check_limits(max_iterations, max_failures, total_tasks) -> (can_continue, signal)",
+        "Check iteration count",
+        "Check for tasks with too many failures (auto-skip)",
+        "Check completion (all completed or skipped)",
+        "Return appropriate signals (AFK_COMPLETE, AFK_LIMIT_REACHED)",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-050-mark-complete",
+      "category": "functional",
+      "description": "Implement mark_complete and mark_failed progress functions",
+      "priority": 1,
+      "steps": [
+        "Implement mark_complete(task_id, message) in progress module",
+        "Update progress.json",
+        "Call mark_story_complete() to update PRD",
+        "Handle beads sync-back",
+        "Implement mark_failed(task_id, message) -> failure_count",
+        "Increment failure_count",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-051-error-handling",
+      "category": "technical",
+      "description": "Implement comprehensive error handling with thiserror/anyhow",
+      "priority": 1,
+      "steps": [
+        "Define AfkError enum with thiserror",
+        "Variants: ConfigError, PrdError, ProgressError, SourceError, RunnerError, GitError, IoError, etc.",
+        "Implement From conversions for std errors",
+        "Use anyhow::Result for functions that can fail",
+        "User-friendly error messages (no internal stack traces)",
+        "Contextual error messages (e.g., 'Failed to load config from .afk/config.json')",
+        "Write tests for error paths"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-052-signal-handling",
+      "category": "technical",
+      "description": "Implement graceful shutdown on Ctrl+C",
+      "priority": 2,
+      "steps": [
+        "Use ctrlc crate or tokio signal handling",
+        "Set flag when Ctrl+C received",
+        "Check flag in main loop",
+        "Stop current iteration gracefully",
+        "Archive session before exit",
+        "Display interrupted message",
+        "Write tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-053-windows-compat",
+      "category": "technical",
+      "description": "Ensure Windows compatibility for all operations",
+      "priority": 2,
+      "steps": [
+        "Test path handling with backslashes",
+        "Test subprocess spawning",
+        "Test file watching",
+        "Test clipboard access",
+        "Test self-update with file locking",
+        "Test terminal colours",
+        "Use dunce crate for canonical paths if needed",
+        "Fix any platform-specific issues",
+        "Add Windows CI target"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-054-unit-tests-config",
+      "category": "testing",
+      "description": "Write comprehensive unit tests for config module",
+      "priority": 2,
+      "steps": [
+        "Test load from file",
+        "Test load with missing file (defaults)",
+        "Test load with partial config (merged defaults)",
+        "Test save round-trip",
+        "Test all config fields",
+        "Use tempfile for isolated tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-055-unit-tests-prd",
+      "category": "testing",
+      "description": "Write comprehensive unit tests for PRD module",
+      "priority": 2,
+      "steps": [
+        "Test load from file",
+        "Test save round-trip",
+        "Test from_json_dict with various key names",
+        "Test get_pending_stories",
+        "Test all_stories_complete",
+        "Test mark_story_complete"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-056-unit-tests-progress",
+      "category": "testing",
+      "description": "Write comprehensive unit tests for progress module",
+      "priority": 2,
+      "steps": [
+        "Test load/save round-trip",
+        "Test increment_iteration",
+        "Test set_task_status for all statuses",
+        "Test failure count increment",
+        "Test learnings add/get",
+        "Test is_complete logic"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-057-unit-tests-sources",
+      "category": "testing",
+      "description": "Write comprehensive unit tests for all source adapters",
+      "priority": 2,
+      "steps": [
+        "Test JSON source with various formats",
+        "Test Markdown source with checkboxes, priorities, IDs",
+        "Test Beads source with mock subprocess",
+        "Test GitHub source with mock subprocess",
+        "Test aggregation with multiple sources"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-058-unit-tests-parser",
+      "category": "testing",
+      "description": "Write comprehensive unit tests for output parser",
+      "priority": 2,
+      "steps": [
+        "Test all Claude patterns",
+        "Test all Cursor patterns",
+        "Test all Aider patterns",
+        "Test error patterns",
+        "Test warning patterns",
+        "Test empty lines",
+        "Test lines with no matches"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-059-integration-tests",
+      "category": "testing",
+      "description": "Write integration tests for CLI commands",
+      "priority": 2,
+      "steps": [
+        "Add assert_cmd and predicates dev dependencies",
+        "Test afk --version",
+        "Test afk --help",
+        "Test afk init with mock project",
+        "Test afk source add/list/remove",
+        "Test afk prd parse/sync/show",
+        "Test afk next",
+        "Test afk verify with mock gates",
+        "Test afk explain"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-060-snapshot-tests",
+      "category": "testing",
+      "description": "Write snapshot tests for prompt output parity with Python",
+      "priority": 2,
+      "steps": [
+        "Generate prompts from Python version as snapshots",
+        "Test Rust prompt output matches snapshots",
+        "Test with various contexts (no tasks, some tasks, all complete)",
+        "Test with bootstrap flag",
+        "Test with custom template"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-061-benchmarks",
+      "category": "testing",
+      "description": "Add performance benchmarks",
+      "priority": 3,
+      "steps": [
+        "Add criterion dev dependency",
+        "Benchmark startup time (parse args, load config)",
+        "Benchmark config load",
+        "Benchmark PRD sync with large file",
+        "Benchmark prompt generation",
+        "Compare against Python baseline"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-062-ci-workflow",
+      "category": "technical",
+      "description": "Set up GitHub Actions CI for Rust",
+      "priority": 1,
+      "steps": [
+        "Create .github/workflows/ci.yml",
+        "Run cargo fmt --check",
+        "Run cargo clippy",
+        "Run cargo test",
+        "Matrix: ubuntu-latest, macos-latest, windows-latest",
+        "Cache cargo dependencies",
+        "Upload test results"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-063-release-workflow",
+      "category": "technical",
+      "description": "Set up GitHub Actions release workflow",
+      "priority": 1,
+      "steps": [
+        "Create .github/workflows/release.yml",
+        "Trigger on tag push (v*)",
+        "Build for all targets: linux x86_64, linux aarch64, macos x86_64, macos aarch64, windows x86_64",
+        "Cross-compile using cross or target-specific runners",
+        "Strip binaries",
+        "Create GitHub release with binaries",
+        "Update homebrew formula (optional)",
+        "Test release workflow on rc tag"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-064-update-readme",
+      "category": "documentation",
+      "description": "Update README.md for Rust version",
+      "priority": 2,
+      "steps": [
+        "Update installation section",
+        "Note Rust rewrite in project description",
+        "Update 'From source' to show Cargo",
+        "Verify all command examples still work",
+        "Update any Python-specific references"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-065-update-usage",
+      "category": "documentation",
+      "description": "Update USAGE.md for Rust version",
+      "priority": 2,
+      "steps": [
+        "Verify all commands documented",
+        "Update installation section",
+        "Update debugging section",
+        "Verify file structure documentation"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-066-update-agents",
+      "category": "documentation",
+      "description": "Update AGENTS.md for Rust codebase",
+      "priority": 2,
+      "steps": [
+        "Update architecture section for Rust",
+        "Update development setup for Cargo",
+        "Update code quality commands (cargo fmt, clippy, test)",
+        "Update module structure",
+        "Remove Python-specific notes",
+        "Add Rust idioms and patterns used"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-067-update-install-scripts",
+      "category": "technical",
+      "description": "Update install.sh and install.ps1 for Rust binaries",
+      "priority": 2,
+      "steps": [
+        "Update binary names if changed",
+        "Verify download URLs",
+        "Test install script on Linux",
+        "Test install script on macOS",
+        "Test install script on Windows"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-068-deprecate-python",
+      "category": "technical",
+      "description": "Deprecate Python version and archive",
+      "priority": 3,
+      "steps": [
+        "Move Python code to python/ or archive/ directory",
+        "Update pyproject.toml to mark as deprecated",
+        "Add deprecation notice to Python README",
+        "Keep Python tests for reference",
+        "Update CI to not run Python tests by default"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-069-release-rc",
+      "category": "release",
+      "description": "Release v1.0.0-rc1 for testing",
+      "priority": 1,
+      "steps": [
+        "All P0 and P1 features complete",
+        "All tests passing",
+        "CI green on all platforms",
+        "Create v1.0.0-rc1 tag",
+        "Verify release workflow produces binaries",
+        "Test binaries on each platform",
+        "Announce RC for testing"
+      ],
+      "passes": false
+    },
+    {
+      "id": "rust-070-release-final",
+      "category": "release",
+      "description": "Release v1.0.0 final",
+      "priority": 1,
+      "steps": [
+        "Address any RC feedback",
+        "All P2 features complete",
+        "Documentation complete",
+        "Create v1.0.0 tag",
+        "Verify release binaries",
+        "Update install scripts to point to new release",
+        "Announce release"
+      ],
+      "passes": false
+    }
+  ]
+}
