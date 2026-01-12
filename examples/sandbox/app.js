@@ -28,6 +28,32 @@
     }
 
     /**
+     * Loads tasks from localStorage and displays them
+     */
+    function loadTasks() {
+        var stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+            return;
+        }
+        
+        var tasks;
+        try {
+            tasks = JSON.parse(stored);
+        } catch (e) {
+            return;
+        }
+        
+        for (var i = 0; i < tasks.length; i++) {
+            var task = tasks[i];
+            var taskElement = createTaskElement(task.text);
+            if (task.completed) {
+                taskElement.classList.add('completed');
+            }
+            taskList.appendChild(taskElement);
+        }
+    }
+
+    /**
      * Toggles the completed state of a task
      * @param {HTMLLIElement} taskElement - The task list item
      */
@@ -98,4 +124,7 @@
 
     // Event listeners
     taskForm.addEventListener('submit', handleSubmit);
+
+    // Load persisted tasks on page load
+    loadTasks();
 })();
