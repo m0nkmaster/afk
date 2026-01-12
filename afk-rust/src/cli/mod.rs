@@ -557,18 +557,28 @@ impl PrdParseCommand {
 }
 
 impl PrdSyncCommand {
-    /// Execute the prd sync command (stub).
+    /// Execute the prd sync command.
     pub fn execute(&self) {
-        println!("afk prd sync: not implemented");
-        println!("  branch: {:?}", self.branch);
+        match commands::prd::prd_sync(self.branch.as_deref()) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl PrdShowCommand {
-    /// Execute the prd show command (stub).
+    /// Execute the prd show command.
     pub fn execute(&self) {
-        println!("afk prd show: not implemented");
-        println!("  pending: {}", self.pending);
+        match commands::prd::prd_show(self.pending) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
