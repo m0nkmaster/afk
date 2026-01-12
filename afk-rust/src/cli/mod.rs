@@ -739,38 +739,108 @@ impl InitCommand {
 impl StatusCommand {
     /// Execute the status command.
     pub fn execute(&self) {
+        use crate::config::AfkConfig;
         use crate::prd::PrdDocument;
         use crate::progress::SessionProgress;
+        use std::path::Path;
 
-        let prd = PrdDocument::load(None).unwrap_or_default();
-        let progress = SessionProgress::load(None).unwrap_or_default();
-
-        let (pending, completed) = prd.get_story_counts();
-        let total = pending + completed;
-
-        println!("\x1b[1mafk status\x1b[0m");
-        println!();
-
-        if total == 0 {
-            println!("  No tasks configured.");
-            println!("  Run \x1b[1mafk init\x1b[0m to get started.");
+        // Check if initialised
+        if !Path::new(".afk").exists() {
+            println!("\x1b[33mafk not initialised.\x1b[0m");
+            println!("Run \x1b[1mafk init\x1b[0m to get started.");
             return;
         }
 
-        println!("  \x1b[1mTasks:\x1b[0m {completed}/{total} complete");
+        let config = AfkConfig::load(None).unwrap_or_default();
+        let prd = PrdDocument::load(None).unwrap_or_default();
+        let progress = SessionProgress::load(None).unwrap_or_default();
 
-        if let Some(next) = prd.get_next_story() {
-            println!("  \x1b[1mNext:\x1b[0m {} - {}", next.id, next.title);
+        println!("\x1b[1m=== afk status ===\x1b[0m");
+        println!();
+
+        // Task summary
+        let (pending, completed) = prd.get_story_counts();
+        let total = pending + completed;
+        
+        println!("\x1b[1mTasks\x1b[0m");
+        if total == 0 {
+            println!("  No tasks configured.");
+        } else {
+            println!("  Total: {total} ({completed} complete, {pending} pending)");
+            if let Some(next) = prd.get_next_story() {
+                let title = if next.title.len() > 50 {
+                    format!("{}...", &next.title[..47])
+                } else {
+                    next.title.clone()
+                };
+                println!("  Next: \x1b[36m{}\x1b[0m - {}", next.id, title);
+            }
         }
+        println!();
 
-        println!("  \x1b[1mIterations:\x1b[0m {}", progress.iterations);
-
+        // Session progress
+        println!("\x1b[1mSession\x1b[0m");
+        println!("  Started: {}", &progress.started_at[..19].replace('T', " "));
+        println!("  Iterations: {}", progress.iterations);
         let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
         if pend + in_prog + comp + fail + skip > 0 {
             println!(
-                "  \x1b[1mProgress:\x1b[0m {} pending, {} in-progress, {} complete, {} failed, {} skipped",
+                "  Tasks: {} pending, {} in-progress, {} complete, {} failed, {} skipped",
                 pend, in_prog, comp, fail, skip
             );
+        }
+        println!();
+
+        // Sources
+        println!("\x1b[1mSources\x1b[0m");
+        if config.sources.is_empty() {
+            println!("  (none configured)");
+        } else {
+            for (i, source) in config.sources.iter().enumerate() {
+                let desc = match &source.source_type {
+                    crate::config::SourceType::Beads => "beads".to_string(),
+                    crate::config::SourceType::Json => {
+                        format!("json: {}", source.path.as_deref().unwrap_or("?"))
+                    }
+                    crate::config::SourceType::Markdown => {
+                        format!("markdown: {}", source.path.as_deref().unwrap_or("?"))
+                    }
+                    crate::config::SourceType::Github => {
+                        format!("github: {}", source.repo.as_deref().unwrap_or("current repo"))
+                    }
+                };
+                println!("  {}. {}", i + 1, desc);
+            }
+        }
+        println!();
+
+        // Limits
+        println!("\x1b[1mLimits\x1b[0m");
+        println!("  Max iterations: {}", config.limits.max_iterations);
+        println!("  Max task failures: {}", config.limits.max_task_failures);
+        println!("  Timeout: {} minutes", config.limits.timeout_minutes);
+        println!();
+
+        // AI CLI
+        println!("\x1b[1mAI CLI\x1b[0m");
+        println!("  Command: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
+        println!();
+
+        // Git integration
+        println!("\x1b[1mGit Integration\x1b[0m");
+        println!("  Auto-commit: {}", if config.git.auto_commit { "yes" } else { "no" });
+        println!("  Auto-branch: {}", if config.git.auto_branch { "yes" } else { "no" });
+        if config.git.auto_branch {
+            println!("  Branch prefix: {}", config.git.branch_prefix);
+        }
+        println!();
+
+        // Archiving
+        println!("\x1b[1mArchiving\x1b[0m");
+        println!("  Enabled: {}", if config.archive.enabled { "yes" } else { "no" });
+        if config.archive.enabled {
+            println!("  Directory: {}", config.archive.directory);
+            println!("  On branch change: {}", if config.archive.on_branch_change { "yes" } else { "no" });
         }
     }
 }
@@ -860,10 +930,15 @@ impl PrdShowCommand {
 }
 
 impl SyncCommand {
-    /// Execute the sync command (stub).
+    /// Execute the sync command (alias for prd sync).
     pub fn execute(&self) {
-        println!("afk sync: not implemented");
-        println!("  branch: {:?}", self.branch);
+        match commands::prd::prd_sync(self.branch.as_deref()) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
@@ -1264,22 +1339,145 @@ impl CompletionsCommand {
 }
 
 impl StartCommand {
-    /// Execute the start command (stub).
+    /// Execute the start command (init if needed + run).
     pub fn execute(&self) {
-        println!("afk start: not implemented");
-        println!("  iterations: {}", self.iterations);
-        println!("  branch: {:?}", self.branch);
-        println!("  yes: {}", self.yes);
+        use crate::bootstrap::{analyse_project, ensure_ai_cli_configured, generate_config, infer_sources};
+        use crate::config::AfkConfig;
+        use crate::runner::run_loop;
+        use std::fs;
+        use std::io::{self, Write};
+        use std::path::Path;
+
+        let afk_dir = Path::new(".afk");
+        let config_path = afk_dir.join("config.json");
+
+        // Init if needed
+        let config = if config_path.exists() {
+            AfkConfig::load(Some(&config_path)).unwrap_or_default()
+        } else {
+            println!("\x1b[1mInitialising afk...\x1b[0m");
+            
+            let analysis = analyse_project(None);
+            let mut config = generate_config(&analysis);
+            config.sources = infer_sources(None);
+            
+            // Ensure AI CLI is configured (first-run experience)
+            if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+                config.ai_cli = ai_cli;
+            } else {
+                eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured.");
+                std::process::exit(1);
+            }
+
+            // Create .afk directory
+            if let Err(e) = fs::create_dir_all(afk_dir) {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to create .afk directory: {e}");
+                std::process::exit(1);
+            }
+
+            // Save config
+            if let Err(e) = config.save(Some(&config_path)) {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to save config: {e}");
+                std::process::exit(1);
+            }
+
+            println!("\x1b[32m✓\x1b[0m Initialised");
+            config
+        };
+
+        // Check for sources
+        if config.sources.is_empty() {
+            // Check for existing PRD
+            let prd = crate::prd::PrdDocument::load(None).unwrap_or_default();
+            if prd.user_stories.is_empty() {
+                eprintln!("\x1b[33mNo task sources configured.\x1b[0m");
+                eprintln!();
+                eprintln!("Add a source first:");
+                eprintln!("  afk source add beads      # Use beads issues");
+                eprintln!("  afk prd parse spec.md     # Parse a requirements doc");
+                std::process::exit(1);
+            }
+        }
+
+        // Confirm unless --yes
+        if !self.yes {
+            println!();
+            println!("Ready to start afk with {} iterations.", self.iterations);
+            if let Some(ref branch) = self.branch {
+                println!("Branch: {branch}");
+            }
+            print!("Continue? [Y/n]: ");
+            let _ = io::stdout().flush();
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_ok() {
+                let input = input.trim().to_lowercase();
+                if input == "n" || input == "no" {
+                    println!("Aborted.");
+                    return;
+                }
+            }
+        }
+
+        // Run the loop
+        let result = run_loop(
+            &config,
+            Some(self.iterations),
+            self.branch.as_deref(),
+            false, // until_complete
+            None,  // timeout
+            false, // resume
+        );
+
+        match result.stop_reason {
+            crate::runner::StopReason::Complete => std::process::exit(0),
+            crate::runner::StopReason::MaxIterations => std::process::exit(0),
+            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
+            _ => std::process::exit(1),
+        }
     }
 }
 
 impl ResumeCommand {
-    /// Execute the resume command (stub).
+    /// Execute the resume command (continue from last session).
     pub fn execute(&self) {
-        println!("afk resume: not implemented");
-        println!("  iterations: {}", self.iterations);
-        println!("  until_complete: {}", self.until_complete);
-        println!("  timeout: {:?}", self.timeout);
+        use crate::config::AfkConfig;
+        use crate::progress::SessionProgress;
+        use crate::runner::run_loop;
+        use std::path::Path;
+
+        // Check for existing progress
+        let progress_path = Path::new(".afk/progress.json");
+        if !progress_path.exists() {
+            eprintln!("\x1b[33mNo session to resume.\x1b[0m");
+            eprintln!("Run \x1b[1mafk start\x1b[0m or \x1b[1mafk go\x1b[0m to begin.");
+            std::process::exit(1);
+        }
+
+        let progress = SessionProgress::load(None).unwrap_or_default();
+        let config = AfkConfig::load(None).unwrap_or_default();
+
+        println!("\x1b[1mResuming session...\x1b[0m");
+        println!("  Started: {}", &progress.started_at[..19].replace('T', " "));
+        println!("  Iterations so far: {}", progress.iterations);
+        println!();
+
+        // Run the loop with resume flag
+        let result = run_loop(
+            &config,
+            Some(self.iterations),
+            None, // branch - don't switch when resuming
+            self.until_complete,
+            self.timeout,
+            true, // resume = true
+        );
+
+        match result.stop_reason {
+            crate::runner::StopReason::Complete => std::process::exit(0),
+            crate::runner::StopReason::MaxIterations => std::process::exit(0),
+            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
+            _ => std::process::exit(1),
+        }
     }
 }
 
