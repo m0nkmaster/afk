@@ -358,7 +358,9 @@ pub fn run_loop(
 /// Provides a rich, animated dashboard showing live AI output,
 /// statistics, and progress.
 pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
-    use crate::tui::TuiApp;
+    use crate::tui::{TuiApp, TuiEvent};
+    use crate::watcher::{ChangeType, FileWatcher};
+    use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
     use std::thread;
 
     // Try to create TUI app
@@ -372,10 +374,37 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     };
 
     let tx = tui_app.sender();
+    let tx_watcher = tx.clone();
 
     // Clone config and options for the runner thread
     let config_clone = config.clone();
     let options_clone = options.clone();
+
+    // Start file watcher in a separate thread
+    let watcher_running = Arc::new(AtomicBool::new(true));
+    let watcher_running_clone = watcher_running.clone();
+    let watcher_handle = thread::spawn(move || {
+        let mut watcher = FileWatcher::new(".");
+        if watcher.start().is_ok() {
+            while watcher_running_clone.load(AtomicOrdering::SeqCst) {
+                // Poll for changes every 200ms
+                thread::sleep(std::time::Duration::from_millis(200));
+                let changes = watcher.get_changes();
+                for change in changes {
+                    let change_type = match change.change_type {
+                        ChangeType::Created => "created",
+                        ChangeType::Modified => "modified",
+                        ChangeType::Deleted => "deleted",
+                    };
+                    let _ = tx_watcher.send(TuiEvent::FileChange {
+                        path: change.path.to_string_lossy().to_string(),
+                        change_type: change_type.to_string(),
+                    });
+                }
+            }
+            watcher.stop();
+        }
+    });
 
     // Spawn the runner in a background thread
     let runner_handle = thread::spawn(move || {
@@ -386,6 +415,10 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     if let Err(e) = tui_app.run() {
         eprintln!("TUI error: {e}");
     }
+
+    // Stop file watcher
+    watcher_running.store(false, std::sync::atomic::Ordering::SeqCst);
+    let _ = watcher_handle.join();
 
     // Clean up TUI
     let _ = tui_app.cleanup();
@@ -694,15 +727,30 @@ fn run_iteration_with_tui(
                         });
                     }
 
-                    // Track tool calls
-                    if line.contains("edit_file") || line.contains("write_file") || line.contains("write(") {
+                    // Track tool calls - detect common AI CLI tool invocation patterns
+                    let line_lower = line.to_lowercase();
+                    if line.contains("antml:invoke") || line.contains("<tool_call>") {
+                        // XML-style tool invocations
+                        let _ = tx.send(TuiEvent::ToolCall("tool".to_string()));
+                    } else if line_lower.contains("edit_file") || line_lower.contains("write_file") 
+                        || line_lower.contains("write(") || line_lower.contains("search_replace")
+                        || line.contains("Created ") || line.contains("Modified ")
+                    {
                         let _ = tx.send(TuiEvent::ToolCall("write".to_string()));
-                    } else if line.contains("read_file") || line.contains("read(") {
+                    } else if line_lower.contains("read_file") || line_lower.contains("read(") 
+                        || line.contains("Reading ")
+                    {
                         let _ = tx.send(TuiEvent::ToolCall("read".to_string()));
-                    } else if line.contains("run_terminal") || line.contains("run_terminal_cmd") {
+                    } else if line_lower.contains("run_terminal") || line_lower.contains("run_terminal_cmd")
+                        || line.contains("$ ") || line.contains("Executing ")
+                    {
                         let _ = tx.send(TuiEvent::ToolCall("terminal".to_string()));
-                    } else if line.contains("search_replace") || line.contains("grep") || line.contains("codebase_search") {
+                    } else if line_lower.contains("grep") || line_lower.contains("codebase_search")
+                        || line_lower.contains("file_search") || line_lower.contains("glob_file_search")
+                    {
                         let _ = tx.send(TuiEvent::ToolCall("search".to_string()));
+                    } else if line_lower.contains("list_dir") || line_lower.contains("listing ") {
+                        let _ = tx.send(TuiEvent::ToolCall("list".to_string()));
                     }
 
                     output_buffer.push(format!("{line}\n"));
