@@ -4,12 +4,16 @@
 
 ## Project Overview
 
-This is a Python CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools.
+This is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools.
+
+The codebase is a rewrite from Python to Rust for improved performance and easier distribution.
 
 ## Development Setup
 
 ```bash
-pip install -e ".[dev]"
+cd afk-rust
+cargo build --release
+cargo test
 ```
 
 ## Issue Tracking
@@ -29,110 +33,118 @@ bd sync               # Sync with git
 Before committing, run:
 
 ```bash
-ruff check .                 # Linting
-ruff format .                # Formatting  
-mypy src/afk                 # Type checking
-pytest                       # Tests with coverage
+cargo fmt -- --check        # Formatting
+cargo clippy                # Linting
+cargo test                  # Run tests
 ```
 
 ## Testing
 
-This project maintains test coverage with pytest (currently ~89%). Tests are required for all changes.
+This project maintains comprehensive tests (500+ tests). Tests are required for all changes.
 
-Write tests first. Follow the red-green-refactor test-driven development process (TDD).
+Write tests first. Follow TDD where practical.
 
 ### Running Tests
 
 ```bash
-pytest                       # Run all tests with coverage
-pytest -v                    # Verbose output
-pytest tests/test_config.py  # Run specific test file
-pytest -k "test_load"        # Run tests matching pattern
+cargo test                          # Run all tests
+cargo test --release                # Run in release mode (faster)
+cargo test config::                 # Run tests for config module
+cargo test -- --test-threads=1     # Run single-threaded (for isolation)
 ```
 
-### Test Structure
+### Test Modules
 
-Tests are organised by module:
+Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 
-| Test File | Module | Coverage |
-|-----------|--------|----------|
-| `test_config.py` | Configuration models | 100% |
-| `test_progress.py` | Session and task progress | 100% |
-| `test_bootstrap.py` | Project analysis | 100% |
-| `test_prompt.py` | Prompt generation | 93% |
-| `test_output.py` | Output handlers | 100% |
-| `test_cli.py` | CLI commands | ~90% |
-| `test_git_ops.py` | Git operations | 95% |
-| `test_runner.py` | Autonomous loop runner | 83% |
-| `test_prd.py` | PRD parsing | 100% |
-| `test_sources.py` | Source aggregation | 79% |
-| `test_sources_beads.py` | Beads adapter | 87% |
-| `test_sources_github.py` | GitHub adapter | 99% |
-| `test_sources_json.py` | JSON adapter | 94% |
-| `test_sources_markdown.py` | Markdown adapter | 100% |
-| `test_art.py` | ASCII art spinners | 100% |
-| `test_feedback.py` | Feedback display | 97% |
-| `test_file_watcher.py` | File system watcher | 91% |
-| `test_output_parser.py` | AI output parsing | 100% |
+| Module | Description |
+|--------|-------------|
+| `config` | Configuration loading and serialisation |
+| `progress` | Session and task progress tracking |
+| `bootstrap` | Project analysis and AI CLI detection |
+| `prompt` | Tera template rendering |
+| `prd` | PRD document parsing and management |
+| `sources` | All source adapters (beads, json, markdown, github) |
+| `parser` | Output parsing with regex patterns |
+| `feedback` | Metrics collection and ASCII art |
+| `watcher` | File system monitoring |
+| `runner` | Loop controller and iteration runner |
 
 ### Writing Tests
 
-1. **Use fixtures** from `tests/conftest.py` for common setup (temp directories, sample data)
-2. **Mock external calls** — subprocess, clipboard, file I/O where appropriate
+1. **Use tempfile** for temporary directories
+2. **Mock external calls** via Command patterns where appropriate
 3. **Test edge cases** — empty inputs, missing files, error conditions
 4. **Keep tests focused** — one behaviour per test
-
-### Coverage Requirements
-
-- Coverage report generated as HTML in `htmlcov/`
-- New code must include corresponding tests
-- Target: maintain >85% overall coverage
 
 ## Architecture
 
 ```
-src/afk/
-├── cli.py           # Click CLI - commands and argument handling
-├── config.py        # Pydantic models for .afk/config.json
-├── bootstrap.py     # Project analysis and auto-configuration
-├── progress.py      # Session and task progress tracking (includes per-task learnings)
-├── prompt.py        # Jinja2 prompt generation
-├── output.py        # Output handlers (clipboard, file, stdout)
-├── prd.py           # PRD parsing prompt generation
-├── prd_store.py     # PRD storage, sync, and task aggregation
-├── runner.py        # Autonomous loop runner (Ralph pattern) - largest module
-├── git_ops.py       # Git operations (branch, commit, archive)
-├── art.py           # ASCII art and spinner animations
-├── feedback.py      # Real-time feedback display with Rich Live panels
-├── file_watcher.py  # File system monitoring using watchdog
-├── output_parser.py # AI CLI output parsing (Claude/Cursor patterns)
-└── sources/         # Task source adapters
-    ├── __init__.py  # aggregate_tasks() dispatcher
-    ├── beads.py     # Beads (bd) integration
-    ├── json_prd.py  # JSON PRD files
-    ├── markdown.py  # Markdown checklists
-    └── github.py    # GitHub issues via gh CLI
+afk-rust/src/
+├── main.rs          # Entry point
+├── lib.rs           # Library exports
+├── cli/
+│   ├── mod.rs       # Clap CLI - commands and argument handling
+│   └── commands/    # Subcommand implementations
+├── config/
+│   └── mod.rs       # Serde models for .afk/config.json
+├── bootstrap/
+│   └── mod.rs       # Project analysis, AI CLI detection
+├── progress/
+│   ├── mod.rs       # Session and task progress tracking
+│   └── limits.rs    # Iteration limits and constraints
+├── prompt/
+│   ├── mod.rs       # Tera template rendering
+│   └── template.rs  # Template utilities
+├── prd/
+│   ├── mod.rs       # PRD document model
+│   ├── parse.rs     # PRD parsing
+│   └── store.rs     # PRD persistence and sync
+├── runner/
+│   ├── mod.rs       # Module exports
+│   ├── controller.rs # Loop lifecycle management
+│   ├── iteration.rs  # Single iteration execution
+│   ├── output_handler.rs # Console output
+│   └── quality_gates.rs  # Lint, test, type checks
+├── git/
+│   └── mod.rs       # Git operations (branch, commit, archive)
+├── feedback/
+│   ├── mod.rs       # Module exports
+│   ├── metrics.rs   # Iteration metrics collection
+│   └── art.rs       # ASCII art spinners and mascots
+├── parser/
+│   └── mod.rs       # AI CLI output parsing (regex patterns)
+├── watcher/
+│   └── mod.rs       # File system monitoring (notify crate)
+└── sources/
+    ├── mod.rs       # aggregate_tasks() dispatcher
+    ├── beads.rs     # Beads (bd) integration
+    ├── json.rs      # JSON PRD files
+    ├── markdown.rs  # Markdown checklists
+    └── github.rs    # GitHub issues via gh CLI
 ```
 
-### Module Sizes
+### Key Dependencies
 
-| Module | Lines | Notes |
-|--------|-------|-------|
-| `runner.py` | ~1,030 | Consider splitting into submodules |
-| `cli.py` | ~1,130 | All Click commands |
-| `bootstrap.py` | ~530 | Project detection |
-| `prd_store.py` | ~275 | Task persistence |
-| `feedback.py` | ~360 | Rich Live panels |
-| `output_parser.py` | ~285 | Regex patterns for AI output |
+| Crate | Purpose |
+|-------|---------|
+| `clap` | CLI argument parsing |
+| `serde` / `serde_json` | Serialisation |
+| `tera` | Template rendering |
+| `regex` | Output pattern matching |
+| `notify` | File system watching |
+| `chrono` | Timestamps |
+| `arboard` | Clipboard access |
+| `ctrlc` | Signal handling |
 
 ## Key Patterns
 
-- **Config**: All settings in `.afk/config.json`, loaded via Pydantic models
+- **Config**: All settings in `.afk/config.json`, loaded via Serde models
 - **PRD File**: `.afk/prd.json` is the working task list; used directly if no sources configured
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations, task status, and per-task learnings (short-term memory)
 - **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
 - **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into prd.json
-- **Prompts**: Jinja2 templates, customisable via config
+- **Prompts**: Tera templates, customisable via config
 - **Runner**: Implements Ralph Wiggum pattern — spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
@@ -166,17 +178,12 @@ When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` u
 
 ## Adding a New Task Source
 
-1. Create `src/afk/sources/newsource.py`
-2. Implement `load_newsource_tasks() -> list[UserStory]`
-3. Add to `SourceConfig.type` literal in `config.py`
-4. Add case to `_load_from_source()` in `sources/__init__.py`
-5. Add tests in `tests/test_sources_newsource.py`
-
-## Known Technical Debt
-
-- **Duplicate AC extraction**: `_extract_acceptance_criteria()` is duplicated in `sources/beads.py` and `sources/github.py`. Should be extracted to `sources/utils.py`.
-- **runner.py size**: At 1,030 lines, this module could be split into `runner/output_handler.py`, `runner/iteration.py`, `runner/controller.py`.
-- **Prompt iteration increment**: `generate_prompt()` calls `progress.increment_iteration()` on every call, but this is also called by `afk next` which shouldn't increment. Needs refactoring.
+1. Create `afk-rust/src/sources/newsource.rs`
+2. Implement `load_newsource_tasks() -> Result<Vec<UserStory>, Error>`
+3. Add variant to `SourceType` enum in `config/mod.rs`
+4. Add match arm to `load_from_source()` in `sources/mod.rs`
+5. Add `mod newsource;` to `sources/mod.rs`
+6. Write tests inline with `#[cfg(test)] mod tests`
 
 ## Landing the Plane (Session Completion)
 

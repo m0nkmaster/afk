@@ -45,14 +45,9 @@ This installs a standalone binary — no Python required. Updates with `afk upda
 ### From source (development)
 
 ```bash
-git clone https://github.com/m0nkmaster/afk.git && cd afk
-pip install -e ".[dev]"
-```
-
-### With pip/pipx
-
-```bash
-pip install afk      # or: pipx install afk
+git clone https://github.com/m0nkmaster/afk.git && cd afk/afk-rust
+cargo build --release
+# Binary at target/release/afk
 ```
 
 ## Key Commands
