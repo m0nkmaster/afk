@@ -744,22 +744,111 @@ impl SyncCommand {
 }
 
 impl NextCommand {
-    /// Execute the next command (stub).
+    /// Execute the next command.
     pub fn execute(&self) {
-        println!("afk next: not implemented");
-        println!("  copy: {}", self.copy);
-        println!("  file: {}", self.file);
-        println!("  stdout: {}", self.stdout);
-        println!("  bootstrap: {}", self.bootstrap);
-        println!("  limit: {:?}", self.limit);
+        use crate::cli::output::output_prompt;
+        use crate::config::{AfkConfig, OutputMode};
+        use crate::prompt::generate_prompt;
+
+        // Load config
+        let config = AfkConfig::load(None).unwrap_or_default();
+
+        // Generate the prompt (but don't increment iteration in future - for now it does)
+        let result = match generate_prompt(&config, self.bootstrap, self.limit) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("\x1b[31mError generating prompt:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        };
+
+        // Determine output mode
+        let mode = if self.stdout {
+            OutputMode::Stdout
+        } else if self.file {
+            OutputMode::File
+        } else if self.copy {
+            OutputMode::Clipboard
+        } else {
+            config.output.default.clone()
+        };
+
+        // Output the prompt
+        let is_stdout = mode == OutputMode::Stdout;
+        let _ = output_prompt(&result.prompt, mode, &config);
+
+        // Show info unless going to stdout
+        if !self.stdout && !is_stdout {
+            println!("\x1b[2mIteration {}\x1b[0m", result.iteration);
+            if result.all_complete {
+                println!("\x1b[32m✓ All tasks complete!\x1b[0m");
+            }
+        }
     }
 }
 
 impl ExplainCommand {
-    /// Execute the explain command (stub).
+    /// Execute the explain command.
     pub fn execute(&self) {
-        println!("afk explain: not implemented");
-        println!("  verbose: {}", self.verbose);
+        use crate::config::AfkConfig;
+        use crate::prd::PrdDocument;
+        use crate::progress::SessionProgress;
+
+        // Load everything
+        let config = AfkConfig::load(None).unwrap_or_default();
+        let prd = PrdDocument::load(None).unwrap_or_default();
+        let progress = SessionProgress::load(None).unwrap_or_default();
+
+        println!("\x1b[1m=== afk explain ===\x1b[0m\n");
+
+        // Config summary
+        println!("\x1b[1mConfiguration:\x1b[0m");
+        println!("  AI CLI: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
+        println!("  Sources: {:?}", config.sources.iter().map(|s| &s.source_type).collect::<Vec<_>>());
+        println!("  Output: {:?}", config.output.default);
+
+        // PRD summary
+        println!("\n\x1b[1mPRD:\x1b[0m");
+        let (pending, completed) = prd.get_story_counts();
+        let total = pending + completed;
+        println!("  Stories: {completed}/{total} complete ({pending} pending)");
+        
+        if let Some(next) = prd.get_next_story() {
+            println!("  Next: \x1b[1m{}\x1b[0m - {}", next.id, next.title);
+        }
+
+        // Progress summary
+        println!("\n\x1b[1mProgress:\x1b[0m");
+        println!("  Session started: {}", progress.started_at);
+        println!("  Iterations: {}", progress.iterations);
+        let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
+        println!("  Tasks: {comp} complete, {in_prog} in-progress, {pend} pending, {fail} failed, {skip} skipped");
+
+        // Verbose: show more details
+        if self.verbose {
+            println!("\n\x1b[1mFeedback Loops:\x1b[0m");
+            let fb = &config.feedback_loops;
+            let has_any = fb.types.is_some() || fb.lint.is_some() || fb.test.is_some() || fb.build.is_some() || !fb.custom.is_empty();
+            if has_any {
+                if let Some(ref cmd) = fb.types { println!("  types: {cmd}"); }
+                if let Some(ref cmd) = fb.lint { println!("  lint: {cmd}"); }
+                if let Some(ref cmd) = fb.test { println!("  test: {cmd}"); }
+                if let Some(ref cmd) = fb.build { println!("  build: {cmd}"); }
+                for (name, cmd) in &fb.custom {
+                    println!("  {name}: {cmd}");
+                }
+            } else {
+                println!("  (none configured)");
+            }
+
+            println!("\n\x1b[1mPending Stories:\x1b[0m");
+            for story in prd.get_pending_stories().iter().take(5) {
+                println!("  - {} (P{})", story.id, story.priority);
+            }
+            if prd.get_pending_stories().len() > 5 {
+                println!("  ... and {} more", prd.get_pending_stories().len() - 5);
+            }
+        }
     }
 }
 
@@ -805,28 +894,122 @@ impl VerifyCommand {
 }
 
 impl DoneCommand {
-    /// Execute the done command (stub).
+    /// Execute the done command.
     pub fn execute(&self) {
-        println!("afk done: not implemented");
-        println!("  task_id: {}", self.task_id);
-        println!("  message: {:?}", self.message);
+        use crate::prd::PrdDocument;
+        use crate::progress::{SessionProgress, TaskStatus};
+
+        // Load progress
+        let mut progress = match SessionProgress::load(None) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("\x1b[31mError loading progress:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        };
+
+        // Mark task as completed in progress
+        progress.set_task_status(
+            &self.task_id,
+            TaskStatus::Completed,
+            "manual",
+            self.message.clone(),
+        );
+
+        if let Err(e) = progress.save(None) {
+            eprintln!("\x1b[31mError saving progress:\x1b[0m {e}");
+            std::process::exit(1);
+        }
+
+        // Also mark as passed in PRD
+        if let Ok(mut prd) = PrdDocument::load(None) {
+            prd.mark_story_complete(&self.task_id);
+            let _ = prd.save(None);
+        }
+
+        println!("\x1b[32m✓\x1b[0m Task \x1b[1m{}\x1b[0m marked complete", self.task_id);
+        if let Some(ref msg) = self.message {
+            println!("  \x1b[2m{msg}\x1b[0m");
+        }
     }
 }
 
 impl FailCommand {
-    /// Execute the fail command (stub).
+    /// Execute the fail command.
     pub fn execute(&self) {
-        println!("afk fail: not implemented");
-        println!("  task_id: {}", self.task_id);
-        println!("  message: {:?}", self.message);
+        use crate::progress::{SessionProgress, TaskStatus};
+
+        // Load progress
+        let mut progress = match SessionProgress::load(None) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("\x1b[31mError loading progress:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        };
+
+        // Mark task as failed in progress
+        progress.set_task_status(
+            &self.task_id,
+            TaskStatus::Failed,
+            "manual",
+            self.message.clone(),
+        );
+
+        if let Err(e) = progress.save(None) {
+            eprintln!("\x1b[31mError saving progress:\x1b[0m {e}");
+            std::process::exit(1);
+        }
+
+        let task = progress.get_task(&self.task_id);
+        let count = task.map(|t| t.failure_count).unwrap_or(1);
+
+        println!("\x1b[31m✗\x1b[0m Task \x1b[1m{}\x1b[0m marked failed (attempt {count})", self.task_id);
+        if let Some(ref msg) = self.message {
+            println!("  \x1b[2m{msg}\x1b[0m");
+        }
     }
 }
 
 impl ResetCommand {
-    /// Execute the reset command (stub).
+    /// Execute the reset command.
     pub fn execute(&self) {
-        println!("afk reset: not implemented");
-        println!("  task_id: {}", self.task_id);
+        use crate::prd::PrdDocument;
+        use crate::progress::{SessionProgress, TaskStatus};
+
+        // Load progress
+        let mut progress = match SessionProgress::load(None) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("\x1b[31mError loading progress:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        };
+
+        // Reset task to pending
+        progress.set_task_status(&self.task_id, TaskStatus::Pending, "manual", None);
+
+        // Clear failure count if the task exists
+        if let Some(task) = progress.get_task_mut(&self.task_id) {
+            task.failure_count = 0;
+            task.started_at = None;
+            task.completed_at = None;
+        }
+
+        if let Err(e) = progress.save(None) {
+            eprintln!("\x1b[31mError saving progress:\x1b[0m {e}");
+            std::process::exit(1);
+        }
+
+        // Also reset passes in PRD
+        if let Ok(mut prd) = PrdDocument::load(None) {
+            if let Some(story) = prd.user_stories.iter_mut().find(|s| s.id == self.task_id) {
+                story.passes = false;
+            }
+            let _ = prd.save(None);
+        }
+
+        println!("\x1b[33m↺\x1b[0m Task \x1b[1m{}\x1b[0m reset to pending", self.task_id);
     }
 }
 
