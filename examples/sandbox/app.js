@@ -42,6 +42,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Deletes a task from the list
+     * @param {HTMLLIElement} taskItem - The task list item element to delete
+     */
+    function deleteTask(taskItem) {
+        taskItem.remove();
+    }
+
+    /**
      * Adds a new task to the list
      * @param {string} text - The task description
      */
@@ -52,6 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkbox = taskElement.querySelector('input[type="checkbox"]');
         checkbox.addEventListener('change', () => {
             toggleTaskComplete(taskElement, checkbox.checked);
+        });
+        
+        // Add delete button click handler
+        const deleteBtn = taskElement.querySelector('.delete-btn');
+        deleteBtn.addEventListener('click', () => {
+            deleteTask(taskElement);
         });
         
         taskList.appendChild(taskElement);
