@@ -418,6 +418,33 @@ class IterationRunner:
 
     config: AfkConfig
     output: OutputHandler = field(default_factory=OutputHandler)
+    _current_iteration: int = field(default=0, init=False)
+    _max_iterations: int = field(default=0, init=False)
+    _current_task_id: str | None = field(default=None, init=False)
+    _current_task_description: str | None = field(default=None, init=False)
+
+    def set_iteration_context(
+        self,
+        iteration: int,
+        max_iterations: int,
+        task_id: str | None = None,
+        task_description: str | None = None,
+    ) -> None:
+        """Set context for the current iteration.
+
+        This context is used by the feedback display to show iteration
+        progress and current task information.
+
+        Args:
+            iteration: Current iteration number (1-indexed).
+            max_iterations: Total iterations planned.
+            task_id: ID of the current task being worked on.
+            task_description: Description of the current task.
+        """
+        self._current_iteration = iteration
+        self._max_iterations = max_iterations
+        self._current_task_id = task_id
+        self._current_task_description = task_description
 
     def run(
         self,
@@ -437,6 +464,10 @@ class IterationRunner:
         Returns:
             IterationResult with success status and any output
         """
+        # Update iteration context if not already set
+        if self._current_iteration == 0:
+            self._current_iteration = iteration
+
         # Generate prompt if not provided
         if prompt is None:
             prompt = generate_prompt(self.config, bootstrap=True)
@@ -463,6 +494,11 @@ class IterationRunner:
         stream: bool,
     ) -> IterationResult:
         """Execute AI CLI command and return result."""
+        # Start feedback display before running command
+        self.output.start_feedback()
+        # Reset metrics collector for this iteration
+        self.output.metrics_collector.reset()
+
         try:
             # Pass prompt as final argument (universal across AI CLIs)
             full_cmd = cmd + [prompt]
@@ -479,7 +515,13 @@ class IterationRunner:
             if stream and process.stdout:
                 output_buffer: list[str] = []
                 for line in iter(process.stdout.readline, ""):
-                    self.output.stream_line(line)
+                    self.output.stream_line(
+                        line,
+                        iteration_current=self._current_iteration,
+                        iteration_total=self._max_iterations,
+                        task_id=self._current_task_id,
+                        task_description=self._current_task_description,
+                    )
                     output_buffer.append(line)
 
                     if self.output.contains_completion_signal(line):
@@ -517,6 +559,9 @@ class IterationRunner:
             )
         except Exception as e:
             return IterationResult(success=False, error=str(e))
+        finally:
+            # Always stop feedback display when iteration completes
+            self.output.stop_feedback()
 
 
 # =============================================================================

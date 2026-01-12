@@ -848,10 +848,11 @@ class TestOutputHandlerFeedbackIntegration:
         with patch.object(handler._feedback, "update") as mock_update:
             handler.stream_line("Write file: test.py\n")
 
-        # Should have called update with current metrics
+        # Should have called update with current metrics (now using keyword args)
         mock_update.assert_called()
         call_args = mock_update.call_args
-        metrics = call_args[0][0]  # First positional argument
+        # Metrics is now passed as keyword argument
+        metrics = call_args.kwargs.get("metrics")
         assert metrics is handler.metrics_collector.metrics
 
     def test_stream_line_parses_tool_call_and_records_metrics(self) -> None:
