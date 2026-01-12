@@ -466,6 +466,7 @@ pub struct ResumeCommand {
 impl GoCommand {
     /// Execute the go command.
     pub fn execute(&self) {
+        use crate::bootstrap::ensure_ai_cli_configured;
         use crate::config::{AfkConfig, SourceConfig};
         use crate::prd::PrdDocument;
         use crate::runner::run_loop;
@@ -516,10 +517,13 @@ impl GoCommand {
             }
         }
 
-        // Ensure AI CLI is configured
-        if config.ai_cli.command.is_empty() {
-            config.ai_cli.command = "claude".to_string();
-            config.ai_cli.args = vec!["--dangerously-skip-permissions".to_string(), "-p".to_string()];
+        // Ensure AI CLI is configured (first-run experience)
+        if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+            config.ai_cli = ai_cli;
+        } else {
+            // No AI CLI available - exit
+            eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured. Install one and try again.");
+            std::process::exit(1);
         }
 
         // Dry run mode
@@ -638,7 +642,6 @@ impl InitCommand {
     /// Execute the init command.
     pub fn execute(&self) {
         use crate::bootstrap::{analyse_project, generate_config, infer_sources};
-        use crate::config::AfkConfig;
         use std::fs;
         use std::path::Path;
 
@@ -667,10 +670,11 @@ impl InitCommand {
         let mut config = generate_config(&analysis);
         config.sources = infer_sources(None);
 
-        // Infer AI CLI
+        // Infer AI CLI using bootstrap detection (gets proper args per CLI)
         if config.ai_cli.command.is_empty() {
-            config.ai_cli.command = detect_ai_cli();
-            config.ai_cli.args = vec!["--dangerously-skip-permissions".to_string(), "-p".to_string()];
+            if let Some(ai_cli) = crate::bootstrap::detect_ai_cli() {
+                config.ai_cli = ai_cli;
+            }
         }
 
         // Show what would be written
@@ -731,25 +735,6 @@ impl InitCommand {
     }
 }
 
-/// Detect available AI CLI.
-fn detect_ai_cli() -> String {
-    use std::process::Command;
-
-    // Check in priority order
-    for cmd in ["claude", "agent", "codex"] {
-        if Command::new(cmd)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            return cmd.to_string();
-        }
-    }
-
-    // Default to claude
-    "claude".to_string()
-}
 
 impl StatusCommand {
     /// Execute the status command.

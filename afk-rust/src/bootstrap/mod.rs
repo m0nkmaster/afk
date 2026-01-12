@@ -1,11 +1,75 @@
 //! Project analysis and auto-configuration.
 //!
 //! This module detects project type, available tools, and generates config.
+//! Also handles the first-run experience for AI CLI selection.
 
-use crate::config::{AfkConfig, FeedbackLoopsConfig, SourceConfig};
+use crate::config::{AfkConfig, AiCliConfig, FeedbackLoopsConfig, SourceConfig, AFK_DIR, CONFIG_FILE};
 use std::collections::HashMap;
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::Command;
+
+/// Information about an AI CLI tool.
+#[derive(Debug, Clone)]
+pub struct AiCliInfo {
+    /// Command to run (e.g., "claude", "agent").
+    pub command: &'static str,
+    /// Human-readable name.
+    pub name: &'static str,
+    /// Default arguments for autonomous operation.
+    pub args: &'static [&'static str],
+    /// Short description.
+    pub description: &'static str,
+    /// URL for installation instructions.
+    pub install_url: &'static str,
+}
+
+/// Known AI CLI tools with their configurations.
+/// Priority order for auto-detection: claude > agent > codex > kiro > aider > amp
+pub const AI_CLIS: &[AiCliInfo] = &[
+    AiCliInfo {
+        command: "claude",
+        name: "Claude Code",
+        args: &["--dangerously-skip-permissions", "-p"],
+        description: "Anthropic's Claude CLI for autonomous terminal-based AI coding",
+        install_url: "https://docs.anthropic.com/en/docs/claude-code",
+    },
+    AiCliInfo {
+        command: "agent",
+        name: "Cursor Agent",
+        args: &["-p", "--force"],
+        description: "Cursor's CLI agent for autonomous terminal-based AI coding",
+        install_url: "https://docs.cursor.com/cli",
+    },
+    AiCliInfo {
+        command: "codex",
+        name: "Codex",
+        args: &["--approval-mode", "full-auto", "-q"],
+        description: "OpenAI's Codex CLI for terminal-based AI coding",
+        install_url: "https://github.com/openai/codex",
+    },
+    AiCliInfo {
+        command: "aider",
+        name: "Aider",
+        args: &["--yes", "--message"],
+        description: "AI pair programming in your terminal",
+        install_url: "https://aider.chat",
+    },
+    AiCliInfo {
+        command: "amp",
+        name: "Amp",
+        args: &["--dangerously-allow-all"],
+        description: "Sourcegraph's agentic coding tool",
+        install_url: "https://sourcegraph.com/amp",
+    },
+    AiCliInfo {
+        command: "kiro",
+        name: "Kiro",
+        args: &["--auto"],
+        description: "Amazon's AI-powered development CLI for terminal-based coding",
+        install_url: "https://kiro.dev",
+    },
+];
 
 /// Detected project type.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -344,6 +408,174 @@ fn command_exists(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
+// ============================================================================
+// First-run AI CLI selection experience
+// ============================================================================
+
+/// Detect which AI CLI tools are installed on the system.
+///
+/// Returns a list of `AiCliInfo` for each installed AI CLI tool.
+pub fn detect_available_ai_clis() -> Vec<&'static AiCliInfo> {
+    AI_CLIS
+        .iter()
+        .filter(|cli| command_exists(cli.command))
+        .collect()
+}
+
+/// Result of the AI CLI selection prompt.
+#[derive(Debug, Clone)]
+pub enum AiCliSelectionResult {
+    /// User selected an AI CLI.
+    Selected(AiCliConfig),
+    /// No AI CLIs are available.
+    NoneAvailable,
+    /// User cancelled the selection.
+    Cancelled,
+}
+
+/// Interactively prompt the user to select an AI CLI.
+///
+/// # Arguments
+///
+/// * `available` - List of available AI CLI tools
+///
+/// # Returns
+///
+/// The selected `AiCliConfig`, or an error if no selection was made.
+pub fn prompt_ai_cli_selection(available: &[&AiCliInfo]) -> AiCliSelectionResult {
+    if available.is_empty() {
+        println!();
+        println!("\x1b[31mNo AI CLI tools found.\x1b[0m");
+        println!();
+        println!("Install one of the following:");
+        for cli in AI_CLIS {
+            println!("  • \x1b[36m{}\x1b[0m: {}", cli.name, cli.install_url);
+        }
+        println!();
+        return AiCliSelectionResult::NoneAvailable;
+    }
+
+    println!();
+    println!("\x1b[1mWelcome to afk!\x1b[0m");
+    println!();
+    println!("Detected AI tools:");
+    for (i, cli) in available.iter().enumerate() {
+        println!(
+            "  \x1b[36m{}\x1b[0m. {} \x1b[2m({})\x1b[0m",
+            i + 1,
+            cli.name,
+            cli.description
+        );
+    }
+    println!();
+
+    // Prompt for selection
+    print!("Which AI CLI should afk use? [1-{}, default=1]: ", available.len());
+    let _ = io::stdout().flush();
+
+    let mut input = String::new();
+    if io::stdin().read_line(&mut input).is_err() {
+        return AiCliSelectionResult::Cancelled;
+    }
+
+    let input = input.trim();
+    
+    // Handle empty input (default to 1)
+    let choice: usize = if input.is_empty() {
+        1
+    } else {
+        match input.parse() {
+            Ok(n) if n >= 1 && n <= available.len() => n,
+            _ => {
+                println!("\x1b[31mInvalid selection.\x1b[0m");
+                return AiCliSelectionResult::Cancelled;
+            }
+        }
+    };
+
+    let selected = &available[choice - 1];
+    let config = AiCliConfig {
+        command: selected.command.to_string(),
+        args: selected.args.iter().map(|s| s.to_string()).collect(),
+    };
+
+    AiCliSelectionResult::Selected(config)
+}
+
+/// Ensure an AI CLI is configured, prompting the user if needed.
+///
+/// This is the main entry point for the first-run experience.
+/// If config exists with ai_cli set, returns it.
+/// Otherwise, detects available CLIs and prompts user to choose.
+///
+/// # Arguments
+///
+/// * `config` - Optional existing config (loads from file if None)
+///
+/// # Returns
+///
+/// The configured `AiCliConfig`, or None if the user needs to install a CLI.
+pub fn ensure_ai_cli_configured(config: Option<&mut AfkConfig>) -> Option<AiCliConfig> {
+    let config_path = std::path::Path::new(CONFIG_FILE);
+
+    // Check if config file exists - if so, use what's there
+    if config_path.exists() {
+        if let Some(cfg) = config {
+            return Some(cfg.ai_cli.clone());
+        }
+        if let Ok(cfg) = AfkConfig::load(Some(config_path)) {
+            return Some(cfg.ai_cli);
+        }
+    }
+
+    // First run - need to prompt
+    let available = detect_available_ai_clis();
+    let result = prompt_ai_cli_selection(&available);
+
+    match result {
+        AiCliSelectionResult::Selected(ai_cli) => {
+            // Save the selection to config
+            let mut new_config = config
+                .map(|c| c.clone())
+                .or_else(|| AfkConfig::load(None).ok())
+                .unwrap_or_default();
+            
+            new_config.ai_cli = ai_cli.clone();
+            
+            // Ensure .afk directory exists
+            let afk_dir = std::path::Path::new(AFK_DIR);
+            if let Err(e) = std::fs::create_dir_all(afk_dir) {
+                eprintln!("\x1b[33mWarning:\x1b[0m Could not create .afk directory: {e}");
+            }
+            
+            // Save config
+            if let Err(e) = new_config.save(Some(config_path)) {
+                eprintln!("\x1b[33mWarning:\x1b[0m Could not save config: {e}");
+            } else {
+                println!();
+                println!("\x1b[32m✓\x1b[0m Saved AI CLI choice: \x1b[36m{}\x1b[0m", ai_cli.command);
+                println!("  Config: \x1b[2m{}\x1b[0m", CONFIG_FILE);
+                println!();
+            }
+
+            Some(ai_cli)
+        }
+        AiCliSelectionResult::NoneAvailable | AiCliSelectionResult::Cancelled => None,
+    }
+}
+
+/// Detect the best available AI CLI tool without prompting.
+///
+/// This is used for auto-detection when prompting is not desired.
+/// Priority order: claude > agent > codex > kiro > aider > amp
+pub fn detect_ai_cli() -> Option<AiCliConfig> {
+    let available = detect_available_ai_clis();
+    available.first().map(|cli| AiCliConfig {
+        command: cli.command.to_string(),
+        args: cli.args.iter().map(|s| s.to_string()).collect(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -485,5 +717,123 @@ line-length = 100
             config.feedback_loops.types,
             Some("cargo check".to_string())
         );
+    }
+
+    // ========================================================================
+    // Tests for first-run AI CLI selection experience
+    // ========================================================================
+
+    #[test]
+    fn test_ai_cli_info_structure() {
+        // Verify AI_CLIS has expected entries
+        assert!(!AI_CLIS.is_empty());
+        
+        // First entry should be claude (highest priority)
+        assert_eq!(AI_CLIS[0].command, "claude");
+        assert_eq!(AI_CLIS[0].name, "Claude Code");
+        assert!(!AI_CLIS[0].args.is_empty());
+        assert!(!AI_CLIS[0].description.is_empty());
+        assert!(!AI_CLIS[0].install_url.is_empty());
+    }
+
+    #[test]
+    fn test_ai_cli_priority_order() {
+        // Verify priority order: claude > agent > codex > aider > amp > kiro
+        let commands: Vec<&str> = AI_CLIS.iter().map(|c| c.command).collect();
+        assert_eq!(commands[0], "claude");
+        assert_eq!(commands[1], "agent");
+        assert_eq!(commands[2], "codex");
+        // Remaining order may vary but all should be present
+        assert!(commands.contains(&"aider"));
+        assert!(commands.contains(&"amp"));
+        assert!(commands.contains(&"kiro"));
+    }
+
+    #[test]
+    fn test_ai_cli_args_are_valid() {
+        // Verify each CLI has appropriate args for autonomous operation
+        for cli in AI_CLIS {
+            // Each CLI should have at least one arg
+            // (some may have empty args if the CLI defaults to autonomous mode)
+            match cli.command {
+                "claude" => {
+                    assert!(cli.args.contains(&"--dangerously-skip-permissions"));
+                }
+                "agent" => {
+                    assert!(cli.args.contains(&"--force"));
+                }
+                "codex" => {
+                    assert!(cli.args.contains(&"--approval-mode"));
+                }
+                "aider" => {
+                    assert!(cli.args.contains(&"--yes"));
+                }
+                "amp" => {
+                    assert!(cli.args.contains(&"--dangerously-allow-all"));
+                }
+                "kiro" => {
+                    assert!(cli.args.contains(&"--auto"));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    #[test]
+    fn test_detect_available_ai_clis_returns_vec() {
+        // This test just verifies the function returns a valid Vec
+        // It may be empty if no AI CLIs are installed
+        let available = detect_available_ai_clis();
+        // The result should be a subset of AI_CLIS
+        for cli in &available {
+            assert!(AI_CLIS.iter().any(|c| c.command == cli.command));
+        }
+    }
+
+    #[test]
+    fn test_ai_cli_selection_result_none_available() {
+        // Test with empty available list
+        let result = prompt_ai_cli_selection(&[]);
+        assert!(matches!(result, AiCliSelectionResult::NoneAvailable));
+    }
+
+    #[test]
+    fn test_detect_ai_cli_uses_priority() {
+        // If detect_ai_cli returns Some, it should be from available CLIs
+        if let Some(config) = detect_ai_cli() {
+            // The command should be from our AI_CLIS list
+            assert!(AI_CLIS.iter().any(|c| c.command == config.command));
+            // Args should be non-empty for most CLIs
+            // (detect_ai_cli uses the first available, which has priority)
+        }
+        // If None, that's fine too - means no AI CLIs installed
+    }
+
+    #[test]
+    fn test_ai_cli_info_all_have_install_urls() {
+        for cli in AI_CLIS {
+            assert!(
+                cli.install_url.starts_with("http"),
+                "CLI {} should have a valid install URL",
+                cli.command
+            );
+        }
+    }
+
+    #[test]
+    fn test_ai_cli_info_all_have_descriptions() {
+        for cli in AI_CLIS {
+            assert!(
+                !cli.description.is_empty(),
+                "CLI {} should have a description",
+                cli.command
+            );
+            // Descriptions should be meaningful (at least 10 chars)
+            assert!(
+                cli.description.len() >= 10,
+                "CLI {} description should be meaningful",
+                cli.command
+            );
+        }
     }
 }
