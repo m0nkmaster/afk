@@ -3,10 +3,12 @@
 //! This module aggregates tasks from various sources (beads, json, markdown, github).
 
 pub mod beads;
+pub mod github;
 pub mod json;
 pub mod markdown;
 
 pub use beads::{close_beads_issue, load_beads_tasks};
+pub use github::load_github_tasks;
 pub use json::load_json_tasks;
 pub use markdown::load_markdown_tasks;
 
@@ -75,9 +77,8 @@ fn load_from_source(source: &SourceConfig) -> Result<Vec<UserStory>, SourceError
             Ok(load_markdown_tasks(path))
         }
         SourceType::Github => {
-            // GitHub source not yet implemented - return empty for now
-            // TODO: Implement when rust-009-source-github is completed
-            Err(SourceError::NotImplemented("github".to_string()))
+            let repo = source.repo.as_deref();
+            Ok(load_github_tasks(repo, &source.labels))
         }
     }
 }
@@ -360,13 +361,12 @@ mod tests {
     }
 
     #[test]
-    fn test_load_from_source_github_not_implemented() {
+    fn test_load_from_source_github() {
         let source = SourceConfig::github("owner/repo", vec![]);
         let result = load_from_source(&source);
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, SourceError::NotImplemented(_)));
+        // GitHub now returns Ok (may be empty if gh not available)
+        assert!(result.is_ok());
     }
 
     #[test]
