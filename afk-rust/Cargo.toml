@@ -39,6 +39,9 @@ tera = "1.20"
 # Clipboard support
 arboard = "3.4"
 
+# Signal handling
+ctrlc = "3.4"
+
 [dev-dependencies]
 tempfile = "3.15"
 

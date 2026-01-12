@@ -238,12 +238,33 @@ impl LoopController {
             }
         }
 
+        // Archive session if interrupted or complete
+        let archived_to = if stop_reason == StopReason::UserInterrupt {
+            if self.config.archive.enabled {
+                match crate::progress::archive_session("interrupted") {
+                    Ok(Some(path)) => {
+                        self.output.info(&format!("Session archived to: {}", path.display()));
+                        Some(path)
+                    }
+                    Ok(None) => None,
+                    Err(e) => {
+                        self.output.warning(&format!("Failed to archive session: {e}"));
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         RunResult {
             iterations_completed,
             tasks_completed,
             stop_reason,
             duration_seconds: start_time.elapsed().as_secs_f64(),
-            archived_to: None,
+            archived_to,
         }
     }
 
@@ -265,6 +286,20 @@ pub fn run_loop(
     resume: bool,
 ) -> RunResult {
     let mut controller = LoopController::new(config.clone());
+    
+    // Set up Ctrl+C handler
+    let interrupt_flag = controller.interrupt_flag();
+    let handler_result = ctrlc::set_handler(move || {
+        // Set the interrupt flag
+        interrupt_flag.store(true, Ordering::SeqCst);
+        eprintln!("\n\x1b[33mInterrupting... press Ctrl+C again to force quit\x1b[0m");
+    });
+    
+    if let Err(e) = handler_result {
+        // Non-fatal: just log and continue without handler
+        eprintln!("\x1b[2mWarning: Could not set up Ctrl+C handler: {e}\x1b[0m");
+    }
+    
     controller.run(max_iterations, branch, until_complete, timeout_override, resume)
 }
 
