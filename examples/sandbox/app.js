@@ -9,6 +9,14 @@
     const taskList = document.getElementById('task-list');
 
     /**
+     * Toggles the completed state of a task
+     * @param {HTMLLIElement} taskElement - The task list item
+     */
+    function toggleComplete(taskElement) {
+        taskElement.classList.toggle('completed');
+    }
+
+    /**
      * Creates a task list item element
      * @param {string} text - The task text
      * @returns {HTMLLIElement} The created list item
@@ -18,6 +26,9 @@
         
         const span = document.createElement('span');
         span.textContent = text;
+        span.addEventListener('click', function() {
+            toggleComplete(li);
+        });
         li.appendChild(span);
         
         return li;
