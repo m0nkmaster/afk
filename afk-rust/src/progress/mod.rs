@@ -3,6 +3,10 @@
 //! This module tracks session state and task progress,
 //! mirroring the Python Pydantic models in src/afk/progress.py.
 
+pub mod limits;
+
+pub use limits::{check_limits, get_failure_count, should_skip_task, LimitCheckResult, LimitSignal};
+
 use crate::config::PROGRESS_FILE;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};

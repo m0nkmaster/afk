@@ -635,19 +635,158 @@ impl RunCommand {
 }
 
 impl InitCommand {
-    /// Execute the init command (stub).
+    /// Execute the init command.
     pub fn execute(&self) {
-        println!("afk init: not implemented");
-        println!("  dry_run: {}", self.dry_run);
-        println!("  force: {}", self.force);
-        println!("  yes: {}", self.yes);
+        use crate::bootstrap::{analyse_project, generate_config, infer_sources};
+        use crate::config::AfkConfig;
+        use std::fs;
+        use std::path::Path;
+
+        let afk_dir = Path::new(".afk");
+        let config_path = afk_dir.join("config.json");
+
+        // Check if already initialised
+        if config_path.exists() && !self.force {
+            eprintln!("\x1b[33mAlready initialised.\x1b[0m Use --force to reinitialise.");
+            return;
+        }
+
+        // Analyse project
+        println!("\x1b[1mAnalysing project...\x1b[0m");
+        let analysis = analyse_project(None);
+
+        println!("  Project type: {:?}", analysis.project_type);
+        if let Some(ref name) = analysis.name {
+            println!("  Project name: {name}");
+        }
+        if let Some(ref pm) = analysis.package_manager {
+            println!("  Package manager: {pm}");
+        }
+
+        // Generate config
+        let mut config = generate_config(&analysis);
+        config.sources = infer_sources(None);
+
+        // Infer AI CLI
+        if config.ai_cli.command.is_empty() {
+            config.ai_cli.command = detect_ai_cli();
+            config.ai_cli.args = vec!["--dangerously-skip-permissions".to_string(), "-p".to_string()];
+        }
+
+        // Show what would be written
+        println!("\n\x1b[1mConfiguration:\x1b[0m");
+        println!("  AI CLI: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
+        println!("  Sources: {:?}", config.sources.iter().map(|s| &s.source_type).collect::<Vec<_>>());
+        if let Some(ref cmd) = config.feedback_loops.test {
+            println!("  Test: {cmd}");
+        }
+        if let Some(ref cmd) = config.feedback_loops.lint {
+            println!("  Lint: {cmd}");
+        }
+
+        // Dry run mode
+        if self.dry_run {
+            println!("\n\x1b[2mDry run - no files written.\x1b[0m");
+            return;
+        }
+
+        // Create .afk directory
+        if let Err(e) = fs::create_dir_all(afk_dir) {
+            eprintln!("\x1b[31mError creating .afk directory:\x1b[0m {e}");
+            std::process::exit(1);
+        }
+
+        // Write config
+        if let Err(e) = config.save(Some(&config_path)) {
+            eprintln!("\x1b[31mError saving config:\x1b[0m {e}");
+            std::process::exit(1);
+        }
+
+        // Create empty prd.json
+        let prd_path = afk_dir.join("prd.json");
+        if !prd_path.exists() {
+            let empty_prd = r#"{
+  "project": "",
+  "branchName": "",
+  "description": "",
+  "userStories": []
+}"#;
+            if let Err(e) = fs::write(&prd_path, empty_prd) {
+                eprintln!("\x1b[31mError creating prd.json:\x1b[0m {e}");
+            }
+        }
+
+        println!("\n\x1b[32m✓ Initialised afk\x1b[0m");
+        println!("  Config: {}", config_path.display());
+
+        // Suggest next steps
+        println!("\n\x1b[1mNext steps:\x1b[0m");
+        if config.sources.is_empty() {
+            println!("  1. Add a task source:");
+            println!("     afk source add beads      # Use beads issues");
+            println!("     afk prd parse spec.md     # Parse a requirements doc");
+        } else {
+            println!("  1. afk go   # Start working through tasks");
+        }
     }
 }
 
+/// Detect available AI CLI.
+fn detect_ai_cli() -> String {
+    use std::process::Command;
+
+    // Check in priority order
+    for cmd in ["claude", "agent", "codex"] {
+        if Command::new(cmd)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return cmd.to_string();
+        }
+    }
+
+    // Default to claude
+    "claude".to_string()
+}
+
 impl StatusCommand {
-    /// Execute the status command (stub).
+    /// Execute the status command.
     pub fn execute(&self) {
-        println!("afk status: not implemented");
+        use crate::prd::PrdDocument;
+        use crate::progress::SessionProgress;
+
+        let prd = PrdDocument::load(None).unwrap_or_default();
+        let progress = SessionProgress::load(None).unwrap_or_default();
+
+        let (pending, completed) = prd.get_story_counts();
+        let total = pending + completed;
+
+        println!("\x1b[1mafk status\x1b[0m");
+        println!();
+
+        if total == 0 {
+            println!("  No tasks configured.");
+            println!("  Run \x1b[1mafk init\x1b[0m to get started.");
+            return;
+        }
+
+        println!("  \x1b[1mTasks:\x1b[0m {completed}/{total} complete");
+
+        if let Some(next) = prd.get_next_story() {
+            println!("  \x1b[1mNext:\x1b[0m {} - {}", next.id, next.title);
+        }
+
+        println!("  \x1b[1mIterations:\x1b[0m {}", progress.iterations);
+
+        let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
+        if pend + in_prog + comp + fail + skip > 0 {
+            println!(
+                "  \x1b[1mProgress:\x1b[0m {} pending, {} in-progress, {} complete, {} failed, {} skipped",
+                pend, in_prog, comp, fail, skip
+            );
+        }
     }
 }
 
