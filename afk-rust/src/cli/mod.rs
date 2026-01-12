@@ -464,15 +464,138 @@ pub struct ResumeCommand {
 // ============================================================================
 
 impl GoCommand {
-    /// Execute the go command (stub).
+    /// Execute the go command.
     pub fn execute(&self) {
-        println!("afk go: not implemented");
-        println!("  iterations_or_source: {:?}", self.iterations_or_source);
-        println!("  dry_run: {}", self.dry_run);
-        println!("  until_complete: {}", self.until_complete);
-        println!("  feedback: {:?}", self.feedback);
-        println!("  no_mascot: {}", self.no_mascot);
+        use crate::config::{AfkConfig, SourceConfig};
+        use crate::prd::PrdDocument;
+        use crate::runner::run_loop;
+        use std::path::Path;
+
+        // Parse iterations_or_source
+        let (iterations, explicit_source) = self.parse_args();
+
+        // Try to load existing config, or create default
+        let mut config = AfkConfig::load(None).unwrap_or_default();
+
+        // Handle explicit source file path
+        if let Some(ref source_path) = explicit_source {
+            let path = Path::new(source_path);
+            if !path.exists() {
+                eprintln!("\x1b[31mError:\x1b[0m Source file not found: {source_path}");
+                std::process::exit(1);
+            }
+
+            // Determine source type from extension
+            let source = if source_path.ends_with(".json") {
+                SourceConfig::json(source_path)
+            } else {
+                SourceConfig::markdown(source_path)
+            };
+
+            config.sources = vec![source];
+        }
+
+        // Check for existing PRD with stories (zero-config mode)
+        if config.sources.is_empty() {
+            let prd = PrdDocument::load(None).unwrap_or_default();
+            if !prd.user_stories.is_empty() {
+                println!("\x1b[2mUsing existing .afk/prd.json ({} stories)\x1b[0m", prd.user_stories.len());
+            } else {
+                // Try to infer sources
+                let inferred = infer_sources();
+                if inferred.is_empty() {
+                    eprintln!("\x1b[33mNo task sources found.\x1b[0m");
+                    eprintln!();
+                    eprintln!("Try one of:");
+                    eprintln!("  afk go TODO.md           # Use a markdown file");
+                    eprintln!("  afk prd parse spec.md    # Parse a requirements doc");
+                    eprintln!("  afk source add beads     # Use beads issues");
+                    std::process::exit(1);
+                }
+                config.sources = inferred;
+            }
+        }
+
+        // Ensure AI CLI is configured
+        if config.ai_cli.command.is_empty() {
+            config.ai_cli.command = "claude".to_string();
+            config.ai_cli.args = vec!["--dangerously-skip-permissions".to_string(), "-p".to_string()];
+        }
+
+        // Dry run mode
+        if self.dry_run {
+            println!("\x1b[1mDry run mode - would execute:\x1b[0m");
+            println!("  AI CLI: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
+            println!("  Iterations: {}", iterations.unwrap_or(10));
+            println!("  Sources: {:?}", config.sources.iter().map(|s| &s.source_type).collect::<Vec<_>>());
+            return;
+        }
+
+        // Run the loop
+        let result = run_loop(
+            &config,
+            iterations,
+            None, // branch
+            self.until_complete,
+            None, // timeout
+            false, // resume
+        );
+
+        // Exit with appropriate code
+        match result.stop_reason {
+            crate::runner::StopReason::Complete => std::process::exit(0),
+            crate::runner::StopReason::MaxIterations => std::process::exit(0),
+            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
+            _ => std::process::exit(1),
+        }
     }
+
+    /// Parse iterations_or_source argument.
+    fn parse_args(&self) -> (Option<u32>, Option<String>) {
+        match &self.iterations_or_source {
+            Some(arg) => {
+                // Try to parse as number first
+                if let Ok(n) = arg.parse::<u32>() {
+                    (Some(n), None)
+                } else {
+                    // It's a path - use iterations_if_source or default 10
+                    (self.iterations_if_source.or(Some(10)), Some(arg.clone()))
+                }
+            }
+            None => (Some(10), None), // Default 10 iterations
+        }
+    }
+}
+
+/// Infer sources from the current directory.
+fn infer_sources() -> Vec<crate::config::SourceConfig> {
+    use crate::config::SourceConfig;
+    use std::path::Path;
+
+    let mut sources = Vec::new();
+
+    // Check for TODO.md or similar
+    for name in ["TODO.md", "TASKS.md", "tasks.md", "todo.md"] {
+        if Path::new(name).exists() {
+            sources.push(SourceConfig::markdown(name));
+            break;
+        }
+    }
+
+    // Check for beads (bd command)
+    if std::process::Command::new("bd")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        // Only add if .beads directory exists
+        if Path::new(".beads").exists() {
+            sources.push(SourceConfig::beads());
+        }
+    }
+
+    sources
 }
 
 impl RunCommand {
