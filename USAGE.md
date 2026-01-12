@@ -475,13 +475,15 @@ AGENTS.md            # Long-term project knowledge (at project root or in subfol
 ## Installation
 
 ```bash
-# From source (recommended during development)
-git clone https://github.com/m0nkmaster/afk.git && cd afk
-pip install -e ".[dev]"
+# One-liner (recommended)
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
 
-# Or with pip (once published)
-pip install afk
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
 
-# Or with pipx (once published)
-pipx install afk
+# From source
+git clone https://github.com/m0nkmaster/afk.git && cd afk/afk-rust
+cargo build --release
+# Binary at target/release/afk
 ```
