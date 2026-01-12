@@ -32,9 +32,9 @@ class FeedbackLoopsConfig(BaseModel):
 class LimitsConfig(BaseModel):
     """Configuration for iteration limits."""
 
-    max_iterations: int = 20
-    max_task_failures: int = 20
-    timeout_minutes: int = 30
+    max_iterations: int = 200
+    max_task_failures: int = 50
+    timeout_minutes: int = 120
 
 
 class OutputConfig(BaseModel):
