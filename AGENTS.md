@@ -6,14 +6,11 @@
 
 This is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools.
 
-The codebase is a rewrite from Python to Rust for improved performance and easier distribution.
-
 ## Development Setup
 
 ```bash
-cd afk-rust
 cargo build --release
-cargo test
+cargo test -- --test-threads=1
 ```
 
 ## Issue Tracking
@@ -35,12 +32,12 @@ Before committing, run:
 ```bash
 cargo fmt -- --check        # Formatting
 cargo clippy                # Linting
-cargo test                  # Run tests
+cargo test -- --test-threads=1  # Run tests
 ```
 
 ## Testing
 
-This project maintains comprehensive tests (580+ tests). Tests are required for all changes.
+This project maintains comprehensive tests. Tests are required for all changes.
 
 Write tests first. Follow TDD where practical.
 
@@ -83,7 +80,7 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 ## Architecture
 
 ```
-afk-rust/src/
+src/
 ├── main.rs          # Entry point
 ├── lib.rs           # Library exports
 ├── cli/
@@ -181,7 +178,7 @@ When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` u
 
 ## Adding a New Task Source
 
-1. Create `afk-rust/src/sources/newsource.rs`
+1. Create `src/sources/newsource.rs`
 2. Implement `load_newsource_tasks() -> Result<Vec<UserStory>, Error>`
 3. Add variant to `SourceType` enum in `config/mod.rs`
 4. Add match arm to `load_from_source()` in `sources/mod.rs`

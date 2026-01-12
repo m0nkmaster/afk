@@ -6,12 +6,9 @@ on:
       - "v*"
 
 env:
-  # Note: Nuitka 2.8.x doesn't fully support Python 3.14 yet
-  # Use 3.13 for release builds until Nuitka catches up
-  PYTHON_VERSION: "3.13"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  # Determine release type from tag
   prepare:
     name: Prepare Release
     runs-on: ubuntu-latest
@@ -26,93 +23,69 @@ jobs:
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           
-          # Check if this is a pre-release (contains -, e.g., v1.0.0-beta.1)
-          if [[ "$TAG" == *-* ]]; then
+          if [[ "$VERSION" == *-* ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
           fi
 
   build:
-    name: Build (${{ matrix.platform }})
+    name: Build (${{ matrix.target }})
     needs: prepare
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: linux-x86_64
+          - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
-            arch: x86_64
-
-          - platform: linux-arm64
+            name: linux-x86_64
+          - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
-            arch: arm64
-
-          # Note: darwin-x86_64 (Intel Mac) removed - requires paid runner
-          # Intel Mac users can install via pip/pipx instead
-
-          - platform: darwin-arm64
+            name: linux-arm64
+          - target: x86_64-apple-darwin
+            os: macos-13
+            name: darwin-x86_64
+          - target: aarch64-apple-darwin
             os: macos-latest
-            arch: arm64
-
-          - platform: windows-x86_64
+            name: darwin-arm64
+          - target: x86_64-pc-windows-msvc
             os: windows-latest
-            arch: x86_64
+            name: windows-x86_64
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          targets: ${{ matrix.target }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
 
-      # Linux: Install C compiler (usually present, but ensure patchelf for Nuitka)
-      - name: Install build dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y patchelf ccache
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
 
-      # macOS: Xcode command line tools should be present
-      - name: Install build dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install ccache || true
+      - name: Strip binary (Unix)
+        if: runner.os != 'Windows'
+        run: strip target/${{ matrix.target }}/release/afk || true
 
-      - name: Build with Nuitka (Unix)
+      - name: Prepare binary (Unix)
         if: runner.os != 'Windows'
         run: |
-          python -m nuitka \
-            --standalone \
-            --onefile \
-            --output-filename=afk-${{ matrix.platform }} \
-            --assume-yes-for-downloads \
-            --output-dir=dist \
-            src/afk/cli.py
+          cp target/${{ matrix.target }}/release/afk afk-${{ matrix.name }}
+          chmod +x afk-${{ matrix.name }}
 
-      - name: Build with Nuitka (Windows)
+      - name: Prepare binary (Windows)
         if: runner.os == 'Windows'
-        run: |
-          python -m nuitka `
-            --standalone `
-            --onefile `
-            --output-filename=afk-${{ matrix.platform }}.exe `
-            --assume-yes-for-downloads `
-            --output-dir=dist `
-            src/afk/cli.py
+        run: copy target\${{ matrix.target }}\release\afk.exe afk-${{ matrix.name }}.exe
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: afk-${{ matrix.platform }}
-          path: dist/afk-${{ matrix.platform }}*
+          name: afk-${{ matrix.name }}
+          path: afk-${{ matrix.name }}*
           if-no-files-found: error
 
   release:
@@ -132,16 +105,10 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release
-          
-          # Move binaries to release directory
           for dir in artifacts/*/; do
-            cp "${dir}"* release/ 2>/dev/null || true
+            cp "\${dir}"* release/ 2>/dev/null || true
           done
-          
-          # Make Unix binaries executable
           chmod +x release/afk-linux-* release/afk-darwin-* 2>/dev/null || true
-          
-          # List what we have
           ls -la release/
 
       - name: Generate checksums
@@ -156,26 +123,4 @@ jobs:
           files: release/*
           prerelease: ${{ needs.prepare.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
-          body: |
-            ## Installation
-            
-            ### macOS / Linux
-            ```bash
-            curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
-            ```
-            
-            ### Windows
-            ```powershell
-            irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
-            ```
-            
-            ### Via pip/pipx (fastest startup)
-            ```bash
-            pipx install afk
-            ```
-            
-            ### Verify checksums
-            Download `checksums.sha256` and verify:
-            ```bash
-            sha256sum -c checksums.sha256
-            ```
+          name: afk v${{ needs.prepare.outputs.version }}

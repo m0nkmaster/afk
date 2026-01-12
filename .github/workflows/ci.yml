@@ -1,16 +1,17 @@
-name: Rust CI
+name: CI
 
 on:
   push:
-    branches: [main, rust-conversion]
-    paths:
-      - 'afk-rust/**'
-      - '.github/workflows/rust-ci.yml'
-  pull_request:
     branches: [main]
     paths:
-      - 'afk-rust/**'
-      - '.github/workflows/rust-ci.yml'
+      - 'src/**'
+      - 'tests/**'
+      - 'benches/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -29,7 +30,6 @@ jobs:
           components: rustfmt
 
       - name: Check formatting
-        working-directory: afk-rust
         run: cargo fmt --check
 
   clippy:
@@ -45,11 +45,8 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: afk-rust
 
       - name: Run clippy
-        working-directory: afk-rust
         run: cargo clippy --all-targets --all-features
 
   test:
@@ -67,18 +64,13 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: afk-rust
 
       - name: Run tests
-        working-directory: afk-rust
-        run: cargo test --release
+        run: cargo test --release -- --test-threads=1
 
       - name: Build
-        working-directory: afk-rust
         run: cargo build --release
 
-  # Summary job to simplify branch protection rules
   ci-success:
     name: CI Success
     needs: [fmt, clippy, test]

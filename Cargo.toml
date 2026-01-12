@@ -9,7 +9,7 @@ authors = ["Rob MacDonald"]
 keywords = ["ai", "coding", "automation", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 repository = "https://github.com/robo-mac/afk"
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 # CLI framework

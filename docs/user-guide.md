@@ -1,8 +1,6 @@
-# afk Usage Guide
+# afk User Guide
 
 Complete reference for **afk** — autonomous AI coding loops, Ralph Wiggum style.
-
----
 
 ## Table of Contents
 
@@ -15,8 +13,6 @@ Complete reference for **afk** — autonomous AI coding loops, Ralph Wiggum styl
 - [Workflow Examples](#workflow-examples)
 - [Debugging](#debugging)
 - [File Structure](#file-structure)
-
----
 
 ## Quick Start
 
@@ -45,8 +41,6 @@ afk run 10                       # Run 10 iterations
 3. **If nothing found** → shows helpful error with next steps
 
 This means you can just drop a `prd.json` in `.afk/` and run `afk go` — no configuration needed.
-
----
 
 ## Core Concepts
 
@@ -101,10 +95,10 @@ Quality gates (feedback loops) run after each task completion:
 
 ```json
 {
-  "feedback_loops": {
-    "types": "mypy .",
-    "lint": "ruff check .",
-    "test": "pytest -x"
+  "feedbackLoops": {
+    "types": "cargo check",
+    "lint": "cargo clippy",
+    "test": "cargo test"
   }
 }
 ```
@@ -120,9 +114,7 @@ Learnings are recorded in two places:
 | **progress.json** | Per-task | Short-term memory for the current session |
 | **AGENTS.md** | Project-wide | Long-term conventions that benefit future sessions |
 
-The AI reads these files directly and updates them as it works. Task-specific learnings go in `progress.json` as an array on each task entry. Project-wide discoveries go in `AGENTS.md` at the project root (or in a subfolder's `AGENTS.md` for localised knowledge).
-
----
+The AI reads these files directly and updates them as it works.
 
 ## Commands Reference
 
@@ -190,7 +182,15 @@ The AI reads these files directly and updates them as it works. Task-specific le
 | `afk archive list` | List archives |
 | `afk archive clear` | Archive and reset |
 
----
+### Utility Commands
+
+| Command | Description |
+|---------|-------------|
+| `afk update` | Update to latest version |
+| `afk update --check` | Check for updates without installing |
+| `afk completions bash` | Generate bash completions |
+| `afk completions zsh` | Generate zsh completions |
+| `afk completions fish` | Generate fish completions |
 
 ## Configuration
 
@@ -202,29 +202,29 @@ All config lives in `.afk/config.json`:
     {"type": "beads"},
     {"type": "json", "path": "prd.json"}
   ],
-  "feedback_loops": {
-    "types": "mypy .",
-    "lint": "ruff check .",
-    "test": "pytest -x"
+  "feedbackLoops": {
+    "types": "cargo check",
+    "lint": "cargo clippy",
+    "test": "cargo test"
   },
   "limits": {
-    "max_iterations": 20,
-    "max_task_failures": 3,
-    "timeout_minutes": 120
+    "maxIterations": 20,
+    "maxTaskFailures": 3,
+    "timeoutMinutes": 120
   },
-  "ai_cli": {
+  "aiCli": {
     "command": "claude",
     "args": ["--dangerously-skip-permissions", "-p"]
   },
   "git": {
-    "auto_commit": true,
-    "auto_branch": false,
-    "branch_prefix": "afk/"
+    "autoCommit": true,
+    "autoBranch": false,
+    "branchPrefix": "afk/"
   },
   "archive": {
     "enabled": true,
     "directory": ".afk/archive",
-    "on_branch_change": true
+    "onBranchChange": true
   }
 }
 ```
@@ -248,13 +248,13 @@ All config lives in `.afk/config.json`:
 
 ```json
 {
-  "feedback_loops": {
-    "types": "mypy .",
-    "lint": "ruff check .",
-    "test": "pytest -x",
-    "build": "npm run build",
+  "feedbackLoops": {
+    "types": "cargo check",
+    "lint": "cargo clippy",
+    "test": "cargo test",
+    "build": "cargo build --release",
     "custom": {
-      "security": "bandit -r src/"
+      "security": "cargo audit"
     }
   }
 }
@@ -264,24 +264,9 @@ All config lives in `.afk/config.json`:
 
 | Limit | Description | Default |
 |-------|-------------|---------|
-| `max_iterations` | Stop after N iterations | 20 |
-| `max_task_failures` | Skip task after N failures | 3 |
-| `timeout_minutes` | Stop after N minutes | 120 |
-
-#### Git Integration
-
-```json
-{
-  "git": {
-    "auto_commit": true,
-    "auto_branch": false,
-    "branch_prefix": "afk/",
-    "commit_message_template": "afk: {task_id} - {message}"
-  }
-}
-```
-
----
+| `maxIterations` | Stop after N iterations | 200 |
+| `maxTaskFailures` | Skip task after N failures | 50 |
+| `timeoutMinutes` | Stop after N minutes | 120 |
 
 ## Task Sources
 
@@ -289,7 +274,8 @@ All config lives in `.afk/config.json`:
 
 ```json
 {
-  "tasks": [
+  "projectName": "my-project",
+  "userStories": [
     {
       "id": "auth-flow",
       "title": "Implement login flow",
@@ -323,8 +309,6 @@ Uses `bd ready` to get available work from your beads issue tracker.
 
 Uses `gh issue list`. Requires GitHub CLI to be installed and authenticated.
 
----
-
 ## AI CLI Support
 
 afk works with any CLI that accepts prompts as the final argument. On first run, `afk go` auto-detects installed CLIs and prompts you to select one.
@@ -339,7 +323,6 @@ afk works with any CLI that accepts prompts as the final argument. On first run,
 | **Aider** | `{"command": "aider", "args": ["--yes"]}` |
 | **Amp** | `{"command": "amp", "args": ["--dangerously-allow-all"]}` |
 | **Kiro** | `{"command": "kiro", "args": ["--auto"]}` |
-| **Custom** | `{"command": "your-cli", "args": [...]}` |
 
 ### Completion Signals
 
@@ -350,8 +333,6 @@ The AI can signal task completion by outputting:
 - `AFK_STOP`
 
 When detected, afk terminates the current iteration gracefully.
-
----
 
 ## Workflow Examples
 
@@ -412,8 +393,6 @@ afk run 10 --branch my-feature
 # This creates: afk/my-feature
 ```
 
----
-
 ## Debugging
 
 ### Check Current State
@@ -436,9 +415,9 @@ afk next
 **Quality gates failing**: Run the gate commands manually to see errors:
 
 ```bash
-mypy .
-ruff check .
-pytest -x
+cargo check
+cargo clippy
+cargo test
 ```
 
 **Context overflow**: Tasks are too large. Split them via `afk prd parse`.
@@ -453,8 +432,6 @@ cat AGENTS.md              # Long-term project knowledge
 ls .afk/archive/           # Previous sessions
 ```
 
----
-
 ## File Structure
 
 ```
@@ -463,27 +440,21 @@ ls .afk/archive/           # Previous sessions
 ├── prd.json         # Current task list (source of truth)
 ├── progress.json    # Session state (iterations, task status, per-task learnings)
 └── archive/         # Previous sessions
-    └── 2025-01-11_12-30-00_main_complete/
+    └── 2026-01-12_12-30-00_main_complete/
         ├── progress.json
         └── metadata.json
 
 AGENTS.md            # Long-term project knowledge (at project root or in subfolders)
 ```
 
----
-
 ## Installation
 
 ```bash
 # One-liner (recommended)
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
-
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
+curl -fsSL https://raw.githubusercontent.com/robo-mac/afk/main/scripts/install.sh | bash
 
 # From source
-git clone https://github.com/m0nkmaster/afk.git && cd afk/afk-rust
+git clone https://github.com/robo-mac/afk.git && cd afk
 cargo build --release
 # Binary at target/release/afk
 ```

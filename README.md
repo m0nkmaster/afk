@@ -34,20 +34,26 @@ afk run 10                       # Run 10 iterations
 
 ```bash
 # macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/robo-mac/afk/main/scripts/install.sh | bash
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/robo-mac/afk/main/scripts/install.ps1 | iex
 ```
 
-This installs a standalone binary — no Python required. Updates with `afk update`.
+This installs a standalone binary — no dependencies required. Updates with `afk update`.
 
-### From source (development)
+### From source
 
 ```bash
-git clone https://github.com/m0nkmaster/afk.git && cd afk/afk-rust
+git clone https://github.com/robo-mac/afk.git && cd afk
 cargo build --release
 # Binary at target/release/afk
+```
+
+### Cargo
+
+```bash
+cargo install afk
 ```
 
 ## Key Commands
@@ -79,8 +85,9 @@ On first run, `afk go` auto-detects installed CLIs and prompts you to select one
 
 ## Documentation
 
-- **[USAGE.md](USAGE.md)** — Complete command reference, configuration options, and workflow examples
-- **[AGENTS.md](AGENTS.md)** — Developer guide for contributing to afk
+- **[docs/user-guide.md](docs/user-guide.md)** — Complete command reference and workflow examples
+- **[docs/architecture.md](docs/architecture.md)** — Technical overview for contributors
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute
 
 ## Task Size (Critical!)
 
