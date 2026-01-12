@@ -1331,10 +1331,24 @@ impl UpdateCommand {
 }
 
 impl CompletionsCommand {
-    /// Execute the completions command (stub).
+    /// Execute the completions command - generates shell completions.
     pub fn execute(&self) {
-        println!("afk completions: not implemented");
-        println!("  shell: {}", self.shell);
+        use clap::CommandFactory;
+        use clap_complete::{generate, Shell};
+        use std::io;
+
+        let shell = match self.shell.as_str() {
+            "bash" => Shell::Bash,
+            "zsh" => Shell::Zsh,
+            "fish" => Shell::Fish,
+            _ => {
+                eprintln!("\x1b[31mError:\x1b[0m Unsupported shell: {}", self.shell);
+                std::process::exit(1);
+            }
+        };
+
+        let mut cmd = Cli::command();
+        generate(shell, &mut cmd, "afk", &mut io::stdout());
     }
 }
 
