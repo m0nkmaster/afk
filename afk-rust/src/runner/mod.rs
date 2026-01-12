@@ -10,7 +10,7 @@ mod quality_gates;
 
 pub use controller::{run_loop, LoopController};
 pub use iteration::{run_iteration, IterationResult, IterationRunner};
-pub use output_handler::{OutputHandler, COMPLETION_SIGNALS};
+pub use output_handler::{FeedbackMode, OutputHandler, COMPLETION_SIGNALS};
 pub use quality_gates::{
     get_configured_gate_names, has_configured_gates, run_quality_gates, GateResult,
     QualityGateResult,

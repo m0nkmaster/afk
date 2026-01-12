@@ -4,7 +4,6 @@
 
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use crate::config::AfkConfig;
 use crate::prompt::{generate_prompt_with_root, PromptError};
@@ -172,7 +171,7 @@ impl IterationRunner {
     }
 
     /// Execute AI CLI command and return result.
-    fn execute_command(&self, cmd_parts: &[String], prompt: &str) -> IterationResult {
+    fn execute_command(&mut self, cmd_parts: &[String], prompt: &str) -> IterationResult {
         if cmd_parts.is_empty() {
             return IterationResult::failure("No command specified");
         }
@@ -374,7 +373,7 @@ mod tests {
     #[test]
     fn test_execute_command_empty_parts() {
         let config = AfkConfig::default();
-        let runner = IterationRunner::new(config);
+        let mut runner = IterationRunner::new(config);
 
         let result = runner.execute_command(&[], "prompt");
 
