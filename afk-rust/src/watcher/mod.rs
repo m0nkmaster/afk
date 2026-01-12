@@ -6,7 +6,7 @@
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -94,6 +94,7 @@ impl FileWatcher {
     }
 
     /// Check if a path should be ignored.
+    #[allow(dead_code)]
     fn should_ignore(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
         for pattern in &self.ignore_patterns {
@@ -120,7 +121,8 @@ impl FileWatcher {
             return Ok(());
         }
 
-        let (tx, rx) = channel();
+        // Use a bounded channel to prevent blocking when buffer is full
+        let (tx, rx) = sync_channel(100);
         let changes = self.changes.clone();
         let ignore_patterns = self.ignore_patterns.clone();
 
@@ -162,8 +164,8 @@ impl FileWatcher {
                         }
                     }
                 }
-                // Send the event to the channel for any external consumers
-                let _ = tx.send(result);
+                // Try to send the event - drop if buffer full (non-blocking)
+                let _ = tx.try_send(result);
             },
             Config::default(),
         )?;
@@ -181,8 +183,14 @@ impl FileWatcher {
     pub fn stop(&mut self) {
         if let Some(mut watcher) = self.watcher.take() {
             let _ = watcher.unwatch(&self.root);
+            // Explicitly drop to ensure cleanup
+            drop(watcher);
         }
-        self.receiver = None;
+        // Drain the receiver to unblock any waiting senders
+        if let Some(rx) = self.receiver.take() {
+            while rx.try_recv().is_ok() {}
+            drop(rx);
+        }
         self.running = false;
     }
 

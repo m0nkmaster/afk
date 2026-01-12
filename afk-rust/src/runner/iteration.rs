@@ -57,6 +57,7 @@ impl IterationResult {
 
 /// Error type for iteration operations.
 #[derive(Debug, thiserror::Error)]
+#[allow(dead_code)]
 pub enum IterationError {
     #[error("Failed to generate prompt: {0}")]
     PromptError(#[from] PromptError),

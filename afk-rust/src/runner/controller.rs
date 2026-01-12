@@ -72,7 +72,7 @@ impl LoopController {
         branch: Option<&str>,
         until_complete: bool,
         timeout_override: Option<u32>,
-        resume: bool,
+        _resume: bool,
     ) -> RunResult {
         let start_time = Instant::now();
 
@@ -158,6 +158,7 @@ impl LoopController {
     ) -> RunResult {
         let mut iterations_completed: u32 = 0;
         let mut tasks_completed: u32 = 0;
+        #[allow(unused_assignments)]
         let mut stop_reason = StopReason::Complete;
 
         let timeout_minutes = timeout_override.unwrap_or(self.config.limits.timeout_minutes);

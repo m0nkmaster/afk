@@ -40,17 +40,19 @@ cargo test                  # Run tests
 
 ## Testing
 
-This project maintains comprehensive tests (500+ tests). Tests are required for all changes.
+This project maintains comprehensive tests (580+ tests). Tests are required for all changes.
 
 Write tests first. Follow TDD where practical.
 
 ### Running Tests
 
+**Important:** Tests must run single-threaded due to the `notify` crate's FSEvents backend on macOS. Parallel test execution can cause hangs.
+
 ```bash
-cargo test                          # Run all tests
-cargo test --release                # Run in release mode (faster)
-cargo test config::                 # Run tests for config module
-cargo test -- --test-threads=1     # Run single-threaded (for isolation)
+cargo test -- --test-threads=1      # Run all tests (recommended)
+RUST_TEST_THREADS=1 cargo test      # Alternative via env var
+cargo test --release -- --test-threads=1  # Release mode
+cargo test config:: -- --test-threads=1   # Run tests for config module
 ```
 
 ### Test Modules
@@ -69,6 +71,7 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 | `feedback` | Metrics collection and ASCII art |
 | `watcher` | File system monitoring |
 | `runner` | Loop controller and iteration runner |
+| `cli_integration` | End-to-end CLI command tests (in tests/) |
 
 ### Writing Tests
 

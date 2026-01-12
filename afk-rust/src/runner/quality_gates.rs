@@ -3,10 +3,8 @@
 //! This module provides functionality to run quality gates (lint, test, types, etc.)
 //! and report pass/fail status.
 
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use crate::config::FeedbackLoopsConfig;
 
@@ -61,6 +59,7 @@ impl Default for QualityGateResult {
 }
 
 /// Default timeout for gates in seconds (5 minutes).
+#[allow(dead_code)]
 const DEFAULT_GATE_TIMEOUT_SECS: u64 = 300;
 
 /// Run all configured quality gates.
@@ -239,6 +238,7 @@ pub fn get_configured_gate_names(feedback_loops: &FeedbackLoopsConfig) -> Vec<St
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_quality_gate_result_new() {

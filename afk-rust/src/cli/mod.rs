@@ -1253,7 +1253,7 @@ impl ArchiveListCommand {
                 );
                 println!("{}", "-".repeat(75));
 
-                for (name, metadata) in archives.iter().take(20) {
+                for (_name, metadata) in archives.iter().take(20) {
                     let branch = metadata.branch.as_deref().unwrap_or("-");
                     let date = &metadata.archived_at[..19]; // Trim microseconds
                     println!(
