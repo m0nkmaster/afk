@@ -32,8 +32,12 @@ pub enum TaskStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskProgress {
     /// Unique identifier for the task.
+    /// Optional during deserialisation (will be populated from map key).
+    #[serde(default)]
     pub id: String,
     /// Source identifier (e.g., "beads", "json:path/to/file.json").
+    /// Optional during deserialisation (defaults to "unknown").
+    #[serde(default = "default_source")]
     pub source: String,
     /// Current status of the task.
     #[serde(default)]
@@ -101,6 +105,10 @@ impl Default for SessionProgress {
 
 fn default_started_at() -> String {
     Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string()
+}
+
+fn default_source() -> String {
+    "unknown".to_string()
 }
 
 /// Error type for progress operations.
@@ -596,6 +604,48 @@ mod tests {
         assert_eq!(task.status, TaskStatus::Pending);
         assert_eq!(task.failure_count, 0);
         assert!(task.commits.is_empty());
+    }
+
+    #[test]
+    fn test_task_progress_deserialisation_learnings_only() {
+        // AI agents may write simplified progress entries with only learnings
+        let json = r#"{
+            "learnings": [
+                "Used form element for Enter key submission",
+                "aria-live for screen reader announcements"
+            ]
+        }"#;
+
+        let task: TaskProgress = serde_json::from_str(json).unwrap();
+        assert_eq!(task.id, ""); // Defaults to empty, should be populated from map key
+        assert_eq!(task.source, "unknown");
+        assert_eq!(task.status, TaskStatus::Pending);
+        assert_eq!(task.learnings.len(), 2);
+    }
+
+    #[test]
+    fn test_session_progress_with_simplified_task_entries() {
+        // Test the exact format that caused the original error
+        let json = r#"{
+            "started_at": "2026-01-12T22:22:35.266735",
+            "iterations": 1,
+            "tasks": {
+                "html-structure": {
+                    "learnings": [
+                        "Used form element with id task-form for Enter key submission",
+                        "aria-live='polite' on task list for screen reader announcements"
+                    ]
+                }
+            }
+        }"#;
+
+        let session: SessionProgress = serde_json::from_str(json).unwrap();
+        assert_eq!(session.iterations, 1);
+        assert_eq!(session.tasks.len(), 1);
+
+        let task = session.tasks.get("html-structure").unwrap();
+        assert_eq!(task.source, "unknown");
+        assert_eq!(task.learnings.len(), 2);
     }
 
     #[test]

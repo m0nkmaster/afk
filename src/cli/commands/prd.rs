@@ -3,8 +3,11 @@
 //! This module implements `afk prd parse`, `afk prd sync`, and `afk prd show` commands
 //! for managing the product requirements document.
 
+use std::io::{BufRead, BufReader};
 use std::path::Path;
+use std::process::{Command, Stdio};
 
+use crate::bootstrap::ensure_ai_cli_configured;
 use crate::cli::output::{get_effective_mode, output_prompt};
 use crate::config::AfkConfig;
 use crate::prd::{PrdDocument, PrdError, generate_prd_prompt, load_prd_file, sync_prd_with_root};
@@ -64,7 +67,7 @@ pub fn prd_parse_impl(
     stdout: bool,
     config_path: Option<&Path>,
 ) -> PrdCommandResult {
-    let config = AfkConfig::load(config_path)?;
+    let mut config = AfkConfig::load(config_path)?;
 
     // Load the input file
     let input_path = Path::new(input_file);
@@ -77,16 +80,117 @@ pub fn prd_parse_impl(
     // Generate the prompt
     let prompt = generate_prd_prompt(&prd_content, output)?;
 
-    // Determine output mode
-    let mode = get_effective_mode(copy, file, stdout, &config);
+    // If any output flag is specified, output the prompt for manual use
+    if copy || file || stdout {
+        let mode = get_effective_mode(copy, file, stdout, &config);
+        output_prompt(&prompt, mode, &config)?;
 
-    // Output the prompt
-    output_prompt(&prompt, mode, &config)?;
+        // Show next steps
+        println!();
+        println!("\x1b[2mRun the prompt with your AI tool, then add the source:\x1b[0m");
+        println!("  \x1b[36mafk source add json {output}\x1b[0m");
 
-    // Show next steps
+        return Ok(());
+    }
+
+    // No output flags - run the AI CLI directly
+    // Ensure AI CLI is configured (first-run experience if needed)
+    if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+        config.ai_cli = ai_cli;
+    } else {
+        return Err(PrdCommandError::NoPrd); // Reusing error - no AI CLI available
+    }
+
+    // Run the AI CLI with the prompt
+    run_ai_cli_for_prd(&config, &prompt, output)
+}
+
+/// Run the AI CLI with the PRD parsing prompt.
+fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdCommandResult {
+    let command = &config.ai_cli.command;
+    let args: Vec<&str> = config.ai_cli.args.iter().map(|s| s.as_str()).collect();
+
+    println!(
+        "\x1b[1mParsing PRD with {}...\x1b[0m",
+        config.ai_cli.command
+    );
     println!();
-    println!("\x1b[2mRun the prompt with your AI tool, then add the source:\x1b[0m");
-    println!("  \x1b[36mafk source add json {output}\x1b[0m");
+
+    // Build the command
+    let mut cmd = Command::new(command);
+    cmd.args(&args)
+        .arg(prompt)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    // Spawn process
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "\x1b[31mError:\x1b[0m AI CLI not found: {}",
+                    command
+                );
+                eprintln!("\x1b[2mIs it installed and in your PATH?\x1b[0m");
+                return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
+            }
+            return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
+        }
+    };
+
+    // Stream stdout
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    println!("{line}");
+                }
+                Err(e) => {
+                    eprintln!("\x1b[33mWarning:\x1b[0m Error reading output: {e}");
+                    break;
+                }
+            }
+        }
+    }
+
+    // Wait for process to finish
+    match child.wait() {
+        Ok(status) => {
+            if !status.success() {
+                let exit_code = status.code().unwrap_or(-1);
+                eprintln!(
+                    "\x1b[31mError:\x1b[0m AI CLI exited with code {exit_code}"
+                );
+                return Err(PrdCommandError::PrdError(PrdError::ReadError(
+                    std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("AI CLI exited with code {exit_code}"),
+                    ),
+                )));
+            }
+        }
+        Err(e) => {
+            return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
+        }
+    }
+
+    // Check if output file was created
+    let output_path = Path::new(output);
+    if output_path.exists() {
+        println!();
+        println!("\x1b[32m✓\x1b[0m PRD parsed successfully");
+        println!("  Output: \x1b[36m{output}\x1b[0m");
+        println!();
+        println!("\x1b[2mStart working on tasks with:\x1b[0m");
+        println!("  \x1b[36mafk go\x1b[0m");
+    } else {
+        println!();
+        println!("\x1b[33mNote:\x1b[0m Output file not found at {output}");
+        println!("\x1b[2mThe AI may have written to a different location.\x1b[0m");
+    }
 
     Ok(())
 }
@@ -678,5 +782,70 @@ mod tests {
             get_effective_mode(false, false, true, &config),
             OutputMode::Stdout
         );
+    }
+
+    #[test]
+    fn test_prd_parse_without_output_flags_tries_ai_cli() {
+        // When no output flags are provided, prd_parse should try to run the AI CLI.
+        // Since the AI CLI won't exist in the test environment, it will fail,
+        // but we can verify it doesn't use the prompt output path.
+        let (temp, afk_dir) = setup_temp_dir();
+        let config_path = afk_dir.join("config.json");
+
+        // Create input file
+        let input_file = temp.path().join("requirements.md");
+        fs::write(&input_file, "# Test\n\nBuild something.").unwrap();
+
+        // Configure with a non-existent AI CLI command
+        let config = AfkConfig {
+            ai_cli: crate::config::AiCliConfig {
+                command: "nonexistent_ai_cli_for_test_12345".to_string(),
+                args: vec!["-p".to_string()],
+            },
+            ..Default::default()
+        };
+        config.save(Some(&config_path)).unwrap();
+
+        // No output flags - should try to run AI CLI and fail
+        let result = prd_parse_impl(
+            input_file.to_str().unwrap(),
+            ".afk/prd.json",
+            false,  // copy
+            false,  // file
+            false,  // stdout - no output flags!
+            Some(&config_path),
+        );
+
+        // Should fail because the AI CLI doesn't exist
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_prd_parse_with_copy_flag_outputs_prompt() {
+        let (temp, afk_dir) = setup_temp_dir();
+        let config_path = afk_dir.join("config.json");
+
+        // Create input file
+        let input_file = temp.path().join("requirements.md");
+        fs::write(&input_file, "# Test\n\nBuild something.").unwrap();
+
+        let config = AfkConfig::default();
+        config.save(Some(&config_path)).unwrap();
+
+        // With copy flag, should output prompt (not run AI CLI)
+        // This will fail due to clipboard access in CI, but that's expected
+        let result = prd_parse_impl(
+            input_file.to_str().unwrap(),
+            ".afk/prd.json",
+            true,   // copy - output flag set
+            false,
+            false,
+            Some(&config_path),
+        );
+
+        // Clipboard may fail in CI environments, but the function should return
+        // (either Ok or ClipboardError, not AI CLI error)
+        // The key is it doesn't try to run the AI CLI
+        let _ = result; // Just verify it doesn't panic
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "afk"
-version = "1.0.0-rc1"
+version = "1.0.0-rc1+202601122218"
 edition = "2024"
 rust-version = "1.85"
 description = "Autonomous AI coding loops - Ralph Wiggum style"

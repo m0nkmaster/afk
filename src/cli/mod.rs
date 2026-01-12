@@ -239,8 +239,11 @@ pub struct SourceRemoveCommand {
 pub enum PrdCommands {
     /// Parse a PRD into a structured JSON feature list.
     ///
-    /// Takes a product requirements document (markdown, text, etc.) and generates
-    /// an AI prompt to convert it into the Anthropic-style JSON format.
+    /// Takes a product requirements document (markdown, text, etc.) and runs the
+    /// configured AI CLI to convert it into structured JSON format.
+    ///
+    /// By default, runs the AI CLI directly. Use --stdout, --copy, or --file
+    /// to output the prompt for manual use instead.
     Parse(PrdParseCommand),
 
     /// Sync PRD from all configured sources.
@@ -656,7 +659,9 @@ impl RunCommand {
 impl InitCommand {
     /// Execute the init command.
     pub fn execute(&self) {
-        use crate::bootstrap::{analyse_project, generate_config, infer_sources};
+        use crate::bootstrap::{
+            analyse_project, ensure_ai_cli_configured, generate_config, infer_sources,
+        };
         use std::fs;
         use std::path::Path;
 
@@ -685,11 +690,18 @@ impl InitCommand {
         let mut config = generate_config(&analysis);
         config.sources = infer_sources(None);
 
-        // Infer AI CLI using bootstrap detection (gets proper args per CLI)
-        if config.ai_cli.command.is_empty() {
+        // Handle AI CLI selection
+        // In dry-run mode, just detect without prompting or saving
+        // Otherwise, prompt user to select (first-run experience)
+        if self.dry_run {
             if let Some(ai_cli) = crate::bootstrap::detect_ai_cli() {
                 config.ai_cli = ai_cli;
             }
+        } else if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+            config.ai_cli = ai_cli;
+        } else {
+            eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured.");
+            std::process::exit(1);
         }
 
         // Show what would be written
