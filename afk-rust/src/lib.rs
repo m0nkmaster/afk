@@ -16,3 +16,6 @@ pub mod prompt;
 pub mod runner;
 pub mod sources;
 pub mod watcher;
+
+// Re-export key types for convenience
+pub use sources::{aggregate_tasks, SourceError};
