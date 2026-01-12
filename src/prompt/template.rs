@@ -78,6 +78,9 @@ Example structure:
 {
   "tasks": {
     "auth-login": {
+      "id": "auth-login",
+      "source": "prd",
+      "status": "in_progress",
       "learnings": [
         "OAuth tokens stored in secure cookies, not localStorage",
         "Must call refreshToken before API requests if >30min old"
@@ -86,6 +89,12 @@ Example structure:
   }
 }
 ```
+
+Task fields:
+- `id`: Task identifier (must match the key)
+- `source`: Where the task came from (e.g. "prd", "beads", "github")
+- `status`: One of `pending`, `in_progress`, `completed`, `failed`, `skipped`
+- `learnings`: Array of strings with discoveries from this task
 
 ### Long-term: `AGENTS.md`
 
