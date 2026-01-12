@@ -33,11 +33,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+     * Toggles the completed state of a task
+     * @param {HTMLLIElement} taskItem - The task list item element
+     * @param {boolean} completed - Whether the task is completed
+     */
+    function toggleTaskComplete(taskItem, completed) {
+        taskItem.classList.toggle('completed', completed);
+    }
+
+    /**
      * Adds a new task to the list
      * @param {string} text - The task description
      */
     function addTask(text) {
         const taskElement = createTaskElement(text);
+        
+        // Add checkbox change handler for toggling completion
+        const checkbox = taskElement.querySelector('input[type="checkbox"]');
+        checkbox.addEventListener('change', () => {
+            toggleTaskComplete(taskElement, checkbox.checked);
+        });
+        
         taskList.appendChild(taskElement);
     }
 
