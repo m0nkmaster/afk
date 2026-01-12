@@ -795,9 +795,10 @@ fn test_sync_with_branch_override() {
 // ============================================================================
 
 #[test]
+#[ignore = "requires network access"]
 fn test_update_check_only() {
-    // This test requires network, so we just verify the command runs
-    // In CI, this might fail due to network restrictions
+    // This test requires network access to check for updates
+    // Run with: cargo test -- --ignored
     afk()
         .args(["update", "--check"])
         .assert()
