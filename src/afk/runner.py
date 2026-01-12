@@ -227,7 +227,14 @@ class OutputHandler:
         self.console.print(f"[dim]Running: {' '.join(cmd)}[/dim]")
         self.console.print()
 
-    def stream_line(self, line: str) -> None:
+    def stream_line(
+        self,
+        line: str,
+        iteration_current: int = 0,
+        iteration_total: int = 0,
+        task_id: str | None = None,
+        task_description: str | None = None,
+    ) -> None:
         """Output a streamed line and parse for metrics events.
 
         Parses the line through OutputParser and records any detected
@@ -237,8 +244,14 @@ class OutputHandler:
 
         Args:
             line: A line of output from the AI CLI.
+            iteration_current: Current iteration number (1-indexed).
+            iteration_total: Total iterations planned.
+            task_id: ID of the current task being worked on.
+            task_description: Description of the current task.
         """
-        self.console.print(line, end="")
+        # Only print line if feedback display is not active (avoid double output)
+        if self._feedback is None or not self._feedback._started:
+            self.console.print(line, end="")
 
         # Parse line and record events in metrics collector
         events = self._parser.parse(line)
@@ -259,9 +272,17 @@ class OutputHandler:
         # Poll file watcher for backup file change detection
         self._poll_watcher_changes()
 
-        # Update feedback display with current metrics
+        # Update feedback display with current metrics and context
         if self._feedback is not None:
-            self._feedback.update(self._collector.metrics)
+            activity_state = self._collector.get_activity_state()
+            self._feedback.update(
+                metrics=self._collector.metrics,
+                iteration_current=iteration_current,
+                iteration_total=iteration_total,
+                task_id=task_id,
+                task_description=task_description,
+                activity_state=activity_state,
+            )
 
     def completion_detected(self) -> None:
         """Display completion signal detected message."""

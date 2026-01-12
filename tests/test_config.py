@@ -92,9 +92,9 @@ class TestLimitsConfig:
     def test_defaults(self) -> None:
         """Test default values."""
         config = LimitsConfig()
-        assert config.max_iterations == 20
-        assert config.max_task_failures == 20
-        assert config.timeout_minutes == 30
+        assert config.max_iterations == 200
+        assert config.max_task_failures == 50
+        assert config.timeout_minutes == 120
 
     def test_custom_values(self) -> None:
         """Test custom limit values."""
@@ -190,7 +190,7 @@ class TestAfkConfig:
         """Test loading returns defaults when file doesn't exist."""
         config = AfkConfig.load(temp_project / ".afk/config.json")
         assert config.sources == []
-        assert config.limits.max_iterations == 20
+        assert config.limits.max_iterations == 200
 
     def test_load_existing_file(self, temp_afk_dir: Path, sample_config_data: dict) -> None:
         """Test loading from existing file."""
