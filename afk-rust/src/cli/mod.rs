@@ -3,6 +3,7 @@
 //! This module contains the clap CLI definitions and command implementations.
 
 pub mod commands;
+pub mod output;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -545,14 +546,21 @@ impl SourceRemoveCommand {
 }
 
 impl PrdParseCommand {
-    /// Execute the prd parse command (stub).
+    /// Execute the prd parse command.
     pub fn execute(&self) {
-        println!("afk prd parse: not implemented");
-        println!("  input_file: {}", self.input_file);
-        println!("  output: {}", self.output);
-        println!("  copy: {}", self.copy);
-        println!("  file: {}", self.file);
-        println!("  stdout: {}", self.stdout);
+        match commands::prd::prd_parse(
+            &self.input_file,
+            &self.output,
+            self.copy,
+            self.file,
+            self.stdout,
+        ) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 

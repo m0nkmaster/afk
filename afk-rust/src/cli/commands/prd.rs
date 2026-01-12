@@ -1,12 +1,13 @@
 //! PRD command implementations.
 //!
-//! This module implements the `afk prd sync` and `afk prd show` commands
+//! This module implements `afk prd parse`, `afk prd sync`, and `afk prd show` commands
 //! for managing the product requirements document.
 
 use std::path::Path;
 
+use crate::cli::output::{get_effective_mode, output_prompt};
 use crate::config::AfkConfig;
-use crate::prd::{sync_prd_with_root, PrdDocument, PrdError};
+use crate::prd::{generate_prd_prompt, load_prd_file, sync_prd_with_root, PrdDocument, PrdError};
 
 /// Result type for PRD command operations.
 pub type PrdCommandResult = Result<(), PrdCommandError>;
@@ -20,6 +21,76 @@ pub enum PrdCommandError {
     ConfigError(#[from] crate::config::ConfigError),
     #[error("No PRD found. Run `afk prd sync` or `afk prd parse` first.")]
     NoPrd,
+    #[error("PRD parse error: {0}")]
+    ParseError(#[from] crate::prd::PrdParseError),
+    #[error("Output error: {0}")]
+    OutputError(#[from] crate::cli::output::OutputError),
+    #[error("File not found: {0}")]
+    FileNotFound(String),
+}
+
+/// Parse a PRD file into structured JSON.
+///
+/// Takes a product requirements document (markdown, text, etc.) and generates
+/// an AI prompt to convert it into the structured JSON format.
+///
+/// # Arguments
+///
+/// * `input_file` - Path to the input file to parse
+/// * `output` - Path for the generated JSON output
+/// * `copy` - Copy to clipboard
+/// * `file` - Write prompt to file
+/// * `stdout` - Print to stdout
+///
+/// # Returns
+///
+/// Ok(()) on success, or an error if parsing fails.
+pub fn prd_parse(
+    input_file: &str,
+    output: &str,
+    copy: bool,
+    file: bool,
+    stdout: bool,
+) -> PrdCommandResult {
+    prd_parse_impl(input_file, output, copy, file, stdout, None)
+}
+
+/// Internal implementation of prd_parse with optional config path for testing.
+pub fn prd_parse_impl(
+    input_file: &str,
+    output: &str,
+    copy: bool,
+    file: bool,
+    stdout: bool,
+    config_path: Option<&Path>,
+) -> PrdCommandResult {
+    let config = AfkConfig::load(config_path)?;
+
+    // Load the input file
+    let input_path = Path::new(input_file);
+    if !input_path.exists() {
+        return Err(PrdCommandError::FileNotFound(input_file.to_string()));
+    }
+
+    let prd_content = load_prd_file(input_path)?;
+
+    // Generate the prompt
+    let prompt = generate_prd_prompt(&prd_content, output)?;
+
+    // Determine output mode
+    let mode = get_effective_mode(copy, file, stdout, &config);
+
+    // Output the prompt
+    output_prompt(&prompt, mode, &config)?;
+
+    // Show next steps
+    println!();
+    println!(
+        "\x1b[2mRun the prompt with your AI tool, then add the source:\x1b[0m"
+    );
+    println!("  \x1b[36mafk source add json {output}\x1b[0m");
+
+    Ok(())
 }
 
 /// Sync PRD from all configured sources.
@@ -188,7 +259,7 @@ fn format_timestamp(ts: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::SourceConfig;
+    use crate::config::{OutputMode, SourceConfig};
     use crate::prd::UserStory;
     use std::fs;
     use tempfile::TempDir;
@@ -499,5 +570,104 @@ mod tests {
         // story-1 should still have passes: true
         let prd = PrdDocument::load(Some(&prd_path)).unwrap();
         assert!(prd.user_stories[0].passes);
+    }
+
+    // Tests for prd_parse command
+
+    #[test]
+    fn test_prd_parse_file_not_found() {
+        let (temp, afk_dir) = setup_temp_dir();
+        let config_path = afk_dir.join("config.json");
+        let config = AfkConfig::default();
+        config.save(Some(&config_path)).unwrap();
+
+        let result = prd_parse_impl(
+            "/nonexistent/file.md",
+            ".afk/prd.json",
+            false,
+            false,
+            true,
+            Some(&config_path),
+        );
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            PrdCommandError::FileNotFound(path) => {
+                assert!(path.contains("nonexistent"));
+            }
+            _ => panic!("Expected FileNotFound error"),
+        }
+    }
+
+    #[test]
+    fn test_prd_parse_generates_prompt_to_stdout() {
+        let (temp, afk_dir) = setup_temp_dir();
+        let config_path = afk_dir.join("config.json");
+
+        // Create input file
+        let input_file = temp.path().join("requirements.md");
+        let content = "# My App\n\nBuild a todo list with user authentication.";
+        fs::write(&input_file, content).unwrap();
+
+        let config = AfkConfig::default();
+        config.save(Some(&config_path)).unwrap();
+
+        let result = prd_parse_impl(
+            input_file.to_str().unwrap(),
+            ".afk/prd.json",
+            false,
+            false,
+            true,
+            Some(&config_path),
+        );
+
+        // Should succeed with stdout mode
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_prd_parse_custom_output_path() {
+        let (temp, afk_dir) = setup_temp_dir();
+        let config_path = afk_dir.join("config.json");
+
+        // Create input file
+        let input_file = temp.path().join("prd.md");
+        fs::write(&input_file, "# Features\n\n- Feature 1").unwrap();
+
+        let config = AfkConfig::default();
+        config.save(Some(&config_path)).unwrap();
+
+        // Use custom output path
+        let result = prd_parse_impl(
+            input_file.to_str().unwrap(),
+            "custom/output/tasks.json",
+            false,
+            false,
+            true,
+            Some(&config_path),
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_prd_command_error_variants() {
+        // Test error display for all variants
+        let file_err = PrdCommandError::FileNotFound("test.md".to_string());
+        assert!(file_err.to_string().contains("File not found"));
+        assert!(file_err.to_string().contains("test.md"));
+
+        let no_prd = PrdCommandError::NoPrd;
+        assert!(no_prd.to_string().contains("No PRD found"));
+    }
+
+    #[test]
+    fn test_get_effective_mode() {
+        let config = AfkConfig::default();
+
+        // Test explicit flags
+        assert_eq!(get_effective_mode(true, false, false, &config), OutputMode::Clipboard);
+        assert_eq!(get_effective_mode(false, true, false, &config), OutputMode::File);
+        assert_eq!(get_effective_mode(false, false, true, &config), OutputMode::Stdout);
     }
 }
