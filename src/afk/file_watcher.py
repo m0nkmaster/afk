@@ -165,9 +165,15 @@ class FileWatcher:
         """Start watching for file system changes.
 
         This schedules the observer to watch the root directory recursively.
+        Creates a new observer if the previous one was stopped (threads can
+        only be started once).
         """
         if self._started:
             return
+
+        # Create a fresh observer if needed (threads can only be started once)
+        if not self._observer.is_alive():
+            self._observer = Observer()
 
         self._observer.schedule(
             self._handler,

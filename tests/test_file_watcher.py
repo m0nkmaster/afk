@@ -271,3 +271,33 @@ class TestFileWatcher:
 
         assert len(log_changes) == 0
         assert len(py_changes) >= 1
+
+    def test_watcher_restart_after_stop(self, tmp_path: Path) -> None:
+        """Test watcher can be stopped and restarted (new observer created)."""
+        watcher = FileWatcher(tmp_path)
+
+        # First start/stop cycle
+        watcher.start()
+        assert watcher.is_running is True
+        time.sleep(0.1)
+        (tmp_path / "file1.py").write_text("# first")
+        time.sleep(0.5)
+        changes1 = watcher.get_changes()
+        watcher.stop()
+        assert watcher.is_running is False
+
+        # Second start/stop cycle - this should work without RuntimeError
+        watcher.start()
+        assert watcher.is_running is True
+        time.sleep(0.1)
+        (tmp_path / "file2.py").write_text("# second")
+        time.sleep(0.5)
+        changes2 = watcher.get_changes()
+        watcher.stop()
+        assert watcher.is_running is False
+
+        # Both cycles should have detected changes
+        assert len(changes1) >= 1
+        assert len(changes2) >= 1
+        assert any("file1.py" in c.path for c in changes1)
+        assert any("file2.py" in c.path for c in changes2)
