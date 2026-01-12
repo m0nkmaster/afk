@@ -3,9 +3,11 @@
 //! This module implements the Ralph Wiggum pattern for autonomous AI coding.
 //! Each iteration spawns a fresh AI CLI instance with clean context.
 
+mod controller;
 mod iteration;
 mod output_handler;
 
+pub use controller::{run_loop, LoopController};
 pub use iteration::{run_iteration, IterationResult, IterationRunner};
 pub use output_handler::{OutputHandler, COMPLETION_SIGNALS};
 

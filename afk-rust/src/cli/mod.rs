@@ -476,16 +476,38 @@ impl GoCommand {
 }
 
 impl RunCommand {
-    /// Execute the run command (stub).
+    /// Execute the run command.
     pub fn execute(&self) {
-        println!("afk run: not implemented");
-        println!("  iterations: {}", self.iterations);
-        println!("  until_complete: {}", self.until_complete);
-        println!("  timeout: {:?}", self.timeout);
-        println!("  branch: {:?}", self.branch);
-        println!("  resume_session: {}", self.resume_session);
-        println!("  feedback: {:?}", self.feedback);
-        println!("  no_mascot: {}", self.no_mascot);
+        use crate::config::AfkConfig;
+        use crate::runner::run_loop;
+
+        // Load config
+        let config = match AfkConfig::load(None) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to load config: {e}");
+                eprintln!("\x1b[2mRun `afk init` to initialise the project.\x1b[0m");
+                std::process::exit(1);
+            }
+        };
+
+        // Run the loop
+        let result = run_loop(
+            &config,
+            Some(self.iterations),
+            self.branch.as_deref(),
+            self.until_complete,
+            self.timeout,
+            self.resume_session,
+        );
+
+        // Exit with appropriate code
+        match result.stop_reason {
+            crate::runner::StopReason::Complete => std::process::exit(0),
+            crate::runner::StopReason::MaxIterations => std::process::exit(0),
+            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
+            _ => std::process::exit(1),
+        }
     }
 }
 
