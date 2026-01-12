@@ -1,7 +1,8 @@
 //! CLI commands and argument handling.
 //!
-//! This module contains the clap CLI definitions and command stubs.
-//! Implementations will be added in future stories.
+//! This module contains the clap CLI definitions and command implementations.
+
+pub mod commands;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -505,26 +506,41 @@ impl StatusCommand {
 }
 
 impl SourceAddCommand {
-    /// Execute the source add command (stub).
+    /// Execute the source add command.
     pub fn execute(&self) {
-        println!("afk source add: not implemented");
-        println!("  source_type: {}", self.source_type);
-        println!("  path: {:?}", self.path);
+        match commands::source::source_add(&self.source_type, self.path.as_deref()) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl SourceListCommand {
-    /// Execute the source list command (stub).
+    /// Execute the source list command.
     pub fn execute(&self) {
-        println!("afk source list: not implemented");
+        match commands::source::source_list() {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl SourceRemoveCommand {
-    /// Execute the source remove command (stub).
+    /// Execute the source remove command.
     pub fn execute(&self) {
-        println!("afk source remove: not implemented");
-        println!("  index: {}", self.index);
+        match commands::source::source_remove(self.index) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
