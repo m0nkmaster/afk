@@ -19,6 +19,7 @@ pub mod progress;
 pub mod prompt;
 pub mod runner;
 pub mod sources;
+pub mod tui;
 pub mod watcher;
 
 // Re-export key types for convenience

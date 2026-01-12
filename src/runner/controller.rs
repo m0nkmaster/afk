@@ -353,6 +353,384 @@ pub fn run_loop(
     run_loop_with_options(config, options)
 }
 
+/// Run the autonomous afk loop with TUI (Terminal User Interface).
+///
+/// Provides a rich, animated dashboard showing live AI output,
+/// statistics, and progress.
+pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
+    use crate::tui::TuiApp;
+    use std::thread;
+
+    // Try to create TUI app
+    let mut tui_app = match TuiApp::new() {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("\x1b[33mWarning:\x1b[0m Failed to start TUI: {e}");
+            eprintln!("Falling back to standard output...");
+            return run_loop_with_options(config, options);
+        }
+    };
+
+    let tx = tui_app.sender();
+
+    // Clone config and options for the runner thread
+    let config_clone = config.clone();
+    let options_clone = options.clone();
+
+    // Spawn the runner in a background thread
+    let runner_handle = thread::spawn(move || {
+        run_loop_with_tui_sender(&config_clone, options_clone, tx)
+    });
+
+    // Run TUI in main thread (handles input and rendering)
+    if let Err(e) = tui_app.run() {
+        eprintln!("TUI error: {e}");
+    }
+
+    // Clean up TUI
+    let _ = tui_app.cleanup();
+
+    // Wait for runner to finish
+    match runner_handle.join() {
+        Ok(result) => result,
+        Err(_) => RunResult {
+            iterations_completed: 0,
+            tasks_completed: 0,
+            stop_reason: super::StopReason::AiError,
+            duration_seconds: 0.0,
+            archived_to: None,
+        },
+    }
+}
+
+/// Run loop with TUI event sender (internal).
+fn run_loop_with_tui_sender(
+    config: &AfkConfig,
+    options: RunOptions,
+    tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+) -> RunResult {
+    use crate::tui::TuiEvent;
+
+    let start_time = Instant::now();
+
+    // Determine effective max iterations
+    let max_iter = if options.until_complete {
+        u32::MAX
+    } else {
+        options.max_iterations.unwrap_or(config.limits.max_iterations)
+    };
+
+    // Sync PRD before loop
+    let prd = match sync_prd_with_root(config, options.branch.as_deref(), None) {
+        Ok(prd) => prd,
+        Err(e) => {
+            let _ = tx.send(TuiEvent::Error(format!("Failed to sync PRD: {e}")));
+            let _ = tx.send(TuiEvent::SessionComplete {
+                iterations: 0,
+                tasks: 0,
+                duration: start_time.elapsed().as_secs_f64(),
+                reason: "PRD sync failed".to_string(),
+            });
+            return RunResult {
+                iterations_completed: 0,
+                tasks_completed: 0,
+                stop_reason: super::StopReason::AiError,
+                duration_seconds: start_time.elapsed().as_secs_f64(),
+                archived_to: None,
+            };
+        }
+    };
+
+    // Check if there are any tasks
+    let pending_stories = prd.get_pending_stories();
+    if pending_stories.is_empty() {
+        let reason = if prd.user_stories.is_empty() {
+            "No tasks found"
+        } else {
+            "All tasks complete"
+        };
+        let _ = tx.send(TuiEvent::SessionComplete {
+            iterations: 0,
+            tasks: 0,
+            duration: start_time.elapsed().as_secs_f64(),
+            reason: reason.to_string(),
+        });
+        return RunResult {
+            iterations_completed: 0,
+            tasks_completed: 0,
+            stop_reason: if prd.user_stories.is_empty() {
+                super::StopReason::NoTasks
+            } else {
+                super::StopReason::Complete
+            },
+            duration_seconds: start_time.elapsed().as_secs_f64(),
+            archived_to: None,
+        };
+    }
+
+    // Send initial task info
+    if let Some(task) = pending_stories.first() {
+        let _ = tx.send(TuiEvent::TaskInfo {
+            id: task.id.clone(),
+            title: task.title.clone(),
+        });
+    }
+
+    // Main loop
+    let mut iterations_completed: u32 = 0;
+    let mut tasks_completed: u32 = 0;
+    #[allow(unused_assignments)]
+    let mut stop_reason = super::StopReason::Complete;
+
+    let timeout_minutes = options.timeout_minutes.unwrap_or(config.limits.timeout_minutes);
+    let timeout_duration = std::time::Duration::from_secs(timeout_minutes as u64 * 60);
+
+    loop {
+        // Check timeout
+        if start_time.elapsed() >= timeout_duration {
+            stop_reason = super::StopReason::Timeout;
+            break;
+        }
+
+        // Check iteration limit
+        if iterations_completed >= max_iter {
+            stop_reason = super::StopReason::MaxIterations;
+            break;
+        }
+
+        // Reload PRD to check completion
+        let current_prd = match PrdDocument::load(None) {
+            Ok(p) => p,
+            Err(_) => prd.clone(),
+        };
+
+        // Check if all tasks complete
+        if current_prd.all_stories_complete() {
+            stop_reason = super::StopReason::Complete;
+            break;
+        }
+
+        // Get next task
+        let pending = current_prd.get_pending_stories();
+        if pending.is_empty() && !options.until_complete {
+            stop_reason = super::StopReason::NoTasks;
+            break;
+        }
+
+        // Send iteration start event
+        let iteration = iterations_completed + 1;
+        let _ = tx.send(TuiEvent::IterationStart {
+            current: iteration,
+            max: max_iter,
+        });
+
+        // Update task info
+        if let Some(task) = pending.first() {
+            let _ = tx.send(TuiEvent::TaskInfo {
+                id: task.id.clone(),
+                title: task.title.clone(),
+            });
+        }
+
+        // Run iteration with TUI output
+        let iter_start = Instant::now();
+        let result = run_iteration_with_tui(config, iteration, tx.clone());
+
+        iterations_completed += 1;
+
+        let _ = tx.send(TuiEvent::IterationComplete {
+            duration_secs: iter_start.elapsed().as_secs_f64(),
+        });
+
+        // Handle result
+        if !result.success {
+            if let Some(ref error) = result.error {
+                if error == "AFK_COMPLETE" {
+                    stop_reason = super::StopReason::Complete;
+                    break;
+                } else if error == "AFK_LIMIT_REACHED" {
+                    stop_reason = super::StopReason::MaxIterations;
+                    break;
+                } else {
+                    let _ = tx.send(TuiEvent::Error(error.clone()));
+                    stop_reason = super::StopReason::AiError;
+                    break;
+                }
+            }
+        }
+
+        // Check if task was completed
+        let updated_prd = PrdDocument::load(None).unwrap_or(current_prd.clone());
+        let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
+        let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
+        if new_completed > old_completed {
+            tasks_completed += (new_completed - old_completed) as u32;
+        }
+    }
+
+    // Send session complete
+    let _ = tx.send(TuiEvent::SessionComplete {
+        iterations: iterations_completed,
+        tasks: tasks_completed,
+        duration: start_time.elapsed().as_secs_f64(),
+        reason: stop_reason.to_string(),
+    });
+
+    // Give TUI time to receive and display
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let _ = tx.send(TuiEvent::Quit);
+
+    RunResult {
+        iterations_completed,
+        tasks_completed,
+        stop_reason,
+        duration_seconds: start_time.elapsed().as_secs_f64(),
+        archived_to: None,
+    }
+}
+
+/// Run a single iteration with TUI output.
+fn run_iteration_with_tui(
+    config: &AfkConfig,
+    _iteration: u32,
+    tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+) -> super::iteration::IterationResult {
+    use crate::prompt::generate_prompt_with_root;
+    use crate::tui::TuiEvent;
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+
+    // Generate prompt
+    let prompt = match generate_prompt_with_root(config, true, None, None) {
+        Ok(result) => result.prompt,
+        Err(e) => {
+            return super::iteration::IterationResult::failure(format!(
+                "Failed to generate prompt: {e}"
+            ));
+        }
+    };
+
+    // Check for stop signals in prompt
+    if prompt.contains("AFK_COMPLETE") {
+        return super::iteration::IterationResult {
+            success: true,
+            task_id: None,
+            error: Some("AFK_COMPLETE".to_string()),
+            output: String::new(),
+        };
+    }
+    if prompt.contains("AFK_LIMIT_REACHED") {
+        return super::iteration::IterationResult {
+            success: false,
+            task_id: None,
+            error: Some("AFK_LIMIT_REACHED".to_string()),
+            output: String::new(),
+        };
+    }
+
+    // Build command
+    let mut cmd_parts = vec![config.ai_cli.command.clone()];
+    cmd_parts.extend(config.ai_cli.args.clone());
+
+    if cmd_parts.is_empty() {
+        return super::iteration::IterationResult::failure("No command specified");
+    }
+
+    let command = &cmd_parts[0];
+    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
+
+    let _ = tx.send(TuiEvent::OutputLine(format!("$ {} {}", command, args.join(" "))));
+
+    // Build and spawn command
+    let mut cmd = Command::new(command);
+    cmd.args(&args)
+        .arg(&prompt)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                return super::iteration::IterationResult::failure(format!(
+                    "AI CLI not found: {}",
+                    command
+                ));
+            }
+            return super::iteration::IterationResult::failure(format!(
+                "Failed to spawn AI CLI: {e}"
+            ));
+        }
+    };
+
+    // Stream stdout to TUI
+    let mut output_buffer = Vec::new();
+    let mut completion_detected = false;
+
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => {
+                    // Send to TUI
+                    let _ = tx.send(TuiEvent::OutputLine(line.clone()));
+
+                    // Parse for tool calls / file changes
+                    if line.contains("edit_file") || line.contains("write_file") || line.contains("Created") {
+                        let _ = tx.send(TuiEvent::ToolCall("write_file".to_string()));
+                    } else if line.contains("read_file") || line.contains("Reading") {
+                        let _ = tx.send(TuiEvent::ToolCall("read_file".to_string()));
+                    } else if line.contains("run_terminal") || line.contains("Executing") {
+                        let _ = tx.send(TuiEvent::ToolCall("run_terminal".to_string()));
+                    }
+
+                    output_buffer.push(format!("{line}\n"));
+
+                    // Check for completion signal
+                    if line.contains("<promise>COMPLETE</promise>")
+                        || line.contains("AFK_COMPLETE")
+                        || line.contains("AFK_STOP")
+                    {
+                        completion_detected = true;
+                        let _ = tx.send(TuiEvent::OutputLine("✓ Completion signal detected".to_string()));
+                        let _ = child.kill();
+                        break;
+                    }
+                }
+                Err(e) => {
+                    let _ = tx.send(TuiEvent::Warning(format!("Error reading output: {e}")));
+                    break;
+                }
+            }
+        }
+    }
+
+    let output = output_buffer.concat();
+
+    if completion_detected {
+        return super::iteration::IterationResult::success(output);
+    }
+
+    // Wait for process
+    match child.wait() {
+        Ok(status) => {
+            if !status.success() {
+                let exit_code = status.code().unwrap_or(-1);
+                return super::iteration::IterationResult::failure_with_output(
+                    format!("AI CLI exited with code {exit_code}"),
+                    output,
+                );
+            }
+            super::iteration::IterationResult::success(output)
+        }
+        Err(e) => super::iteration::IterationResult::failure_with_output(
+            format!("Failed to wait for AI CLI: {e}"),
+            output,
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -8,7 +8,7 @@ mod iteration;
 mod output_handler;
 mod quality_gates;
 
-pub use controller::{LoopController, run_loop, run_loop_with_options};
+pub use controller::{LoopController, run_loop, run_loop_with_options, run_loop_with_tui};
 pub use iteration::{IterationResult, IterationRunner, run_iteration};
 pub use output_handler::{COMPLETION_SIGNALS, FeedbackMode, OutputHandler};
 
@@ -92,6 +92,11 @@ impl RunOptions {
             None => FeedbackMode::Minimal, // Default to minimal for visibility
             _ => FeedbackMode::Minimal,
         }
+    }
+
+    /// Check if TUI mode is requested.
+    pub fn is_tui_mode(s: Option<&str>) -> bool {
+        matches!(s, Some("tui"))
     }
 }
 pub use quality_gates::{

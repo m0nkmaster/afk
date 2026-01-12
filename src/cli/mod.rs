@@ -139,7 +139,9 @@ pub struct GoCommand {
     pub until_complete: bool,
 
     /// Feedback display mode.
-    #[arg(long, value_parser = ["full", "minimal", "off"])]
+    ///
+    /// Options: tui (rich dashboard), full, minimal, off
+    #[arg(long, value_parser = ["tui", "full", "minimal", "off"], default_value = "tui")]
     pub feedback: Option<String>,
 
     /// Disable ASCII mascot in feedback display.
@@ -171,7 +173,9 @@ pub struct RunCommand {
     pub resume_session: bool,
 
     /// Feedback display mode.
-    #[arg(long, value_parser = ["full", "minimal", "off"])]
+    ///
+    /// Options: tui (rich dashboard), full, minimal, off
+    #[arg(long, value_parser = ["tui", "full", "minimal", "off"], default_value = "tui")]
     pub feedback: Option<String>,
 
     /// Disable ASCII mascot in feedback display.
@@ -473,7 +477,7 @@ impl GoCommand {
         use crate::bootstrap::ensure_ai_cli_configured;
         use crate::config::{AfkConfig, SourceConfig};
         use crate::prd::PrdDocument;
-        use crate::runner::{run_loop_with_options, RunOptions};
+        use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
         use std::path::Path;
 
         // Parse iterations_or_source
@@ -560,8 +564,12 @@ impl GoCommand {
             .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
             .with_mascot(!self.no_mascot);
 
-        // Run the loop
-        let result = run_loop_with_options(&config, options);
+        // Run the loop - use TUI if requested
+        let result = if RunOptions::is_tui_mode(self.feedback.as_deref()) {
+            run_loop_with_tui(&config, options)
+        } else {
+            run_loop_with_options(&config, options)
+        };
 
         // Exit with appropriate code
         match result.stop_reason {
@@ -624,7 +632,7 @@ impl RunCommand {
     /// Execute the run command.
     pub fn execute(&self) {
         use crate::config::AfkConfig;
-        use crate::runner::{run_loop_with_options, RunOptions};
+        use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
 
         // Load config
         let config = match AfkConfig::load(None) {
@@ -646,8 +654,12 @@ impl RunCommand {
             .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
             .with_mascot(!self.no_mascot);
 
-        // Run the loop
-        let result = run_loop_with_options(&config, options);
+        // Run the loop - use TUI if requested
+        let result = if RunOptions::is_tui_mode(self.feedback.as_deref()) {
+            run_loop_with_tui(&config, options)
+        } else {
+            run_loop_with_options(&config, options)
+        };
 
         // Exit with appropriate code
         match result.stop_reason {
@@ -1646,7 +1658,8 @@ mod tests {
                 assert!(cmd.iterations_or_source.is_none());
                 assert!(!cmd.dry_run);
                 assert!(!cmd.until_complete);
-                assert!(cmd.feedback.is_none());
+                // Default is now "tui" for rich terminal experience
+                assert_eq!(cmd.feedback, Some("tui".to_string()));
                 assert!(!cmd.no_mascot);
             }
             _ => panic!("Expected Go command"),
