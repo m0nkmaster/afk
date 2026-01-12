@@ -57,6 +57,13 @@ section[aria-label="Add new task"] {
     gap: 0.5rem;
 }
 
+/* Fallback for browsers that don't support flexbox gap */
+@supports not (gap: 0.5rem) {
+    #task-form > * + * {
+        margin-left: 0.5rem;
+    }
+}
+
 /* Input field styling */
 #task-input {
     flex: 1;
@@ -123,6 +130,13 @@ section[aria-label="Add new task"] {
     transition: background-color 0.2s ease;
 }
 
+/* Fallback for browsers that don't support flexbox gap */
+@supports not (gap: 0.75rem) {
+    #task-list li span {
+        margin-right: 0.75rem;
+    }
+}
+
 #task-list li:last-child {
     margin-bottom: 0;
 }
@@ -185,6 +199,14 @@ section[aria-label="Add new task"] {
 
     #task-form {
         flex-direction: column;
+    }
+
+    /* Reset horizontal gap fallback for column layout */
+    @supports not (gap: 0.5rem) {
+        #task-form > * + * {
+            margin-left: 0;
+            margin-top: 0.5rem;
+        }
     }
 
     #add-button {

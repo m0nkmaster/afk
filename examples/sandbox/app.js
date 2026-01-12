@@ -67,7 +67,10 @@
      * @param {HTMLLIElement} taskElement - The task list item to delete
      */
     function deleteTask(taskElement) {
-        taskElement.remove();
+        // Use parentNode.removeChild for broader browser support
+        if (taskElement.parentNode) {
+            taskElement.parentNode.removeChild(taskElement);
+        }
         saveTasks();
     }
 
