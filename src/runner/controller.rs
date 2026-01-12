@@ -676,13 +676,33 @@ fn run_iteration_with_tui(
                     // Send to TUI
                     let _ = tx.send(TuiEvent::OutputLine(line.clone()));
 
-                    // Parse for tool calls / file changes
-                    if line.contains("edit_file") || line.contains("write_file") || line.contains("Created") {
-                        let _ = tx.send(TuiEvent::ToolCall("write_file".to_string()));
-                    } else if line.contains("read_file") || line.contains("Reading") {
-                        let _ = tx.send(TuiEvent::ToolCall("read_file".to_string()));
-                    } else if line.contains("run_terminal") || line.contains("Executing") {
-                        let _ = tx.send(TuiEvent::ToolCall("run_terminal".to_string()));
+                    // Parse for tool calls and file changes
+                    // Look for file paths in the output
+                    if let Some(path) = extract_file_path(&line) {
+                        let change_type = if line.contains("Created") || line.contains("create") || line.contains("write_file") {
+                            "created"
+                        } else if line.contains("Modified") || line.contains("edit") || line.contains("edit_file") {
+                            "modified"
+                        } else if line.contains("Deleted") || line.contains("delete") {
+                            "deleted"
+                        } else {
+                            "modified"
+                        };
+                        let _ = tx.send(TuiEvent::FileChange {
+                            path: path.to_string(),
+                            change_type: change_type.to_string(),
+                        });
+                    }
+
+                    // Track tool calls
+                    if line.contains("edit_file") || line.contains("write_file") || line.contains("write(") {
+                        let _ = tx.send(TuiEvent::ToolCall("write".to_string()));
+                    } else if line.contains("read_file") || line.contains("read(") {
+                        let _ = tx.send(TuiEvent::ToolCall("read".to_string()));
+                    } else if line.contains("run_terminal") || line.contains("run_terminal_cmd") {
+                        let _ = tx.send(TuiEvent::ToolCall("terminal".to_string()));
+                    } else if line.contains("search_replace") || line.contains("grep") || line.contains("codebase_search") {
+                        let _ = tx.send(TuiEvent::ToolCall("search".to_string()));
                     }
 
                     output_buffer.push(format!("{line}\n"));
@@ -731,6 +751,46 @@ fn run_iteration_with_tui(
     }
 }
 
+/// Extract a file path from an output line.
+///
+/// Looks for common patterns like:
+/// - "file: path/to/file.rs"
+/// - "path/to/file.rs"
+/// - Quoted paths: "path/to/file.rs" or 'path/to/file.rs'
+fn extract_file_path(line: &str) -> Option<&str> {
+    // Common file extensions to look for (longer ones first to avoid partial matches)
+    let extensions = [
+        ".json", ".yaml", ".yml", ".toml", ".scss", ".bash",
+        ".tsx", ".jsx", ".html",
+        ".rs", ".js", ".ts", ".py", ".go", ".java", ".css",
+        ".md", ".txt", ".sh", ".zsh",
+    ];
+
+    // Try to find a path with a known extension
+    for ext in extensions {
+        if let Some(pos) = line.find(ext) {
+            // Find the start of the path (work backwards)
+            let end = pos + ext.len();
+            let before = &line[..pos];
+
+            // Find where the path starts
+            let start = before
+                .rfind(|c: char| c.is_whitespace() || c == '"' || c == '\'' || c == '`' || c == ':')
+                .map(|p| p + 1)
+                .unwrap_or(0);
+
+            let path = line[start..end].trim();
+
+            // Validate it looks like a path
+            if !path.is_empty() && (path.contains('/') || path.contains('.')) {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,6 +833,32 @@ mod tests {
         };
 
         assert_eq!(result.stop_reason, StopReason::NoTasks);
+    }
+
+    #[test]
+    fn test_extract_file_path_basic() {
+        assert_eq!(extract_file_path("Created src/main.rs"), Some("src/main.rs"));
+        assert_eq!(extract_file_path("Modified styles.css"), Some("styles.css"));
+        assert_eq!(extract_file_path("Reading app.js"), Some("app.js"));
+    }
+
+    #[test]
+    fn test_extract_file_path_with_quotes() {
+        assert_eq!(extract_file_path("file: \"src/lib.rs\""), Some("src/lib.rs"));
+        assert_eq!(extract_file_path("editing 'index.html'"), Some("index.html"));
+    }
+
+    #[test]
+    fn test_extract_file_path_no_match() {
+        assert_eq!(extract_file_path("No file path here"), None);
+        assert_eq!(extract_file_path("Just some text"), None);
+    }
+
+    #[test]
+    fn test_extract_file_path_various_extensions() {
+        assert_eq!(extract_file_path("file config.json"), Some("config.json"));
+        assert_eq!(extract_file_path("file Cargo.toml"), Some("Cargo.toml"));
+        assert_eq!(extract_file_path("file script.py"), Some("script.py"));
     }
 
     // Note: Full integration tests would require mocking the AI CLI
