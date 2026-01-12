@@ -190,10 +190,20 @@ impl IterationRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
+        // Start feedback display (shows live status)
+        self.output.set_iteration_context(
+            self.current_iteration,
+            self.max_iterations,
+            self.current_task_id.clone(),
+            self.current_task_description.clone(),
+        );
+        self.output.start_feedback(None);
+
         // Spawn process
         let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
+                self.output.stop_feedback();
                 if e.kind() == std::io::ErrorKind::NotFound {
                     return IterationResult::failure(format!(
                         "AI CLI not found: {}. Is it installed and in your PATH?",
@@ -233,6 +243,12 @@ impl IterationRunner {
                 }
             }
         }
+
+        // Show iteration summary with stats
+        self.output.iteration_summary();
+
+        // Stop feedback display
+        self.output.stop_feedback();
 
         let output = output_buffer.concat();
 

@@ -8,9 +8,92 @@ mod iteration;
 mod output_handler;
 mod quality_gates;
 
-pub use controller::{LoopController, run_loop};
+pub use controller::{LoopController, run_loop, run_loop_with_options};
 pub use iteration::{IterationResult, IterationRunner, run_iteration};
 pub use output_handler::{COMPLETION_SIGNALS, FeedbackMode, OutputHandler};
+
+/// Options for running the loop with feedback display.
+#[derive(Debug, Clone, Default)]
+pub struct RunOptions {
+    /// Maximum iterations (None uses config default).
+    pub max_iterations: Option<u32>,
+    /// Branch to create/checkout.
+    pub branch: Option<String>,
+    /// Run until all tasks complete.
+    pub until_complete: bool,
+    /// Timeout override in minutes.
+    pub timeout_minutes: Option<u32>,
+    /// Resume from previous session.
+    pub resume: bool,
+    /// Feedback display mode.
+    pub feedback_mode: FeedbackMode,
+    /// Show ASCII mascot in feedback.
+    pub show_mascot: bool,
+}
+
+impl RunOptions {
+    /// Create new options with default feedback (minimal).
+    pub fn new() -> Self {
+        Self {
+            feedback_mode: FeedbackMode::Minimal,
+            show_mascot: true,
+            ..Default::default()
+        }
+    }
+
+    /// Set max iterations.
+    pub fn with_iterations(mut self, n: Option<u32>) -> Self {
+        self.max_iterations = n;
+        self
+    }
+
+    /// Set branch name.
+    pub fn with_branch(mut self, branch: Option<String>) -> Self {
+        self.branch = branch;
+        self
+    }
+
+    /// Set until_complete flag.
+    pub fn with_until_complete(mut self, until_complete: bool) -> Self {
+        self.until_complete = until_complete;
+        self
+    }
+
+    /// Set timeout override.
+    pub fn with_timeout(mut self, minutes: Option<u32>) -> Self {
+        self.timeout_minutes = minutes;
+        self
+    }
+
+    /// Set resume flag.
+    pub fn with_resume(mut self, resume: bool) -> Self {
+        self.resume = resume;
+        self
+    }
+
+    /// Set feedback mode.
+    pub fn with_feedback_mode(mut self, mode: FeedbackMode) -> Self {
+        self.feedback_mode = mode;
+        self
+    }
+
+    /// Set mascot visibility.
+    pub fn with_mascot(mut self, show: bool) -> Self {
+        self.show_mascot = show;
+        self
+    }
+
+    /// Parse feedback mode from string.
+    pub fn parse_feedback_mode(s: Option<&str>) -> FeedbackMode {
+        match s {
+            Some("full") => FeedbackMode::Full,
+            Some("minimal") => FeedbackMode::Minimal,
+            Some("off") | Some("none") => FeedbackMode::None,
+            None => FeedbackMode::Minimal, // Default to minimal for visibility
+            _ => FeedbackMode::Minimal,
+        }
+    }
+}
 pub use quality_gates::{
     GateResult, QualityGateResult, get_configured_gate_names, has_configured_gates,
     run_quality_gates,

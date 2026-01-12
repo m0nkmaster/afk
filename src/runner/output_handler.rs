@@ -62,6 +62,8 @@ pub struct OutputHandler {
     task_id: Option<String>,
     /// Current task description.
     task_description: Option<String>,
+    /// Start time for tracking elapsed time.
+    start_time: Option<std::time::Instant>,
 }
 
 impl OutputHandler {
@@ -79,6 +81,7 @@ impl OutputHandler {
             iteration_max: 0,
             task_id: None,
             task_description: None,
+            start_time: None,
         }
     }
 
@@ -125,8 +128,9 @@ impl OutputHandler {
 
     /// Start feedback display and file watcher.
     pub fn start_feedback(&mut self, project_root: Option<&Path>) {
-        // Reset metrics
+        // Reset metrics and start timer
         self.metrics_collector.reset();
+        self.start_time = Some(std::time::Instant::now());
 
         // Create and start feedback display if mode is not None
         if let Some(display_mode) = self.feedback_mode.to_display_mode() {
@@ -181,14 +185,37 @@ impl OutputHandler {
 
     /// Display iteration header.
     pub fn iteration_header(&self, iteration: u32, max_iterations: u32) {
+        use crate::feedback::get_spinner_frame;
+
         println!();
         println!(
             "\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
-        println!(
-            "\x1b[36m│\x1b[0m \x1b[1mIteration {}/{}\x1b[0m",
-            iteration, max_iterations
+
+        // Build header line with iteration and optional task info
+        let spinner = get_spinner_frame("dots", iteration as usize);
+        let mut header = format!(
+            "\x1b[36m│\x1b[0m \x1b[36m{}\x1b[0m \x1b[1mIteration {}/{}\x1b[0m",
+            spinner, iteration, max_iterations
         );
+
+        // Add task info if available
+        if let Some(ref task_id) = self.task_id {
+            header.push_str(&format!("  \x1b[2m│\x1b[0m  \x1b[33m{}\x1b[0m", task_id));
+        }
+
+        println!("{}", header);
+
+        // Show task description if available
+        if let Some(ref desc) = self.task_description {
+            let truncated = if desc.len() > 70 {
+                format!("{}...", &desc[..67])
+            } else {
+                desc.clone()
+            };
+            println!("\x1b[36m│\x1b[0m \x1b[2;3m{}\x1b[0m", truncated);
+        }
+
         println!(
             "\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
         );
@@ -198,6 +225,20 @@ impl OutputHandler {
     pub fn command_info(&self, cmd: &[String]) {
         let cmd_str = cmd.join(" ");
         println!("\x1b[2m$ {cmd_str}\x1b[0m");
+        println!();
+        // Show working indicator
+        self.show_working_indicator();
+    }
+
+    /// Show a working indicator to signal activity is starting.
+    fn show_working_indicator(&self) {
+        use crate::feedback::get_spinner_frame;
+
+        let spinner = get_spinner_frame("dots", 0);
+        println!(
+            "\x1b[36m{}\x1b[0m \x1b[2mAI is working...\x1b[0m",
+            spinner
+        );
         println!();
     }
 
@@ -309,6 +350,82 @@ impl OutputHandler {
         println!("\x1b[32m✓ Completion signal detected\x1b[0m");
     }
 
+    /// Display iteration summary with metrics.
+    pub fn iteration_summary(&self) {
+        let metrics = self.get_metrics();
+        let activity = self.get_activity_state();
+        let elapsed = self.get_elapsed_time();
+
+        println!();
+
+        // Build summary line with colour-coded stats
+        let mut summary = String::new();
+
+        // Activity indicator
+        let indicator = match activity {
+            ActivityState::Active => "\x1b[32m●\x1b[0m",
+            ActivityState::Thinking => "\x1b[33m●\x1b[0m",
+            ActivityState::Stalled => "\x1b[31m●\x1b[0m",
+        };
+        summary.push_str(indicator);
+        summary.push(' ');
+
+        // Elapsed time
+        if let Some(elapsed) = elapsed {
+            let secs = elapsed.as_secs();
+            let mins = secs / 60;
+            let secs = secs % 60;
+            summary.push_str(&format!("\x1b[2m{:02}:{:02}\x1b[0m ", mins, secs));
+        }
+
+        // Tool calls
+        if metrics.tool_calls > 0 {
+            summary.push_str(&format!(
+                "\x1b[33m{}\x1b[0m \x1b[2mcalls\x1b[0m  ",
+                metrics.tool_calls
+            ));
+        }
+
+        // Files changed
+        let total_files = metrics.total_file_ops();
+        if total_files > 0 {
+            summary.push_str(&format!(
+                "\x1b[34m{}\x1b[0m \x1b[2mfiles\x1b[0m  ",
+                total_files
+            ));
+        }
+
+        // Lines added/removed
+        if metrics.lines_added > 0 || metrics.lines_removed > 0 {
+            summary.push_str(&format!(
+                "\x1b[32m+{}\x1b[0m\x1b[2m/\x1b[0m\x1b[31m-{}\x1b[0m  ",
+                metrics.lines_added, metrics.lines_removed
+            ));
+        }
+
+        // Errors/warnings
+        if metrics.errors > 0 {
+            summary.push_str(&format!("\x1b[31m{} errors\x1b[0m  ", metrics.errors));
+        }
+        if metrics.warnings > 0 {
+            summary.push_str(&format!("\x1b[33m{} warnings\x1b[0m  ", metrics.warnings));
+        }
+
+        // Print if we have anything to show
+        if !summary.trim().is_empty() {
+            println!("{}", summary);
+        }
+
+        println!(
+            "\x1b[36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m"
+        );
+    }
+
+    /// Get elapsed time since feedback started.
+    fn get_elapsed_time(&self) -> Option<std::time::Duration> {
+        self.start_time.map(|t| t.elapsed())
+    }
+
     /// Display error message.
     pub fn error(&self, msg: &str) {
         eprintln!("\x1b[31mError:\x1b[0m {msg}");
@@ -336,28 +453,69 @@ impl OutputHandler {
 
     /// Display loop start panel.
     pub fn loop_start_panel(&self, max_iterations: u32, branch: &str) {
+        use crate::feedback::get_mascot;
+
         println!();
         println!(
             "\x1b[36m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
         );
         println!(
-            "\x1b[36m│\x1b[0m                           \x1b[1mafk - Ralph Wiggum Mode\x1b[0m                          \x1b[36m│\x1b[0m"
+            "\x1b[36m│\x1b[0m  \x1b[32;1m◉\x1b[0m \x1b[1;36mafk\x1b[0m \x1b[2m─\x1b[0m \x1b[1mRalph Wiggum Mode\x1b[0m                                               \x1b[36m│\x1b[0m"
         );
         println!(
             "\x1b[36m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
         );
-        println!(
-            "\x1b[36m│\x1b[0m  Max iterations: {:<57}\x1b[36m│\x1b[0m",
-            max_iterations
-        );
-        if !branch.is_empty() {
-            println!("\x1b[36m│\x1b[0m  Branch: {:<65}\x1b[36m│\x1b[0m", branch);
+
+        // Show mascot if enabled
+        if self.show_mascot {
+            let mascot = get_mascot("working");
+            for line in mascot.lines() {
+                let padding = 77_usize.saturating_sub(line.chars().count() + 4);
+                println!(
+                    "\x1b[36m│\x1b[0m  \x1b[33m{}\x1b[0m{}\x1b[36m│\x1b[0m",
+                    line,
+                    " ".repeat(padding)
+                );
+            }
+            println!(
+                "\x1b[36m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
+            );
         }
+
+        // Session info
+        let iter_display = if max_iterations == u32::MAX {
+            "∞ (until complete)".to_string()
+        } else {
+            format!("{}", max_iterations)
+        };
+        println!(
+            "\x1b[36m│\x1b[0m  \x1b[2mIterations:\x1b[0m  \x1b[1m{:<60}\x1b[36m│\x1b[0m",
+            iter_display
+        );
+
+        if !branch.is_empty() {
+            println!(
+                "\x1b[36m│\x1b[0m  \x1b[2mBranch:\x1b[0m      \x1b[34m{:<60}\x1b[36m│\x1b[0m",
+                branch
+            );
+        }
+
+        // Mode indicator
+        let mode_str = match self.feedback_mode {
+            FeedbackMode::None => "quiet",
+            FeedbackMode::Minimal => "minimal",
+            FeedbackMode::Full => "full",
+        };
+        println!(
+            "\x1b[36m│\x1b[0m  \x1b[2mFeedback:\x1b[0m    \x1b[35m{:<60}\x1b[36m│\x1b[0m",
+            mode_str
+        );
+
         println!(
             "\x1b[36m│\x1b[0m                                                                             \x1b[36m│\x1b[0m"
         );
         println!(
-            "\x1b[36m│\x1b[0m  \x1b[2mPress Ctrl+C to stop the loop\x1b[0m                                            \x1b[36m│\x1b[0m"
+            "\x1b[36m│\x1b[0m  \x1b[2;3mPress Ctrl+C to stop\x1b[0m                                                      \x1b[36m│\x1b[0m"
         );
         println!(
             "\x1b[36m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
@@ -373,41 +531,78 @@ impl OutputHandler {
         duration_seconds: f64,
         stop_reason: &str,
     ) {
-        // If we have a feedback display, use its celebration method
-        if let Some(ref display) = self.feedback_display {
-            display.show_session_complete(tasks_completed, iterations, duration_seconds);
-        }
+        use crate::feedback::get_mascot;
 
         let duration_mins = duration_seconds / 60.0;
 
+        // Determine colour based on outcome
+        let (border_colour, icon) = if tasks_completed > 0 || stop_reason.contains("complete") {
+            ("\x1b[32m", "✓") // Green for success
+        } else if stop_reason.contains("interrupt") {
+            ("\x1b[33m", "⚠") // Yellow for interrupt
+        } else {
+            ("\x1b[36m", "●") // Cyan for neutral
+        };
+
         println!();
         println!(
-            "\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
+            "{}┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m",
+            border_colour
         );
         println!(
-            "\x1b[32m│\x1b[0m                              \x1b[1mSession Complete\x1b[0m                              \x1b[32m│\x1b[0m"
+            "{}│\x1b[0m  \x1b[1m{} Session Complete\x1b[0m                                                       {}│\x1b[0m",
+            border_colour, icon, border_colour
         );
         println!(
-            "\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
+            "{}├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m",
+            border_colour
+        );
+
+        // Show celebration mascot for successful completions
+        if self.show_mascot && tasks_completed > 0 {
+            let mascot = get_mascot("celebration");
+            for line in mascot.lines() {
+                let padding = 77_usize.saturating_sub(line.chars().count() + 4);
+                println!(
+                    "{}│\x1b[0m  \x1b[32m{}\x1b[0m{}{}│\x1b[0m",
+                    border_colour,
+                    line,
+                    " ".repeat(padding),
+                    border_colour
+                );
+            }
+            println!(
+                "{}├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m",
+                border_colour
+            );
+        }
+
+        // Stats
+        println!(
+            "{}│\x1b[0m  \x1b[2mIterations:\x1b[0m      \x1b[1m{:<55}{}│\x1b[0m",
+            border_colour, iterations, border_colour
         );
         println!(
-            "\x1b[32m│\x1b[0m  Iterations: {:<61}\x1b[32m│\x1b[0m",
-            iterations
+            "{}│\x1b[0m  \x1b[2mTasks completed:\x1b[0m \x1b[32;1m{:<55}{}│\x1b[0m",
+            border_colour, tasks_completed, border_colour
+        );
+
+        let duration_str = if duration_mins >= 1.0 {
+            format!("{:.1} minutes", duration_mins)
+        } else {
+            format!("{:.0} seconds", duration_seconds)
+        };
+        println!(
+            "{}│\x1b[0m  \x1b[2mDuration:\x1b[0m        {:<55}{}│\x1b[0m",
+            border_colour, duration_str, border_colour
         );
         println!(
-            "\x1b[32m│\x1b[0m  Tasks completed: {:<56}\x1b[32m│\x1b[0m",
-            tasks_completed
+            "{}│\x1b[0m  \x1b[2mReason:\x1b[0m          {:<55}{}│\x1b[0m",
+            border_colour, stop_reason, border_colour
         );
         println!(
-            "\x1b[32m│\x1b[0m  Duration: {:.1} minutes{:<48}\x1b[32m│\x1b[0m",
-            duration_mins, ""
-        );
-        println!(
-            "\x1b[32m│\x1b[0m  Reason: {:<64}\x1b[32m│\x1b[0m",
-            stop_reason
-        );
-        println!(
-            "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
+            "{}└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m",
+            border_colour
         );
         println!();
     }

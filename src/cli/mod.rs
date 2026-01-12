@@ -14,7 +14,7 @@ use clap::{Args, Parser, Subcommand};
 /// Memory persists via git history, progress.json, and task sources.
 #[derive(Parser, Debug)]
 #[command(name = "afk")]
-#[command(author, version, about, long_about = None)]
+#[command(author, version = crate::VERSION, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
     #[command(subcommand)]
@@ -473,7 +473,7 @@ impl GoCommand {
         use crate::bootstrap::ensure_ai_cli_configured;
         use crate::config::{AfkConfig, SourceConfig};
         use crate::prd::PrdDocument;
-        use crate::runner::run_loop;
+        use crate::runner::{run_loop_with_options, RunOptions};
         use std::path::Path;
 
         // Parse iterations_or_source
@@ -553,15 +553,15 @@ impl GoCommand {
             return;
         }
 
+        // Build run options with feedback settings
+        let options = RunOptions::new()
+            .with_iterations(iterations)
+            .with_until_complete(self.until_complete)
+            .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
+            .with_mascot(!self.no_mascot);
+
         // Run the loop
-        let result = run_loop(
-            &config,
-            iterations,
-            None, // branch
-            self.until_complete,
-            None,  // timeout
-            false, // resume
-        );
+        let result = run_loop_with_options(&config, options);
 
         // Exit with appropriate code
         match result.stop_reason {
@@ -624,7 +624,7 @@ impl RunCommand {
     /// Execute the run command.
     pub fn execute(&self) {
         use crate::config::AfkConfig;
-        use crate::runner::run_loop;
+        use crate::runner::{run_loop_with_options, RunOptions};
 
         // Load config
         let config = match AfkConfig::load(None) {
@@ -636,15 +636,18 @@ impl RunCommand {
             }
         };
 
+        // Build run options with feedback settings
+        let options = RunOptions::new()
+            .with_iterations(Some(self.iterations))
+            .with_branch(self.branch.clone())
+            .with_until_complete(self.until_complete)
+            .with_timeout(self.timeout)
+            .with_resume(self.resume_session)
+            .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
+            .with_mascot(!self.no_mascot);
+
         // Run the loop
-        let result = run_loop(
-            &config,
-            Some(self.iterations),
-            self.branch.as_deref(),
-            self.until_complete,
-            self.timeout,
-            self.resume_session,
-        );
+        let result = run_loop_with_options(&config, options);
 
         // Exit with appropriate code
         match result.stop_reason {

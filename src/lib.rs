@@ -2,6 +2,10 @@
 //!
 //! This library provides the core functionality for the afk CLI tool,
 //! implementing the Ralph Wiggum pattern for autonomous AI coding.
+//!
+
+// Include the generated version string
+include!(concat!(env!("OUT_DIR"), "/version.rs"));
 
 // Module declarations - to be implemented in future stories
 pub mod bootstrap;
@@ -18,4 +22,4 @@ pub mod sources;
 pub mod watcher;
 
 // Re-export key types for convenience
-pub use sources::{SourceError, aggregate_tasks};
+pub use sources::{aggregate_tasks, SourceError};

@@ -11,8 +11,8 @@ use crate::config::AfkConfig;
 use crate::prd::{PrdDocument, sync_prd_with_root};
 
 use super::iteration::IterationRunner;
-use super::output_handler::OutputHandler;
-use super::{RunResult, StopReason};
+use super::output_handler::{FeedbackMode, OutputHandler};
+use super::{RunOptions, RunResult, StopReason};
 
 /// Controls the main loop lifecycle.
 pub struct LoopController {
@@ -20,23 +20,41 @@ pub struct LoopController {
     output: OutputHandler,
     iteration_runner: IterationRunner,
     interrupted: Arc<AtomicBool>,
+    #[allow(dead_code)]
+    feedback_mode: FeedbackMode,
+    #[allow(dead_code)]
+    show_mascot: bool,
 }
 
 impl LoopController {
-    /// Create a new LoopController.
+    /// Create a new LoopController with default feedback (minimal).
     pub fn new(config: AfkConfig) -> Self {
-        let output = OutputHandler::new();
-        let iteration_runner = IterationRunner::new(config.clone());
+        Self::with_feedback(config, FeedbackMode::Minimal, true)
+    }
+
+    /// Create with specific feedback settings.
+    pub fn with_feedback(config: AfkConfig, feedback_mode: FeedbackMode, show_mascot: bool) -> Self {
+        let mut output = OutputHandler::with_feedback(feedback_mode, show_mascot);
+        output.set_feedback_mode(feedback_mode);
+        output.set_show_mascot(show_mascot);
+
+        let mut iter_output = OutputHandler::with_feedback(feedback_mode, show_mascot);
+        iter_output.set_feedback_mode(feedback_mode);
+        iter_output.set_show_mascot(show_mascot);
+
+        let iteration_runner = IterationRunner::with_output_handler(config.clone(), iter_output);
 
         Self {
             config,
             output,
             iteration_runner,
             interrupted: Arc::new(AtomicBool::new(false)),
+            feedback_mode,
+            show_mascot,
         }
     }
 
-    /// Create with custom output handler.
+    /// Create with custom output handler (legacy).
     pub fn with_output(config: AfkConfig, output: OutputHandler) -> Self {
         let iteration_runner =
             IterationRunner::with_output_handler(config.clone(), OutputHandler::new());
@@ -46,6 +64,8 @@ impl LoopController {
             output,
             iteration_runner,
             interrupted: Arc::new(AtomicBool::new(false)),
+            feedback_mode: FeedbackMode::None,
+            show_mascot: true,
         }
     }
 
@@ -280,18 +300,12 @@ impl LoopController {
     }
 }
 
-/// Run the autonomous afk loop.
+/// Run the autonomous afk loop with options.
 ///
-/// Convenience function that creates a LoopController and runs it.
-pub fn run_loop(
-    config: &AfkConfig,
-    max_iterations: Option<u32>,
-    branch: Option<&str>,
-    until_complete: bool,
-    timeout_override: Option<u32>,
-    resume: bool,
-) -> RunResult {
-    let mut controller = LoopController::new(config.clone());
+/// Convenience function that creates a LoopController and runs it with full options.
+pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResult {
+    let mut controller =
+        LoopController::with_feedback(config.clone(), options.feedback_mode, options.show_mascot);
 
     // Set up Ctrl+C handler
     let interrupt_flag = controller.interrupt_flag();
@@ -307,12 +321,36 @@ pub fn run_loop(
     }
 
     controller.run(
-        max_iterations,
-        branch,
-        until_complete,
-        timeout_override,
-        resume,
+        options.max_iterations,
+        options.branch.as_deref(),
+        options.until_complete,
+        options.timeout_minutes,
+        options.resume,
     )
+}
+
+/// Run the autonomous afk loop.
+///
+/// Convenience function that creates a LoopController and runs it.
+/// Uses minimal feedback display by default.
+pub fn run_loop(
+    config: &AfkConfig,
+    max_iterations: Option<u32>,
+    branch: Option<&str>,
+    until_complete: bool,
+    timeout_override: Option<u32>,
+    resume: bool,
+) -> RunResult {
+    let options = RunOptions {
+        max_iterations,
+        branch: branch.map(|s| s.to_string()),
+        until_complete,
+        timeout_minutes: timeout_override,
+        resume,
+        feedback_mode: FeedbackMode::Minimal,
+        show_mascot: true,
+    };
+    run_loop_with_options(config, options)
 }
 
 #[cfg(test)]

@@ -17,8 +17,8 @@ const GITHUB_REPO: &str = "m0nkmaster/afk";
 /// GitHub API URL for releases.
 const GITHUB_API_URL: &str = "https://api.github.com/repos";
 
-/// Current version from Cargo.toml.
-const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Current version with build timestamp.
+const CURRENT_VERSION: &str = crate::VERSION;
 
 /// GitHub release asset information.
 #[derive(Debug, Deserialize)]

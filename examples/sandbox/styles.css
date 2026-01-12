@@ -1,1 +1,207 @@
-/* Empty stylesheet - to be implemented in css-styling story */
+/* Modern minimal task list styling */
+
+/* Reset and base styles */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    line-height: 1.6;
+    color: #1a1a2e;
+    background-color: #f8f9fa;
+    min-height: 100vh;
+    padding: 2rem 1rem;
+}
+
+/* Main container - centred layout */
+main {
+    max-width: 32rem;
+    margin: 0 auto;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    padding: 2rem;
+}
+
+/* Header styling */
+header {
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: #1a1a2e;
+    letter-spacing: -0.025em;
+}
+
+/* Form section */
+section[aria-label="Add new task"] {
+    margin-bottom: 1.5rem;
+}
+
+#task-form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Input field styling */
+#task-input {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    color: #1a1a2e;
+    background-color: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 0.5rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#task-input::placeholder {
+    color: #868e96;
+}
+
+#task-input:focus {
+    outline: none;
+    border-color: #4c6ef5;
+    box-shadow: 0 0 0 3px rgba(76, 110, 245, 0.15);
+}
+
+/* Button styling */
+#add-button {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: #ffffff;
+    background-color: #4c6ef5;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+#add-button:hover {
+    background-color: #3b5bdb;
+}
+
+#add-button:active {
+    transform: scale(0.98);
+}
+
+#add-button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 110, 245, 0.4);
+}
+
+/* Task list styling */
+#task-list {
+    list-style: none;
+}
+
+#task-list li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    transition: background-color 0.2s ease;
+}
+
+#task-list li:last-child {
+    margin-bottom: 0;
+}
+
+#task-list li:hover {
+    background-color: #e9ecef;
+}
+
+/* Completed task styling */
+#task-list li.completed {
+    text-decoration: line-through;
+    color: #868e96;
+}
+
+/* Task text */
+#task-list li span {
+    flex: 1;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+/* Delete button on tasks */
+#task-list li button {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    color: #868e96;
+    background-color: transparent;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+#task-list li button:hover {
+    color: #e03131;
+    border-color: #e03131;
+    background-color: rgba(224, 49, 49, 0.05);
+}
+
+#task-list li button:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(224, 49, 49, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+    body {
+        padding: 1rem 0.5rem;
+    }
+
+    main {
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+    }
+
+    h1 {
+        font-size: 1.5rem;
+    }
+
+    #task-form {
+        flex-direction: column;
+    }
+
+    #add-button {
+        width: 100%;
+    }
+
+    #task-input {
+        padding: 0.875rem 1rem;
+    }
+}
+
+/* Empty state hint */
+#task-list:empty::before {
+    content: 'No tasks yet. Add one above!';
+    display: block;
+    text-align: center;
+    color: #868e96;
+    font-style: italic;
+    padding: 2rem 1rem;
+}
