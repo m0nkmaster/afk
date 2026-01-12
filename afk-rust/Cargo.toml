@@ -29,6 +29,9 @@ tokio = { version = "1.43", features = ["full"] }
 anyhow = "1.0"
 thiserror = "2.0"
 
+# Regex for parsing
+regex = "1.11"
+
 [dev-dependencies]
 tempfile = "3.15"
 
