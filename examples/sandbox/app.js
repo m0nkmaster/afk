@@ -17,6 +17,14 @@
     }
 
     /**
+     * Deletes a task from the list
+     * @param {HTMLLIElement} taskElement - The task list item to delete
+     */
+    function deleteTask(taskElement) {
+        taskElement.remove();
+    }
+
+    /**
      * Creates a task list item element
      * @param {string} text - The task text
      * @returns {HTMLLIElement} The created list item
@@ -30,6 +38,14 @@
             toggleComplete(li);
         });
         li.appendChild(span);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.setAttribute('aria-label', 'Delete task');
+        deleteBtn.addEventListener('click', function() {
+            deleteTask(li);
+        });
+        li.appendChild(deleteBtn);
         
         return li;
     }
