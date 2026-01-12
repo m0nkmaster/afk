@@ -731,4 +731,78 @@ mod tests {
         let mode = DisplayMode::default();
         assert_eq!(mode, DisplayMode::Minimal);
     }
+
+    // Celebration functions tests
+    // Note: These primarily verify the functions don't panic.
+    // Visual output is tested manually.
+
+    #[test]
+    fn test_show_gates_passed_empty() {
+        let display = FeedbackDisplay::new();
+        display.show_gates_passed(&[]);
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_gates_passed_with_gates() {
+        let display = FeedbackDisplay::new();
+        display.show_gates_passed(&["lint".to_string(), "test".to_string()]);
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_gates_failed_continuing() {
+        let display = FeedbackDisplay::new();
+        display.show_gates_failed(&["test".to_string()], true);
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_gates_failed_not_continuing() {
+        let display = FeedbackDisplay::new();
+        display.show_gates_failed(&["lint".to_string(), "test".to_string()], false);
+        // Should not panic
+    }
+
+    #[test]
+    fn test_show_celebration() {
+        let display = FeedbackDisplay::new();
+        // This will print to stdout and sleep briefly
+        // We just verify it doesn't panic
+        display.show_celebration("test-task-001");
+    }
+
+    #[test]
+    fn test_show_session_complete() {
+        let display = FeedbackDisplay::new();
+        // This will print to stdout and sleep briefly
+        // We just verify it doesn't panic
+        display.show_session_complete(5, 10, 120.5);
+    }
+
+    #[test]
+    fn test_activity_state_spinner_colors() {
+        let display = FeedbackDisplay::new();
+        let metrics = IterationMetrics::default();
+
+        // Each activity state should render without panic
+        let _ = display.render_minimal(&metrics, ActivityState::Active);
+        let _ = display.render_minimal(&metrics, ActivityState::Thinking);
+        let _ = display.render_minimal(&metrics, ActivityState::Stalled);
+    }
+
+    #[test]
+    fn test_full_mode_with_task_info() {
+        let mut display = FeedbackDisplay::with_options(DisplayMode::Full, true);
+        display.task_id = Some("rust-001".to_string());
+        display.task_description = Some("Implement feature X".to_string());
+        display.progress = 0.5;
+        
+        let metrics = IterationMetrics::default();
+        let lines = display.render_full(&metrics, ActivityState::Active);
+        
+        // Should include task section
+        let has_task = lines.iter().any(|l| l.contains("rust-001"));
+        assert!(has_task);
+    }
 }
