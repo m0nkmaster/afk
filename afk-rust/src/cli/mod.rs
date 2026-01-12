@@ -1138,25 +1138,111 @@ impl ResetCommand {
 }
 
 impl ArchiveCreateCommand {
-    /// Execute the archive create command (stub).
+    /// Execute the archive create command.
     pub fn execute(&self) {
-        println!("afk archive create: not implemented");
-        println!("  reason: {}", self.reason);
+        use crate::progress::archive_session;
+
+        match archive_session(&self.reason) {
+            Ok(Some(path)) => {
+                println!("\x1b[32m✓\x1b[0m Session archived to: {}", path.display());
+            }
+            Ok(None) => {
+                println!("\x1b[33mNo session to archive.\x1b[0m");
+            }
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to archive session: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl ArchiveListCommand {
-    /// Execute the archive list command (stub).
+    /// Execute the archive list command.
     pub fn execute(&self) {
-        println!("afk archive list: not implemented");
+        use crate::progress::list_archives;
+
+        match list_archives() {
+            Ok(archives) => {
+                if archives.is_empty() {
+                    println!("No archived sessions found.");
+                    return;
+                }
+
+                println!("\x1b[1mArchived Sessions\x1b[0m");
+                println!();
+                println!(
+                    "{:<24} {:<20} {:<8} {:<10} {}",
+                    "DATE", "BRANCH", "ITERS", "COMPLETED", "REASON"
+                );
+                println!("{}", "-".repeat(75));
+
+                for (name, metadata) in archives.iter().take(20) {
+                    let branch = metadata.branch.as_deref().unwrap_or("-");
+                    let date = &metadata.archived_at[..19]; // Trim microseconds
+                    println!(
+                        "{:<24} {:<20} {:<8} {:<10} {}",
+                        date.replace('T', " "),
+                        if branch.len() > 18 { &branch[..18] } else { branch },
+                        metadata.iterations,
+                        format!("{}/{}", metadata.tasks_completed, metadata.tasks_completed + metadata.tasks_pending),
+                        metadata.reason
+                    );
+                }
+
+                if archives.len() > 20 {
+                    println!();
+                    println!("\x1b[2m... and {} more\x1b[0m", archives.len() - 20);
+                }
+            }
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to list archives: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 impl ArchiveClearCommand {
-    /// Execute the archive clear command (stub).
+    /// Execute the archive clear command.
     pub fn execute(&self) {
-        println!("afk archive clear: not implemented");
-        println!("  yes: {}", self.yes);
+        use crate::progress::{archive_session, clear_session};
+        use std::io::{self, Write};
+
+        // Confirm unless --yes
+        if !self.yes {
+            print!("Archive current session before clearing? [Y/n]: ");
+            let _ = io::stdout().flush();
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_ok() {
+                let input = input.trim().to_lowercase();
+                if input != "n" && input != "no" {
+                    // Archive first
+                    match archive_session("clear") {
+                        Ok(Some(path)) => {
+                            println!("\x1b[32m✓\x1b[0m Archived to: {}", path.display());
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            eprintln!("\x1b[31mError:\x1b[0m Failed to archive: {e}");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Clear session
+        match clear_session() {
+            Ok(()) => {
+                println!("\x1b[32m✓\x1b[0m Session cleared");
+            }
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to clear session: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
