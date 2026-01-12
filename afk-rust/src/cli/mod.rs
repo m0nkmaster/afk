@@ -4,6 +4,7 @@
 
 pub mod commands;
 pub mod output;
+pub mod update;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -1322,11 +1323,12 @@ impl ArchiveClearCommand {
 }
 
 impl UpdateCommand {
-    /// Execute the update command (stub).
+    /// Execute the update command - checks for and installs updates.
     pub fn execute(&self) {
-        println!("afk update: not implemented");
-        println!("  beta: {}", self.beta);
-        println!("  check: {}", self.check);
+        if let Err(e) = update::execute_update(self.beta, self.check) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
+        }
     }
 }
 
