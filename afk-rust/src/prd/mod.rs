@@ -3,6 +3,13 @@
 //! This module contains Serde models for user stories and PRD documents,
 //! mirroring the Python Pydantic models in src/afk/prd_store.py.
 
+pub mod store;
+
+pub use store::{
+    get_current_branch, get_project_name, get_project_name_from_root, mark_story_complete,
+    mark_story_complete_with_path, sync_prd, sync_prd_with_root,
+};
+
 use crate::config::PRD_FILE;
 use serde::{Deserialize, Serialize};
 use std::fs;
