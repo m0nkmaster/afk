@@ -6,7 +6,7 @@
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{sync_channel, Receiver};
+use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -99,9 +99,8 @@ impl FileWatcher {
         let path_str = path.to_string_lossy();
         for pattern in &self.ignore_patterns {
             // Simple pattern matching
-            if pattern.starts_with('*') {
+            if let Some(suffix) = pattern.strip_prefix('*') {
                 // Extension pattern like *.pyc
-                let suffix = &pattern[1..];
                 if path_str.ends_with(suffix) {
                     return true;
                 }
@@ -134,8 +133,8 @@ impl FileWatcher {
                         // Check if should ignore
                         let path_str = path.to_string_lossy();
                         let should_ignore = ignore_patterns.iter().any(|pattern| {
-                            if pattern.starts_with('*') {
-                                path_str.ends_with(&pattern[1..])
+                            if let Some(suffix) = pattern.strip_prefix('*') {
+                                path_str.ends_with(suffix)
                             } else {
                                 path_str.contains(pattern)
                             }
@@ -250,7 +249,11 @@ mod tests {
     fn test_default_ignore_patterns() {
         let watcher = FileWatcher::new("/tmp");
         assert!(watcher.ignore_patterns.contains(&".git".to_string()));
-        assert!(watcher.ignore_patterns.contains(&"node_modules".to_string()));
+        assert!(
+            watcher
+                .ignore_patterns
+                .contains(&"node_modules".to_string())
+        );
         assert!(watcher.ignore_patterns.contains(&".afk".to_string()));
     }
 
@@ -398,7 +401,9 @@ mod tests {
         // The exact events can vary by platform
         assert!(
             changes.is_empty()
-                || changes.iter().any(|c| c.path.to_string_lossy().contains("test_file"))
+                || changes
+                    .iter()
+                    .any(|c| c.path.to_string_lossy().contains("test_file"))
         );
     }
 

@@ -108,7 +108,11 @@ fn extract_items(data: &serde_json::Value) -> Vec<&serde_json::Value> {
 /// Returns None if the task should be skipped (passes: true or no valid ID).
 fn parse_task_item(item: &serde_json::Value, source: &str) -> Option<UserStory> {
     // Skip completed tasks
-    if item.get("passes").and_then(|v| v.as_bool()).unwrap_or(false) {
+    if item
+        .get("passes")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
         return None;
     }
 

@@ -304,9 +304,7 @@ mod tests {
 
         // Config with a source that returns empty (non-existent file)
         let config = AfkConfig {
-            sources: vec![crate::config::SourceConfig::json(
-                "/nonexistent/path.json",
-            )],
+            sources: vec![crate::config::SourceConfig::json("/nonexistent/path.json")],
             ..Default::default()
         };
 

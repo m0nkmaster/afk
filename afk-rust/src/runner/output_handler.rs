@@ -5,16 +5,15 @@
 
 use std::path::Path;
 
-use crate::feedback::{ActivityState, DisplayMode, FeedbackDisplay, IterationMetrics, MetricsCollector};
+use crate::feedback::{
+    ActivityState, DisplayMode, FeedbackDisplay, IterationMetrics, MetricsCollector,
+};
 use crate::parser::{FileChangeType, OutputParser, ParsedEvent};
 use crate::watcher::{ChangeType, FileWatcher};
 
 /// Completion signals to detect in AI output (ralf.sh style).
-pub const COMPLETION_SIGNALS: &[&str] = &[
-    "<promise>COMPLETE</promise>",
-    "AFK_COMPLETE",
-    "AFK_STOP",
-];
+pub const COMPLETION_SIGNALS: &[&str] =
+    &["<promise>COMPLETE</promise>", "AFK_COMPLETE", "AFK_STOP"];
 
 /// Feedback mode for the runner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -157,7 +156,8 @@ impl OutputHandler {
                     ChangeType::Deleted => "deleted",
                 };
                 let path_str = change.path.to_string_lossy();
-                self.metrics_collector.record_file_change(&path_str, change_type);
+                self.metrics_collector
+                    .record_file_change(&path_str, change_type);
             }
         }
 
@@ -244,7 +244,8 @@ impl OutputHandler {
                     FileChangeType::Deleted => "deleted",
                     FileChangeType::Read => "read",
                 };
-                self.metrics_collector.record_file_change(&e.file_path, change_type);
+                self.metrics_collector
+                    .record_file_change(&e.file_path, change_type);
             }
             ParsedEvent::Error(_) => {
                 self.metrics_collector.record_error();
@@ -277,7 +278,8 @@ impl OutputHandler {
                 };
 
                 if !already_recorded {
-                    self.metrics_collector.record_file_change(&path_str, change_type);
+                    self.metrics_collector
+                        .record_file_change(&path_str, change_type);
                 }
             }
         }
@@ -335,16 +337,31 @@ impl OutputHandler {
     /// Display loop start panel.
     pub fn loop_start_panel(&self, max_iterations: u32, branch: &str) {
         println!();
-        println!("\x1b[36m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
-        println!("\x1b[36m│\x1b[0m                           \x1b[1mafk - Ralph Wiggum Mode\x1b[0m                          \x1b[36m│\x1b[0m");
-        println!("\x1b[36m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m");
-        println!("\x1b[36m│\x1b[0m  Max iterations: {:<57}\x1b[36m│\x1b[0m", max_iterations);
+        println!(
+            "\x1b[36m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
+        );
+        println!(
+            "\x1b[36m│\x1b[0m                           \x1b[1mafk - Ralph Wiggum Mode\x1b[0m                          \x1b[36m│\x1b[0m"
+        );
+        println!(
+            "\x1b[36m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
+        );
+        println!(
+            "\x1b[36m│\x1b[0m  Max iterations: {:<57}\x1b[36m│\x1b[0m",
+            max_iterations
+        );
         if !branch.is_empty() {
             println!("\x1b[36m│\x1b[0m  Branch: {:<65}\x1b[36m│\x1b[0m", branch);
         }
-        println!("\x1b[36m│\x1b[0m                                                                             \x1b[36m│\x1b[0m");
-        println!("\x1b[36m│\x1b[0m  \x1b[2mPress Ctrl+C to stop the loop\x1b[0m                                            \x1b[36m│\x1b[0m");
-        println!("\x1b[36m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+        println!(
+            "\x1b[36m│\x1b[0m                                                                             \x1b[36m│\x1b[0m"
+        );
+        println!(
+            "\x1b[36m│\x1b[0m  \x1b[2mPress Ctrl+C to stop the loop\x1b[0m                                            \x1b[36m│\x1b[0m"
+        );
+        println!(
+            "\x1b[36m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
+        );
         println!();
     }
 
@@ -364,14 +381,34 @@ impl OutputHandler {
         let duration_mins = duration_seconds / 60.0;
 
         println!();
-        println!("\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
-        println!("\x1b[32m│\x1b[0m                              \x1b[1mSession Complete\x1b[0m                              \x1b[32m│\x1b[0m");
-        println!("\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m");
-        println!("\x1b[32m│\x1b[0m  Iterations: {:<61}\x1b[32m│\x1b[0m", iterations);
-        println!("\x1b[32m│\x1b[0m  Tasks completed: {:<56}\x1b[32m│\x1b[0m", tasks_completed);
-        println!("\x1b[32m│\x1b[0m  Duration: {:.1} minutes{:<48}\x1b[32m│\x1b[0m", duration_mins, "");
-        println!("\x1b[32m│\x1b[0m  Reason: {:<64}\x1b[32m│\x1b[0m", stop_reason);
-        println!("\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+        println!(
+            "\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
+        );
+        println!(
+            "\x1b[32m│\x1b[0m                              \x1b[1mSession Complete\x1b[0m                              \x1b[32m│\x1b[0m"
+        );
+        println!(
+            "\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
+        );
+        println!(
+            "\x1b[32m│\x1b[0m  Iterations: {:<61}\x1b[32m│\x1b[0m",
+            iterations
+        );
+        println!(
+            "\x1b[32m│\x1b[0m  Tasks completed: {:<56}\x1b[32m│\x1b[0m",
+            tasks_completed
+        );
+        println!(
+            "\x1b[32m│\x1b[0m  Duration: {:.1} minutes{:<48}\x1b[32m│\x1b[0m",
+            duration_mins, ""
+        );
+        println!(
+            "\x1b[32m│\x1b[0m  Reason: {:<64}\x1b[32m│\x1b[0m",
+            stop_reason
+        );
+        println!(
+            "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
+        );
         println!();
     }
 
@@ -403,7 +440,10 @@ impl OutputHandler {
         if let Some(ref display) = self.feedback_display {
             display.show_gates_failed(failed_gates, continuing);
         } else {
-            print!("\x1b[33m⚠\x1b[0m Quality gates failed: \x1b[31m{}\x1b[0m", failed_gates.join(", "));
+            print!(
+                "\x1b[33m⚠\x1b[0m Quality gates failed: \x1b[31m{}\x1b[0m",
+                failed_gates.join(", ")
+            );
             if continuing {
                 print!(" - continuing...");
             }
@@ -438,6 +478,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::const_is_empty)]
     fn test_completion_signals_not_empty() {
         assert!(!COMPLETION_SIGNALS.is_empty());
     }
@@ -499,7 +540,7 @@ mod tests {
     fn test_set_feedback_mode() {
         let mut handler = OutputHandler::new();
         assert_eq!(handler.feedback_mode, FeedbackMode::None);
-        
+
         handler.set_feedback_mode(FeedbackMode::Full);
         assert_eq!(handler.feedback_mode, FeedbackMode::Full);
     }
@@ -507,8 +548,13 @@ mod tests {
     #[test]
     fn test_set_iteration_context() {
         let mut handler = OutputHandler::new();
-        handler.set_iteration_context(5, 10, Some("task-1".to_string()), Some("Description".to_string()));
-        
+        handler.set_iteration_context(
+            5,
+            10,
+            Some("task-1".to_string()),
+            Some("Description".to_string()),
+        );
+
         assert_eq!(handler.iteration_current, 5);
         assert_eq!(handler.iteration_max, 10);
         assert_eq!(handler.task_id, Some("task-1".to_string()));
@@ -517,8 +563,14 @@ mod tests {
     #[test]
     fn test_feedback_mode_to_display_mode() {
         assert!(FeedbackMode::None.to_display_mode().is_none());
-        assert_eq!(FeedbackMode::Minimal.to_display_mode(), Some(DisplayMode::Minimal));
-        assert_eq!(FeedbackMode::Full.to_display_mode(), Some(DisplayMode::Full));
+        assert_eq!(
+            FeedbackMode::Minimal.to_display_mode(),
+            Some(DisplayMode::Minimal)
+        );
+        assert_eq!(
+            FeedbackMode::Full.to_display_mode(),
+            Some(DisplayMode::Full)
+        );
     }
 
     #[test]
@@ -533,7 +585,7 @@ mod tests {
         let mut handler = OutputHandler::new();
         handler.metrics_collector.record_tool_call("test");
         assert_eq!(handler.get_metrics().tool_calls, 1);
-        
+
         handler.reset_metrics();
         assert_eq!(handler.get_metrics().tool_calls, 0);
     }

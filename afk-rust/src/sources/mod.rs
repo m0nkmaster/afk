@@ -203,10 +203,7 @@ mod tests {
 
     #[test]
     fn test_aggregate_tasks_with_github_source_not_implemented() {
-        let sources = vec![SourceConfig::github(
-            "owner/repo",
-            vec!["bug".to_string()],
-        )];
+        let sources = vec![SourceConfig::github("owner/repo", vec!["bug".to_string()])];
         let tasks = aggregate_tasks(&sources);
         // GitHub source returns error, which is handled gracefully
         assert!(tasks.is_empty());

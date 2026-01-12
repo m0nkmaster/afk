@@ -151,10 +151,10 @@ fn is_newer_version(current: &str, new: &str) -> bool {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
-        if new_num > current_num {
-            return true;
-        } else if new_num < current_num {
-            return false;
+        match new_num.cmp(&current_num) {
+            std::cmp::Ordering::Greater => return true,
+            std::cmp::Ordering::Less => return false,
+            std::cmp::Ordering::Equal => {}
         }
     }
 
@@ -256,7 +256,10 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
         println!("  pip install --upgrade afk");
         println!();
         println!("Or install the standalone binary:");
-        println!("  curl -fsSL https://raw.githubusercontent.com/{}/main/scripts/install.sh | sh", GITHUB_REPO);
+        println!(
+            "  curl -fsSL https://raw.githubusercontent.com/{}/main/scripts/install.sh | sh",
+            GITHUB_REPO
+        );
         return Ok(());
     }
 
@@ -264,8 +267,14 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
 
     let result = check_for_updates(beta)?;
 
-    println!("  Current version: \x1b[36m{}\x1b[0m", result.current_version);
-    println!("  Latest version:  \x1b[36m{}\x1b[0m", result.latest_version);
+    println!(
+        "  Current version: \x1b[36m{}\x1b[0m",
+        result.current_version
+    );
+    println!(
+        "  Latest version:  \x1b[36m{}\x1b[0m",
+        result.latest_version
+    );
     println!();
 
     if !result.update_available {
@@ -283,18 +292,27 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
     }
 
     if check_only {
-        println!("\x1b[33m⚠\x1b[0m Update available: {} → {}", result.current_version, result.latest_version);
+        println!(
+            "\x1b[33m⚠\x1b[0m Update available: {} → {}",
+            result.current_version, result.latest_version
+        );
         println!();
         println!("Run 'afk update' to install.");
         return Ok(());
     }
 
-    println!("\x1b[36mℹ\x1b[0m Updating {} → {}...", result.current_version, result.latest_version);
+    println!(
+        "\x1b[36mℹ\x1b[0m Updating {} → {}...",
+        result.current_version, result.latest_version
+    );
 
     let exe_path = perform_update(result.download_url.as_ref().unwrap())?;
 
     println!();
-    println!("\x1b[32m✓\x1b[0m Successfully updated to version {}", result.latest_version);
+    println!(
+        "\x1b[32m✓\x1b[0m Successfully updated to version {}",
+        result.latest_version
+    );
     println!("  Binary: {}", exe_path.display());
     println!();
     println!("Restart afk to use the new version.");
@@ -366,6 +384,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::const_is_empty)]
     fn test_current_version_defined() {
         assert!(!CURRENT_VERSION.is_empty());
     }

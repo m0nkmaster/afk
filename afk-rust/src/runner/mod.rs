@@ -8,12 +8,12 @@ mod iteration;
 mod output_handler;
 mod quality_gates;
 
-pub use controller::{run_loop, LoopController};
-pub use iteration::{run_iteration, IterationResult, IterationRunner};
-pub use output_handler::{FeedbackMode, OutputHandler, COMPLETION_SIGNALS};
+pub use controller::{LoopController, run_loop};
+pub use iteration::{IterationResult, IterationRunner, run_iteration};
+pub use output_handler::{COMPLETION_SIGNALS, FeedbackMode, OutputHandler};
 pub use quality_gates::{
-    get_configured_gate_names, has_configured_gates, run_quality_gates, GateResult,
-    QualityGateResult,
+    GateResult, QualityGateResult, get_configured_gate_names, has_configured_gates,
+    run_quality_gates,
 };
 
 /// Reasons for stopping the runner.
@@ -72,10 +72,7 @@ mod tests {
             StopReason::MaxIterations.to_string(),
             "Maximum iterations reached"
         );
-        assert_eq!(
-            StopReason::Timeout.to_string(),
-            "Session timeout reached"
-        );
+        assert_eq!(StopReason::Timeout.to_string(), "Session timeout reached");
         assert_eq!(StopReason::NoTasks.to_string(), "No tasks available");
         assert_eq!(StopReason::UserInterrupt.to_string(), "User interrupted");
         assert_eq!(StopReason::AiError.to_string(), "AI CLI error");

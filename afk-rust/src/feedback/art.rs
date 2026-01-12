@@ -9,7 +9,10 @@ use std::sync::LazyLock;
 /// Spinner frame sequences for different animation styles.
 pub static SPINNERS: LazyLock<HashMap<&'static str, Vec<&'static str>>> = LazyLock::new(|| {
     let mut m = HashMap::new();
-    m.insert("dots", vec!["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
+    m.insert(
+        "dots",
+        vec!["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
+    );
     m.insert("arrows", vec!["←", "↖", "↑", "↗", "→", "↘", "↓", "↙"]);
     m.insert("bounce", vec!["⠁", "⠂", "⠄", "⠂"]);
     m.insert("pulse", vec!["◯", "◎", "●", "◎"]);

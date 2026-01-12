@@ -5,7 +5,9 @@
 
 pub mod limits;
 
-pub use limits::{check_limits, get_failure_count, should_skip_task, LimitCheckResult, LimitSignal};
+pub use limits::{
+    LimitCheckResult, LimitSignal, check_limits, get_failure_count, should_skip_task,
+};
 
 use crate::config::{ARCHIVE_DIR, PROGRESS_FILE};
 use chrono::Utc;
@@ -356,7 +358,7 @@ pub struct ArchiveMetadata {
 /// The path to the archive directory, or None if there's nothing to archive.
 pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
     use crate::git::get_current_branch;
-    
+
     let progress_path = Path::new(PROGRESS_FILE);
     if !progress_path.exists() {
         return Ok(None);
@@ -364,30 +366,29 @@ pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
 
     // Load progress to get stats
     let progress = SessionProgress::load(None)?;
-    
+
     // Create archive directory name with timestamp and sanitised branch name
     let branch = get_current_branch();
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
     let branch_part = branch
         .as_deref()
         .unwrap_or("unknown")
-        .replace('/', "-")
-        .replace('\\', "-")
+        .replace(['/', '\\'], "-")
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
         .take(30)
         .collect::<String>();
-    
+
     let archive_name = format!("{}_{}", timestamp, branch_part);
     let archive_dir = Path::new(ARCHIVE_DIR).join(&archive_name);
-    
+
     // Create archive directory
     fs::create_dir_all(&archive_dir)?;
-    
+
     // Copy progress.json to archive
     let archive_progress = archive_dir.join("progress.json");
     fs::copy(progress_path, &archive_progress)?;
-    
+
     // Write metadata
     let (pending, _, completed, _, _) = progress.get_task_counts();
     let metadata = ArchiveMetadata {
@@ -401,7 +402,7 @@ pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
     let metadata_path = archive_dir.join("metadata.json");
     let metadata_json = serde_json::to_string_pretty(&metadata)?;
     fs::write(&metadata_path, metadata_json)?;
-    
+
     Ok(Some(archive_dir))
 }
 
@@ -419,13 +420,13 @@ pub fn clear_session() -> Result<(), ProgressError> {
 /// Compares the current git branch with the branch stored in any existing session.
 pub fn should_archive_on_branch_change() -> bool {
     use crate::git::get_current_branch;
-    
+
     // Load existing progress to check stored branch
     let progress_path = Path::new(PROGRESS_FILE);
     if !progress_path.exists() {
         return false;
     }
-    
+
     // Read progress to check if we have session data
     if let Ok(contents) = fs::read_to_string(progress_path) {
         // Try to parse and check if there's meaningful session data
@@ -436,7 +437,7 @@ pub fn should_archive_on_branch_change() -> bool {
             }
         }
     }
-    
+
     // For now, return false since we don't store branch in SessionProgress
     // A future enhancement could add branch tracking to SessionProgress
     let _ = get_current_branch();
@@ -453,7 +454,7 @@ pub fn list_archives() -> Result<Vec<(String, ArchiveMetadata)>, ProgressError> 
     }
 
     let mut archives = Vec::new();
-    
+
     for entry in fs::read_dir(archive_dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -473,10 +474,10 @@ pub fn list_archives() -> Result<Vec<(String, ArchiveMetadata)>, ProgressError> 
             }
         }
     }
-    
+
     // Sort by archived_at descending (newest first)
     archives.sort_by(|a, b| b.1.archived_at.cmp(&a.1.archived_at));
-    
+
     Ok(archives)
 }
 
@@ -797,7 +798,12 @@ mod tests {
     fn test_set_task_status_completed_sets_completed_at() {
         let mut session = SessionProgress::new();
 
-        session.set_task_status("task-001", TaskStatus::Completed, "beads", Some("Done!".to_string()));
+        session.set_task_status(
+            "task-001",
+            TaskStatus::Completed,
+            "beads",
+            Some("Done!".to_string()),
+        );
 
         let task = session.tasks.get("task-001").unwrap();
         assert_eq!(task.status, TaskStatus::Completed);
@@ -809,10 +815,20 @@ mod tests {
     fn test_set_task_status_failed_increments_failure_count() {
         let mut session = SessionProgress::new();
 
-        session.set_task_status("task-001", TaskStatus::Failed, "beads", Some("Error".to_string()));
+        session.set_task_status(
+            "task-001",
+            TaskStatus::Failed,
+            "beads",
+            Some("Error".to_string()),
+        );
         assert_eq!(session.tasks.get("task-001").unwrap().failure_count, 1);
 
-        session.set_task_status("task-001", TaskStatus::Failed, "beads", Some("Error again".to_string()));
+        session.set_task_status(
+            "task-001",
+            TaskStatus::Failed,
+            "beads",
+            Some("Error again".to_string()),
+        );
         assert_eq!(session.tasks.get("task-001").unwrap().failure_count, 2);
 
         session.set_task_status("task-001", TaskStatus::Failed, "beads", None);
@@ -845,10 +861,9 @@ mod tests {
     #[test]
     fn test_get_completed_tasks() {
         let mut session = SessionProgress::new();
-        session.tasks.insert(
-            "pending".to_string(),
-            TaskProgress::new("pending", "beads"),
-        );
+        session
+            .tasks
+            .insert("pending".to_string(), TaskProgress::new("pending", "beads"));
         session.tasks.insert(
             "completed-1".to_string(),
             TaskProgress {
@@ -973,10 +988,9 @@ mod tests {
                 ..TaskProgress::new("completed", "beads")
             },
         );
-        session.tasks.insert(
-            "pending".to_string(),
-            TaskProgress::new("pending", "beads"),
-        );
+        session
+            .tasks
+            .insert("pending".to_string(), TaskProgress::new("pending", "beads"));
 
         assert!(!session.is_complete());
     }
@@ -1088,10 +1102,9 @@ mod tests {
     #[test]
     fn test_get_task_counts() {
         let mut session = SessionProgress::new();
-        session.tasks.insert(
-            "pending".to_string(),
-            TaskProgress::new("pending", "beads"),
-        );
+        session
+            .tasks
+            .insert("pending".to_string(), TaskProgress::new("pending", "beads"));
         session.tasks.insert(
             "in-progress".to_string(),
             TaskProgress {
@@ -1254,7 +1267,10 @@ mod tests {
         // Parse it back
         let parsed: SessionProgress = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.iterations, 5);
-        assert_eq!(parsed.tasks.get("task-001").unwrap().status, TaskStatus::Completed);
+        assert_eq!(
+            parsed.tasks.get("task-001").unwrap().status,
+            TaskStatus::Completed
+        );
     }
 
     // ========================================================================
@@ -1311,7 +1327,7 @@ mod tests {
         // Should not error when progress.json doesn't exist
         let temp = TempDir::new().unwrap();
         std::env::set_current_dir(temp.path()).unwrap();
-        
+
         // This should succeed silently
         let result = clear_session();
         assert!(result.is_ok());
@@ -1321,7 +1337,7 @@ mod tests {
     fn test_list_archives_empty() {
         let temp = TempDir::new().unwrap();
         std::env::set_current_dir(temp.path()).unwrap();
-        
+
         let archives = list_archives().unwrap();
         assert!(archives.is_empty());
     }
@@ -1330,7 +1346,7 @@ mod tests {
     fn test_should_archive_on_branch_change_no_progress() {
         let temp = TempDir::new().unwrap();
         std::env::set_current_dir(temp.path()).unwrap();
-        
+
         // No progress file means nothing to archive
         assert!(!should_archive_on_branch_change());
     }

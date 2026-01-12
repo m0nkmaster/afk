@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::cli::output::{get_effective_mode, output_prompt};
 use crate::config::AfkConfig;
-use crate::prd::{generate_prd_prompt, load_prd_file, sync_prd_with_root, PrdDocument, PrdError};
+use crate::prd::{PrdDocument, PrdError, generate_prd_prompt, load_prd_file, sync_prd_with_root};
 
 /// Result type for PRD command operations.
 pub type PrdCommandResult = Result<(), PrdCommandError>;
@@ -85,9 +85,7 @@ pub fn prd_parse_impl(
 
     // Show next steps
     println!();
-    println!(
-        "\x1b[2mRun the prompt with your AI tool, then add the source:\x1b[0m"
-    );
+    println!("\x1b[2mRun the prompt with your AI tool, then add the source:\x1b[0m");
     println!("  \x1b[36mafk source add json {output}\x1b[0m");
 
     Ok(())
@@ -223,9 +221,7 @@ pub fn prd_show_impl(pending_only: bool, prd_path: Option<&Path>) -> PrdCommandR
     if pending_only {
         println!("\x1b[2mShowing {pending} pending of {total} total stories\x1b[0m");
     } else {
-        println!(
-            "\x1b[2m{completed}/{total} complete ({pending} pending)\x1b[0m"
-        );
+        println!("\x1b[2m{completed}/{total} complete ({pending} pending)\x1b[0m");
     }
 
     // Show branch and last synced info
@@ -335,7 +331,11 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_sync_impl(Some("feature/custom"), Some(&config_path), Some(temp.path()));
+        let result = prd_sync_impl(
+            Some("feature/custom"),
+            Some(&config_path),
+            Some(temp.path()),
+        );
         assert!(result.is_ok());
 
         let prd = PrdDocument::load(Some(&prd_path)).unwrap();
@@ -344,7 +344,7 @@ mod tests {
 
     #[test]
     fn test_prd_show_empty_prd() {
-        let (temp, afk_dir) = setup_temp_dir();
+        let (_temp, afk_dir) = setup_temp_dir();
         let prd_path = afk_dir.join("prd.json");
 
         // Empty PRD
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn test_prd_parse_file_not_found() {
-        let (temp, afk_dir) = setup_temp_dir();
+        let (_temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
@@ -666,8 +666,17 @@ mod tests {
         let config = AfkConfig::default();
 
         // Test explicit flags
-        assert_eq!(get_effective_mode(true, false, false, &config), OutputMode::Clipboard);
-        assert_eq!(get_effective_mode(false, true, false, &config), OutputMode::File);
-        assert_eq!(get_effective_mode(false, false, true, &config), OutputMode::Stdout);
+        assert_eq!(
+            get_effective_mode(true, false, false, &config),
+            OutputMode::Clipboard
+        );
+        assert_eq!(
+            get_effective_mode(false, true, false, &config),
+            OutputMode::File
+        );
+        assert_eq!(
+            get_effective_mode(false, false, true, &config),
+            OutputMode::Stdout
+        );
     }
 }

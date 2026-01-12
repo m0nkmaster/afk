@@ -178,6 +178,7 @@ mod tests {
     use tera::{Context, Tera};
 
     #[test]
+    #[allow(clippy::const_is_empty)]
     fn test_default_template_not_empty() {
         assert!(!DEFAULT_TEMPLATE.is_empty());
     }
@@ -297,7 +298,11 @@ mod tests {
         context.insert("stop_signal", &None::<String>);
 
         let result = tera.render("prompt", &context);
-        assert!(result.is_ok(), "Template failed to render: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Template failed to render: {:?}",
+            result.err()
+        );
 
         let rendered = result.unwrap();
         assert!(rendered.contains("# afk Autonomous Agent"));
@@ -332,13 +337,20 @@ mod tests {
         context.insert("total_count", &10);
         context.insert("context_files", &vec!["AGENTS.md", "README.md"]);
         context.insert("feedback_loops", &feedback_loops);
-        context.insert("custom_instructions", &vec!["Use British English", "Always run tests"]);
+        context.insert(
+            "custom_instructions",
+            &vec!["Use British English", "Always run tests"],
+        );
         context.insert("bootstrap", &true);
         context.insert("next_story", &next_story);
         context.insert("stop_signal", &None::<String>);
 
         let result = tera.render("prompt", &context);
-        assert!(result.is_ok(), "Template failed to render: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Template failed to render: {:?}",
+            result.err()
+        );
 
         let rendered = result.unwrap();
         assert!(rendered.contains("Iteration: 5/20"));
@@ -367,10 +379,17 @@ mod tests {
         context.insert("custom_instructions", &Vec::<String>::new());
         context.insert("bootstrap", &false);
         context.insert("next_story", &None::<()>);
-        context.insert("stop_signal", &Some("AFK_COMPLETE - All stories have passes: true"));
+        context.insert(
+            "stop_signal",
+            &Some("AFK_COMPLETE - All stories have passes: true"),
+        );
 
         let result = tera.render("prompt", &context);
-        assert!(result.is_ok(), "Template failed to render: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Template failed to render: {:?}",
+            result.err()
+        );
 
         let rendered = result.unwrap();
         assert!(rendered.contains("## STOP"));
@@ -397,7 +416,11 @@ mod tests {
         context.insert("stop_signal", &None::<String>);
 
         let result = tera.render("prompt", &context);
-        assert!(result.is_ok(), "Template failed to render: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Template failed to render: {:?}",
+            result.err()
+        );
 
         let rendered = result.unwrap();
         assert!(rendered.contains("No gates configured"));

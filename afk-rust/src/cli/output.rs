@@ -30,7 +30,11 @@ pub enum OutputError {
 /// # Returns
 ///
 /// Ok(()) on success, or an error if the output fails.
-pub fn output_prompt(prompt: &str, mode: OutputMode, config: &AfkConfig) -> Result<(), OutputError> {
+pub fn output_prompt(
+    prompt: &str,
+    mode: OutputMode,
+    config: &AfkConfig,
+) -> Result<(), OutputError> {
     match mode {
         OutputMode::Clipboard => copy_to_clipboard(prompt),
         OutputMode::File => write_to_file(prompt, &config.output.file_path),
@@ -94,12 +98,7 @@ pub fn print_to_stdout(prompt: &str) {
 /// Get the effective output mode.
 ///
 /// Returns the explicit mode if provided, otherwise uses the config default.
-pub fn get_effective_mode(
-    copy: bool,
-    file: bool,
-    stdout: bool,
-    config: &AfkConfig,
-) -> OutputMode {
+pub fn get_effective_mode(copy: bool, file: bool, stdout: bool, config: &AfkConfig) -> OutputMode {
     if copy {
         OutputMode::Clipboard
     } else if file {
@@ -158,9 +157,18 @@ mod tests {
     fn test_get_effective_mode_explicit_flags() {
         let config = AfkConfig::default();
 
-        assert_eq!(get_effective_mode(true, false, false, &config), OutputMode::Clipboard);
-        assert_eq!(get_effective_mode(false, true, false, &config), OutputMode::File);
-        assert_eq!(get_effective_mode(false, false, true, &config), OutputMode::Stdout);
+        assert_eq!(
+            get_effective_mode(true, false, false, &config),
+            OutputMode::Clipboard
+        );
+        assert_eq!(
+            get_effective_mode(false, true, false, &config),
+            OutputMode::File
+        );
+        assert_eq!(
+            get_effective_mode(false, false, true, &config),
+            OutputMode::Stdout
+        );
     }
 
     #[test]
@@ -173,7 +181,10 @@ mod tests {
             ..Default::default()
         };
 
-        assert_eq!(get_effective_mode(false, false, false, &config), OutputMode::File);
+        assert_eq!(
+            get_effective_mode(false, false, false, &config),
+            OutputMode::File
+        );
     }
 
     #[test]
@@ -181,8 +192,14 @@ mod tests {
         let config = AfkConfig::default();
 
         // If multiple flags set, priority is: copy > file > stdout
-        assert_eq!(get_effective_mode(true, true, true, &config), OutputMode::Clipboard);
-        assert_eq!(get_effective_mode(false, true, true, &config), OutputMode::File);
+        assert_eq!(
+            get_effective_mode(true, true, true, &config),
+            OutputMode::Clipboard
+        );
+        assert_eq!(
+            get_effective_mode(false, true, true, &config),
+            OutputMode::File
+        );
     }
 
     #[test]

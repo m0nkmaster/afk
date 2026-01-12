@@ -4,7 +4,7 @@ A simple, elegant task list web application.
 
 ## Overview
 
-Build a single-page task list application using vanilla HTML, CSS, and JavaScript. No frameworks or build tools required — just clean, working code.
+Build a single-page task list application using vanilla HTML, CSS, and JavaScript. No frameworks or build tools required — just clean, working code. The task list will be stored and managed within localStorage.
 
 ## Tasks
 

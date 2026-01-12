@@ -3,7 +3,9 @@
 //! This module detects project type, available tools, and generates config.
 //! Also handles the first-run experience for AI CLI selection.
 
-use crate::config::{AfkConfig, AiCliConfig, FeedbackLoopsConfig, SourceConfig, AFK_DIR, CONFIG_FILE};
+use crate::config::{
+    AFK_DIR, AfkConfig, AiCliConfig, CONFIG_FILE, FeedbackLoopsConfig, SourceConfig,
+};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
@@ -157,7 +159,7 @@ pub fn analyse_project(root: Option<&Path>) -> ProjectAnalysis {
         let has_ruff = root.join("ruff.toml").exists()
             || root.join(".ruff.toml").exists()
             || file_contains(root.join("pyproject.toml"), "[tool.ruff]");
-        
+
         // Check for type checking
         let has_mypy = root.join("mypy.ini").exists()
             || file_contains(root.join("pyproject.toml"), "[tool.mypy]");
@@ -275,9 +277,10 @@ pub fn analyse_project(root: Option<&Path>) -> ProjectAnalysis {
 
 /// Generate a config from project analysis.
 pub fn generate_config(analysis: &ProjectAnalysis) -> AfkConfig {
-    let mut config = AfkConfig::default();
-    config.feedback_loops = analysis.suggested_feedback.clone();
-    config
+    AfkConfig {
+        feedback_loops: analysis.suggested_feedback.clone(),
+        ..AfkConfig::default()
+    }
 }
 
 /// Infer sources from the current directory.
@@ -306,7 +309,7 @@ pub fn infer_sources(root: Option<&Path>) -> Vec<SourceConfig> {
             .output()
             .map(|o| o.status.success())
             .unwrap_or(false);
-        
+
         if gh_auth {
             // Use default repo detection (empty string means current repo)
             sources.push(SourceConfig::github("", Vec::new()));
@@ -388,7 +391,7 @@ fn extract_go_name(root: &Path) -> Option<String> {
         if parts.len() >= 2 {
             // Get the last segment of the module path
             let module_path = parts[1];
-            return module_path.split('/').last().map(|s| s.to_string());
+            return module_path.split('/').next_back().map(|s| s.to_string());
         }
     }
     None
@@ -470,7 +473,10 @@ pub fn prompt_ai_cli_selection(available: &[&AiCliInfo]) -> AiCliSelectionResult
     println!();
 
     // Prompt for selection
-    print!("Which AI CLI should afk use? [1-{}, default=1]: ", available.len());
+    print!(
+        "Which AI CLI should afk use? [1-{}, default=1]: ",
+        available.len()
+    );
     let _ = io::stdout().flush();
 
     let mut input = String::new();
@@ -479,7 +485,7 @@ pub fn prompt_ai_cli_selection(available: &[&AiCliInfo]) -> AiCliSelectionResult
     }
 
     let input = input.trim();
-    
+
     // Handle empty input (default to 1)
     let choice: usize = if input.is_empty() {
         1
@@ -539,21 +545,24 @@ pub fn ensure_ai_cli_configured(config: Option<&mut AfkConfig>) -> Option<AiCliC
                 .map(|c| c.clone())
                 .or_else(|| AfkConfig::load(None).ok())
                 .unwrap_or_default();
-            
+
             new_config.ai_cli = ai_cli.clone();
-            
+
             // Ensure .afk directory exists
             let afk_dir = std::path::Path::new(AFK_DIR);
             if let Err(e) = std::fs::create_dir_all(afk_dir) {
                 eprintln!("\x1b[33mWarning:\x1b[0m Could not create .afk directory: {e}");
             }
-            
+
             // Save config
             if let Err(e) = new_config.save(Some(config_path)) {
                 eprintln!("\x1b[33mWarning:\x1b[0m Could not save config: {e}");
             } else {
                 println!();
-                println!("\x1b[32m✓\x1b[0m Saved AI CLI choice: \x1b[36m{}\x1b[0m", ai_cli.command);
+                println!(
+                    "\x1b[32m✓\x1b[0m Saved AI CLI choice: \x1b[36m{}\x1b[0m",
+                    ai_cli.command
+                );
                 println!("  Config: \x1b[2m{}\x1b[0m", CONFIG_FILE);
                 println!();
             }
@@ -713,10 +722,7 @@ line-length = 100
         };
 
         let config = generate_config(&analysis);
-        assert_eq!(
-            config.feedback_loops.types,
-            Some("cargo check".to_string())
-        );
+        assert_eq!(config.feedback_loops.types, Some("cargo check".to_string()));
     }
 
     // ========================================================================
@@ -724,10 +730,11 @@ line-length = 100
     // ========================================================================
 
     #[test]
+    #[allow(clippy::const_is_empty)]
     fn test_ai_cli_info_structure() {
         // Verify AI_CLIS has expected entries
         assert!(!AI_CLIS.is_empty());
-        
+
         // First entry should be claude (highest priority)
         assert_eq!(AI_CLIS[0].command, "claude");
         assert_eq!(AI_CLIS[0].name, "Claude Code");

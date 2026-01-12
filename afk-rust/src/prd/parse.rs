@@ -156,6 +156,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    #[allow(clippy::const_is_empty)]
     fn test_prd_parse_template_not_empty() {
         assert!(!PRD_PARSE_TEMPLATE.is_empty());
     }

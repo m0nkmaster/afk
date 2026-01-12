@@ -123,12 +123,10 @@ static CLAUDE_TOOL_CALL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Calling tool: (\w+)").unwrap());
 static CLAUDE_FILE_WRITE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Writing to: (.+)").unwrap());
-static CLAUDE_FILE_READ: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Reading: (.+)").unwrap());
+static CLAUDE_FILE_READ: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Reading: (.+)").unwrap());
 
 // Cursor CLI patterns
-static CURSOR_TOOL_CALL: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"⏺\s+(\w+)\(").unwrap());
+static CURSOR_TOOL_CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"⏺\s+(\w+)\(").unwrap());
 static CURSOR_FILE_EDITED: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^Edited\s+(.+)$").unwrap());
 static CURSOR_FILE_CREATED: LazyLock<Regex> =
@@ -139,8 +137,7 @@ static CURSOR_FILE_DELETED: LazyLock<Regex> =
 // Aider patterns
 static AIDER_APPLIED_EDIT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Applied edit to (.+)").unwrap());
-static AIDER_WROTE_FILE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^Wrote\s+(.+)$").unwrap());
+static AIDER_WROTE_FILE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^Wrote\s+(.+)$").unwrap());
 static AIDER_ADDED_TO_CHAT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Added (.+) to the chat").unwrap());
 static AIDER_COMMIT_MADE: LazyLock<Regex> =

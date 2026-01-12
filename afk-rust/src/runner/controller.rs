@@ -3,12 +3,12 @@
 //! This module implements the main loop lifecycle, including limits,
 //! stop conditions, and session management.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use crate::config::AfkConfig;
-use crate::prd::{sync_prd_with_root, PrdDocument};
+use crate::prd::{PrdDocument, sync_prd_with_root};
 
 use super::iteration::IterationRunner;
 use super::output_handler::OutputHandler;
@@ -38,7 +38,8 @@ impl LoopController {
 
     /// Create with custom output handler.
     pub fn with_output(config: AfkConfig, output: OutputHandler) -> Self {
-        let iteration_runner = IterationRunner::with_output_handler(config.clone(), OutputHandler::new());
+        let iteration_runner =
+            IterationRunner::with_output_handler(config.clone(), OutputHandler::new());
 
         Self {
             config,
@@ -131,10 +132,12 @@ impl LoopController {
         let task_description = first_task.map(|t| t.title.clone());
 
         // Set iteration context
-        self.iteration_runner.set_iteration_context(1, max_iter, task_id, task_description);
+        self.iteration_runner
+            .set_iteration_context(1, max_iter, task_id, task_description);
 
         // Main loop
-        let result = self.run_main_loop(max_iter, until_complete, timeout_override, start_time, &prd);
+        let result =
+            self.run_main_loop(max_iter, until_complete, timeout_override, start_time, &prd);
 
         // Display session complete panel
         self.output.session_complete_panel(
@@ -244,12 +247,14 @@ impl LoopController {
             if self.config.archive.enabled {
                 match crate::progress::archive_session("interrupted") {
                     Ok(Some(path)) => {
-                        self.output.info(&format!("Session archived to: {}", path.display()));
+                        self.output
+                            .info(&format!("Session archived to: {}", path.display()));
                         Some(path)
                     }
                     Ok(None) => None,
                     Err(e) => {
-                        self.output.warning(&format!("Failed to archive session: {e}"));
+                        self.output
+                            .warning(&format!("Failed to archive session: {e}"));
                         None
                     }
                 }
@@ -287,7 +292,7 @@ pub fn run_loop(
     resume: bool,
 ) -> RunResult {
     let mut controller = LoopController::new(config.clone());
-    
+
     // Set up Ctrl+C handler
     let interrupt_flag = controller.interrupt_flag();
     let handler_result = ctrlc::set_handler(move || {
@@ -295,22 +300,28 @@ pub fn run_loop(
         interrupt_flag.store(true, Ordering::SeqCst);
         eprintln!("\n\x1b[33mInterrupting... press Ctrl+C again to force quit\x1b[0m");
     });
-    
+
     if let Err(e) = handler_result {
         // Non-fatal: just log and continue without handler
         eprintln!("\x1b[2mWarning: Could not set up Ctrl+C handler: {e}\x1b[0m");
     }
-    
-    controller.run(max_iterations, branch, until_complete, timeout_override, resume)
+
+    controller.run(
+        max_iterations,
+        branch,
+        until_complete,
+        timeout_override,
+        resume,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prd::UserStory;
     use std::fs;
     use tempfile::TempDir;
 
+    #[allow(dead_code)]
     fn setup_test_env(temp: &TempDir) -> std::path::PathBuf {
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();

@@ -132,7 +132,6 @@ pub fn get_failure_count(progress: &SessionProgress, task_id: &str) -> u32 {
 mod tests {
     use super::*;
     use crate::progress::TaskProgress;
-    use std::collections::HashMap;
 
     fn create_test_progress() -> SessionProgress {
         let mut progress = SessionProgress::new();
@@ -164,7 +163,7 @@ mod tests {
     fn test_check_limits_can_continue() {
         let mut progress = create_test_progress();
         let result = check_limits(&mut progress, 1, 10, 3);
-        
+
         assert!(result.can_continue);
         assert_eq!(result.signal, LimitSignal::Continue);
         assert!(result.auto_skipped.is_empty());
@@ -174,7 +173,7 @@ mod tests {
     fn test_check_limits_max_iterations() {
         let mut progress = create_test_progress();
         let result = check_limits(&mut progress, 11, 10, 3);
-        
+
         assert!(!result.can_continue);
         assert_eq!(result.signal, LimitSignal::MaxIterations);
     }
@@ -182,15 +181,15 @@ mod tests {
     #[test]
     fn test_check_limits_auto_skip_failed_task() {
         let mut progress = create_test_progress();
-        
+
         // Set task-002 to have 3 failures (equals max)
         progress.tasks.get_mut("task-002").unwrap().failure_count = 3;
-        
+
         let result = check_limits(&mut progress, 1, 10, 3);
-        
+
         assert!(result.can_continue);
         assert_eq!(result.auto_skipped, vec!["task-002".to_string()]);
-        
+
         // Verify task was marked as skipped
         let task = progress.get_task("task-002").unwrap();
         assert_eq!(task.status, TaskStatus::Skipped);
@@ -213,9 +212,9 @@ mod tests {
                 ..TaskProgress::new("task-002", "test")
             },
         );
-        
+
         let result = check_limits(&mut progress, 1, 10, 3);
-        
+
         assert!(!result.can_continue);
         assert_eq!(result.signal, LimitSignal::Complete);
     }
@@ -224,7 +223,7 @@ mod tests {
     fn test_should_skip_task() {
         let mut progress = create_test_progress();
         progress.tasks.get_mut("task-002").unwrap().failure_count = 3;
-        
+
         assert!(!should_skip_task(&progress, "task-001", 3));
         assert!(should_skip_task(&progress, "task-002", 3));
         assert!(!should_skip_task(&progress, "nonexistent", 3));
@@ -233,7 +232,7 @@ mod tests {
     #[test]
     fn test_get_failure_count() {
         let progress = create_test_progress();
-        
+
         assert_eq!(get_failure_count(&progress, "task-001"), 0);
         assert_eq!(get_failure_count(&progress, "task-002"), 2);
         assert_eq!(get_failure_count(&progress, "nonexistent"), 0);

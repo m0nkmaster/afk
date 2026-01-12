@@ -409,7 +409,9 @@ impl AfkConfig {
     ///
     /// The loaded configuration, or defaults if the file doesn't exist.
     pub fn load(path: Option<&Path>) -> Result<Self, ConfigError> {
-        let path = path.map(PathBuf::from).unwrap_or_else(|| PathBuf::from(CONFIG_FILE));
+        let path = path
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(CONFIG_FILE));
 
         if !path.exists() {
             return Ok(Self::default());
@@ -428,7 +430,9 @@ impl AfkConfig {
     ///
     /// Creates parent directories if they don't exist.
     pub fn save(&self, path: Option<&Path>) -> Result<(), ConfigError> {
-        let path = path.map(PathBuf::from).unwrap_or_else(|| PathBuf::from(CONFIG_FILE));
+        let path = path
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(CONFIG_FILE));
 
         // Create parent directory if needed
         if let Some(parent) = path.parent() {
@@ -489,7 +493,10 @@ mod tests {
 
     #[test]
     fn test_source_config_github_with_options() {
-        let source = SourceConfig::github("owner/repo", vec!["bug".to_string(), "enhancement".to_string()]);
+        let source = SourceConfig::github(
+            "owner/repo",
+            vec!["bug".to_string(), "enhancement".to_string()],
+        );
         assert_eq!(source.source_type, SourceType::Github);
         assert_eq!(source.repo, Some("owner/repo".to_string()));
         assert_eq!(source.labels, vec!["bug", "enhancement"]);
@@ -531,7 +538,10 @@ mod tests {
         assert_eq!(config.lint, Some("ruff check .".to_string()));
         assert_eq!(config.test, Some("pytest".to_string()));
         assert_eq!(config.build, Some("pip wheel .".to_string()));
-        assert_eq!(config.custom.get("format"), Some(&"ruff format .".to_string()));
+        assert_eq!(
+            config.custom.get("format"),
+            Some(&"ruff format .".to_string())
+        );
     }
 
     #[test]
@@ -602,12 +612,18 @@ mod tests {
             template: "minimal".to_string(),
             custom_path: Some(".afk/prompt.jinja2".to_string()),
             context_files: vec!["AGENTS.md".to_string(), "README.md".to_string()],
-            instructions: vec!["Always run tests".to_string(), "Use British English".to_string()],
+            instructions: vec![
+                "Always run tests".to_string(),
+                "Use British English".to_string(),
+            ],
         };
         assert_eq!(config.template, "minimal");
         assert_eq!(config.custom_path, Some(".afk/prompt.jinja2".to_string()));
         assert_eq!(config.context_files, vec!["AGENTS.md", "README.md"]);
-        assert_eq!(config.instructions, vec!["Always run tests", "Use British English"]);
+        assert_eq!(
+            config.instructions,
+            vec!["Always run tests", "Use British English"]
+        );
     }
 
     #[test]
@@ -873,7 +889,10 @@ mod tests {
     fn test_path_helpers() {
         assert_eq!(AfkConfig::afk_dir(), PathBuf::from(".afk"));
         assert_eq!(AfkConfig::config_file(), PathBuf::from(".afk/config.json"));
-        assert_eq!(AfkConfig::progress_file(), PathBuf::from(".afk/progress.json"));
+        assert_eq!(
+            AfkConfig::progress_file(),
+            PathBuf::from(".afk/progress.json")
+        );
         assert_eq!(AfkConfig::prd_file(), PathBuf::from(".afk/prd.json"));
         assert_eq!(AfkConfig::archive_dir(), PathBuf::from(".afk/archive"));
     }

@@ -140,6 +140,7 @@ impl FeedbackDisplay {
     /// * `task_description` - Description of the current task.
     /// * `progress` - Task completion percentage (0.0 to 1.0).
     /// * `activity_state` - Current activity state.
+    #[allow(clippy::too_many_arguments)]
     pub fn update(
         &mut self,
         metrics: &IterationMetrics,
@@ -186,7 +187,11 @@ impl FeedbackDisplay {
     /// Render minimal mode single-line status bar.
     ///
     /// Format: ◉ afk [x/y] mm:ss │ ⣾ N calls │ N files │ +N/-N
-    fn render_minimal(&self, metrics: &IterationMetrics, activity_state: ActivityState) -> Vec<String> {
+    fn render_minimal(
+        &self,
+        metrics: &IterationMetrics,
+        activity_state: ActivityState,
+    ) -> Vec<String> {
         let mut bar = String::new();
 
         // Prefix: ◉ afk
@@ -246,7 +251,11 @@ impl FeedbackDisplay {
     }
 
     /// Render full mode multi-panel display.
-    fn render_full(&self, metrics: &IterationMetrics, activity_state: ActivityState) -> Vec<String> {
+    fn render_full(
+        &self,
+        metrics: &IterationMetrics,
+        activity_state: ActivityState,
+    ) -> Vec<String> {
         let mut lines = Vec::new();
 
         // Top border
@@ -304,7 +313,11 @@ impl FeedbackDisplay {
     }
 
     /// Render the activity section.
-    fn render_activity_section(&self, metrics: &IterationMetrics, activity_state: ActivityState) -> Vec<String> {
+    fn render_activity_section(
+        &self,
+        metrics: &IterationMetrics,
+        activity_state: ActivityState,
+    ) -> Vec<String> {
         let mut lines = Vec::new();
 
         // Spinner and status line
@@ -367,7 +380,11 @@ impl FeedbackDisplay {
             lines.push(self.pad_line(&empty_line));
         } else {
             for (prefix, path) in recent_files.iter().rev() {
-                let style = if *prefix == "+" { "\x1b[32;1m" } else { "\x1b[33m" };
+                let style = if *prefix == "+" {
+                    "\x1b[32;1m"
+                } else {
+                    "\x1b[33m"
+                };
                 let truncated_path = self.truncate_path(path, 60);
                 let file_line = format!(
                     "\x1b[36m│\x1b[0m    {}{}\x1b[0m \x1b[2m{}\x1b[0m",
@@ -477,7 +494,10 @@ impl FeedbackDisplay {
             let (directory, filename) = path.split_at(pos + 1);
             if filename.len() >= max_length - 4 {
                 // Filename alone is too long
-                return format!("...{}", &filename[filename.len().saturating_sub(max_length - 3)..]);
+                return format!(
+                    "...{}",
+                    &filename[filename.len().saturating_sub(max_length - 3)..]
+                );
             }
 
             // Truncate directory
@@ -515,7 +535,10 @@ impl FeedbackDisplay {
     /// Display visual feedback when quality gates pass.
     pub fn show_gates_passed(&self, gates: &[String]) {
         for gate in gates {
-            println!("  \x1b[32;1m✓\x1b[0m \x1b[32m{}\x1b[0m \x1b[2mpassed\x1b[0m", gate);
+            println!(
+                "  \x1b[32;1m✓\x1b[0m \x1b[32m{}\x1b[0m \x1b[2mpassed\x1b[0m",
+                gate
+            );
             std::thread::sleep(Duration::from_millis(100));
         }
     }
@@ -525,10 +548,20 @@ impl FeedbackDisplay {
         let celebration_art = get_mascot("celebration");
 
         println!();
-        println!("\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
-        println!("\x1b[32m│\x1b[0m                          \x1b[32;1m🎉 Celebration 🎉\x1b[0m                               \x1b[32m│\x1b[0m");
-        println!("\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m");
-        println!("\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m", "★ ".repeat(16), " ".repeat(45 - 32));
+        println!(
+            "\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
+        );
+        println!(
+            "\x1b[32m│\x1b[0m                          \x1b[32;1m🎉 Celebration 🎉\x1b[0m                               \x1b[32m│\x1b[0m"
+        );
+        println!(
+            "\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
+        );
+        println!(
+            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
+            "★ ".repeat(16),
+            " ".repeat(45 - 32)
+        );
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
 
         for line in celebration_art.lines() {
@@ -539,20 +572,38 @@ impl FeedbackDisplay {
         }
 
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        let msg = format!("  \x1b[32;1m✓ Task Complete!\x1b[0m \x1b[36;1m{}\x1b[0m", task_id);
+        let msg = format!(
+            "  \x1b[32;1m✓ Task Complete!\x1b[0m \x1b[36;1m{}\x1b[0m",
+            task_id
+        );
         let msg_len = self.visible_len(&msg);
         let msg_padding = 77_usize.saturating_sub(msg_len);
-        println!("\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m", msg, " ".repeat(msg_padding));
+        println!(
+            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
+            msg,
+            " ".repeat(msg_padding)
+        );
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        println!("\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m", "★ ".repeat(16), " ".repeat(45 - 32));
-        println!("\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+        println!(
+            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
+            "★ ".repeat(16),
+            " ".repeat(45 - 32)
+        );
+        println!(
+            "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
+        );
         println!();
 
         std::thread::sleep(Duration::from_millis(500));
     }
 
     /// Display a full celebration when the session is complete.
-    pub fn show_session_complete(&self, tasks_completed: u32, iterations: u32, duration_seconds: f64) {
+    pub fn show_session_complete(
+        &self,
+        tasks_completed: u32,
+        iterations: u32,
+        duration_seconds: f64,
+    ) {
         let celebration_art = get_mascot("celebration");
         let total_seconds = duration_seconds as u64;
         let minutes = total_seconds / 60;
@@ -560,10 +611,20 @@ impl FeedbackDisplay {
         let duration_str = format!("{}m {}s", minutes, seconds);
 
         println!();
-        println!("\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
-        println!("\x1b[32m│\x1b[0m                        \x1b[32;1m🎉 Session Complete 🎉\x1b[0m                             \x1b[32m│\x1b[0m");
-        println!("\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m");
-        println!("\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m", "★ ".repeat(20), " ".repeat(77 - 42));
+        println!(
+            "\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
+        );
+        println!(
+            "\x1b[32m│\x1b[0m                        \x1b[32;1m🎉 Session Complete 🎉\x1b[0m                             \x1b[32m│\x1b[0m"
+        );
+        println!(
+            "\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
+        );
+        println!(
+            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
+            "★ ".repeat(20),
+            " ".repeat(77 - 42)
+        );
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
 
         for line in celebration_art.lines() {
@@ -574,24 +635,54 @@ impl FeedbackDisplay {
         }
 
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        println!("\x1b[32m│\x1b[0m  \x1b[32;1m✓ All Tasks Complete!\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77 - 24));
+        println!(
+            "\x1b[32m│\x1b[0m  \x1b[32;1m✓ All Tasks Complete!\x1b[0m{}\x1b[32m│\x1b[0m",
+            " ".repeat(77 - 24)
+        );
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
 
-        let stats1 = format!("  \x1b[2mTasks completed:\x1b[0m \x1b[36;1m{}\x1b[0m", tasks_completed);
+        let stats1 = format!(
+            "  \x1b[2mTasks completed:\x1b[0m \x1b[36;1m{}\x1b[0m",
+            tasks_completed
+        );
         let stats1_len = self.visible_len(&stats1);
-        println!("\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m", stats1, " ".repeat(77 - stats1_len));
+        println!(
+            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
+            stats1,
+            " ".repeat(77 - stats1_len)
+        );
 
-        let stats2 = format!("  \x1b[2mIterations:\x1b[0m \x1b[36;1m{}\x1b[0m", iterations);
+        let stats2 = format!(
+            "  \x1b[2mIterations:\x1b[0m \x1b[36;1m{}\x1b[0m",
+            iterations
+        );
         let stats2_len = self.visible_len(&stats2);
-        println!("\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m", stats2, " ".repeat(77 - stats2_len));
+        println!(
+            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
+            stats2,
+            " ".repeat(77 - stats2_len)
+        );
 
-        let stats3 = format!("  \x1b[2mTotal time:\x1b[0m \x1b[36;1m{}\x1b[0m", duration_str);
+        let stats3 = format!(
+            "  \x1b[2mTotal time:\x1b[0m \x1b[36;1m{}\x1b[0m",
+            duration_str
+        );
         let stats3_len = self.visible_len(&stats3);
-        println!("\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m", stats3, " ".repeat(77 - stats3_len));
+        println!(
+            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
+            stats3,
+            " ".repeat(77 - stats3_len)
+        );
 
         println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        println!("\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m", "★ ".repeat(20), " ".repeat(77 - 42));
-        println!("\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+        println!(
+            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
+            "★ ".repeat(20),
+            " ".repeat(77 - 42)
+        );
+        println!(
+            "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
+        );
         println!();
 
         std::thread::sleep(Duration::from_millis(500));
@@ -666,10 +757,10 @@ mod tests {
     #[test]
     fn test_visible_len() {
         let display = FeedbackDisplay::new();
-        
+
         // Plain text
         assert_eq!(display.visible_len("hello"), 5);
-        
+
         // With ANSI codes
         assert_eq!(display.visible_len("\x1b[31mred\x1b[0m"), 3);
         assert_eq!(display.visible_len("\x1b[1;32mbold green\x1b[0m"), 10);
@@ -694,7 +785,7 @@ mod tests {
         let display = FeedbackDisplay::new();
         let metrics = IterationMetrics::default();
         let lines = display.render_minimal(&metrics, ActivityState::Active);
-        
+
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("afk"));
     }
@@ -704,7 +795,7 @@ mod tests {
         let display = FeedbackDisplay::with_options(DisplayMode::Full, true);
         let metrics = IterationMetrics::default();
         let lines = display.render_full(&metrics, ActivityState::Active);
-        
+
         // Should have multiple lines (borders, sections)
         assert!(lines.len() > 5);
         // Should have top border
@@ -719,10 +810,12 @@ mod tests {
         let mut metrics = IterationMetrics::default();
         metrics.files_created.insert("src/new.rs".to_string());
         metrics.files_modified.insert("src/main.rs".to_string());
-        
+
         let lines = display.render_full(&metrics, ActivityState::Active);
         // The files section should be rendered
-        let has_files = lines.iter().any(|l| l.contains("new.rs") || l.contains("main.rs"));
+        let has_files = lines
+            .iter()
+            .any(|l| l.contains("new.rs") || l.contains("main.rs"));
         assert!(has_files);
     }
 
@@ -797,10 +890,10 @@ mod tests {
         display.task_id = Some("rust-001".to_string());
         display.task_description = Some("Implement feature X".to_string());
         display.progress = 0.5;
-        
+
         let metrics = IterationMetrics::default();
         let lines = display.render_full(&metrics, ActivityState::Active);
-        
+
         // Should include task section
         let has_task = lines.iter().any(|l| l.contains("rust-001"));
         assert!(has_task);

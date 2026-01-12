@@ -93,10 +93,7 @@ pub fn load_github_tasks(repo: Option<&str>, labels: &[String]) -> Vec<UserStory
     };
 
     // Convert to UserStory
-    issues
-        .into_iter()
-        .map(|issue| issue_to_story(issue))
-        .collect()
+    issues.into_iter().map(issue_to_story).collect()
 }
 
 /// Convert a GitHub issue to a UserStory.

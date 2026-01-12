@@ -2,9 +2,7 @@
 //!
 //! This is the main entry point for the afk CLI tool.
 
-use afk::cli::{
-    ArchiveCommands, Cli, Commands, PrdCommands, SourceCommands,
-};
+use afk::cli::{ArchiveCommands, Cli, Commands, PrdCommands, SourceCommands};
 use clap::Parser;
 
 fn main() {

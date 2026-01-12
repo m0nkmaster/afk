@@ -6,7 +6,7 @@
 pub mod parse;
 pub mod store;
 
-pub use parse::{generate_prd_prompt, load_prd_file, PrdParseError, PRD_PARSE_TEMPLATE};
+pub use parse::{PRD_PARSE_TEMPLATE, PrdParseError, generate_prd_prompt, load_prd_file};
 pub use store::{
     get_current_branch, get_project_name, get_project_name_from_root, mark_story_complete,
     mark_story_complete_with_path, sync_prd, sync_prd_with_root,
@@ -284,8 +284,7 @@ impl PrdDocument {
 
     /// Get stories that haven't passed yet, sorted by priority.
     pub fn get_pending_stories(&self) -> Vec<&UserStory> {
-        let mut pending: Vec<&UserStory> =
-            self.user_stories.iter().filter(|s| !s.passes).collect();
+        let mut pending: Vec<&UserStory> = self.user_stories.iter().filter(|s| !s.passes).collect();
         pending.sort_by_key(|s| s.priority);
         pending
     }

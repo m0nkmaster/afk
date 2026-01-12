@@ -107,7 +107,7 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
 
     for (name, cmd) in gates {
         let gate_result = run_single_gate(&name, &cmd, verbose);
-        
+
         let status = if gate_result.passed {
             "\x1b[32m✓\x1b[0m"
         } else {
@@ -116,9 +116,7 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
 
         println!(
             "  {} {} ({:.1}s)",
-            status,
-            name,
-            gate_result.duration_seconds
+            status, name, gate_result.duration_seconds
         );
 
         if verbose && !gate_result.output.is_empty() {
@@ -135,7 +133,10 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
     if result.all_passed {
         println!("\x1b[32m✓ All gates passed\x1b[0m");
     } else {
-        println!("\x1b[31m✗ Some gates failed: {}\x1b[0m", result.failed_gates.join(", "));
+        println!(
+            "\x1b[31m✗ Some gates failed: {}\x1b[0m",
+            result.failed_gates.join(", ")
+        );
     }
 
     result

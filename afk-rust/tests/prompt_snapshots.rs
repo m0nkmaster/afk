@@ -111,10 +111,13 @@ fn test_prompt_contains_header() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check header section
     assert!(stdout.contains("# afk Autonomous Agent"), "Missing header");
-    assert!(stdout.contains("You are an autonomous coding agent"), "Missing role description");
+    assert!(
+        stdout.contains("You are an autonomous coding agent"),
+        "Missing role description"
+    );
 }
 
 #[test]
@@ -128,12 +131,21 @@ fn test_prompt_contains_task_list() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check task instructions
     assert!(stdout.contains("## Your Task"), "Missing task section");
-    assert!(stdout.contains("Read `.afk/progress.json`"), "Missing progress instruction");
-    assert!(stdout.contains("Read `.afk/prd.json`"), "Missing PRD instruction");
-    assert!(stdout.contains("Pick the **highest priority** user story"), "Missing priority instruction");
+    assert!(
+        stdout.contains("Read `.afk/progress.json`"),
+        "Missing progress instruction"
+    );
+    assert!(
+        stdout.contains("Read `.afk/prd.json`"),
+        "Missing PRD instruction"
+    );
+    assert!(
+        stdout.contains("Pick the **highest priority** user story"),
+        "Missing priority instruction"
+    );
 }
 
 #[test]
@@ -147,7 +159,7 @@ fn test_prompt_contains_progress() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check progress section
     assert!(stdout.contains("## Progress"), "Missing progress section");
     assert!(stdout.contains("Iteration:"), "Missing iteration count");
@@ -165,9 +177,12 @@ fn test_prompt_contains_quality_gates() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check quality gates section
-    assert!(stdout.contains("## Quality Gates"), "Missing quality gates section");
+    assert!(
+        stdout.contains("## Quality Gates"),
+        "Missing quality gates section"
+    );
     assert!(stdout.contains("afk verify"), "Missing verify command");
 }
 
@@ -182,11 +197,20 @@ fn test_prompt_contains_learnings_section() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check learnings section
-    assert!(stdout.contains("## Recording Learnings"), "Missing learnings section");
-    assert!(stdout.contains("Short-term: `.afk/progress.json`"), "Missing short-term section");
-    assert!(stdout.contains("Long-term: `AGENTS.md`"), "Missing long-term section");
+    assert!(
+        stdout.contains("## Recording Learnings"),
+        "Missing learnings section"
+    );
+    assert!(
+        stdout.contains("Short-term: `.afk/progress.json`"),
+        "Missing short-term section"
+    );
+    assert!(
+        stdout.contains("Long-term: `AGENTS.md`"),
+        "Missing long-term section"
+    );
 }
 
 #[test]
@@ -200,10 +224,16 @@ fn test_prompt_contains_stop_condition() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check stop condition section
-    assert!(stdout.contains("## Stop Condition"), "Missing stop condition section");
-    assert!(stdout.contains("COMPLETE") || stdout.contains("AFK_COMPLETE"), "Missing completion signal");
+    assert!(
+        stdout.contains("## Stop Condition"),
+        "Missing stop condition section"
+    );
+    assert!(
+        stdout.contains("COMPLETE") || stdout.contains("AFK_COMPLETE"),
+        "Missing completion signal"
+    );
 }
 
 // ============================================================================
@@ -221,7 +251,7 @@ fn test_prompt_shows_next_story_details() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Next story appears in Progress section
     assert!(stdout.contains("Next story:"), "Missing next story line");
     assert!(stdout.contains("task-001"), "Missing story ID");
@@ -238,9 +268,12 @@ fn test_prompt_mentions_acceptance_criteria() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Prompt mentions acceptance criteria in task instructions
-    assert!(stdout.contains("acceptanceCriteria"), "Missing acceptance criteria mention");
+    assert!(
+        stdout.contains("acceptanceCriteria"),
+        "Missing acceptance criteria mention"
+    );
 }
 
 #[test]
@@ -254,10 +287,12 @@ fn test_prompt_shows_story_count() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check story counts (1 completed, 3 total)
-    assert!(stdout.contains("1/3") || stdout.contains("1 of 3"), 
-        "Missing or incorrect story count");
+    assert!(
+        stdout.contains("1/3") || stdout.contains("1 of 3"),
+        "Missing or incorrect story count"
+    );
 }
 
 // ============================================================================
@@ -293,10 +328,12 @@ fn test_prompt_all_complete_shows_signal() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // When all complete, should show completion signal
-    assert!(stdout.contains("AFK_COMPLETE") || stdout.contains("COMPLETE"), 
-        "Missing completion signal when all stories done");
+    assert!(
+        stdout.contains("AFK_COMPLETE") || stdout.contains("COMPLETE"),
+        "Missing completion signal when all stories done"
+    );
 }
 
 // ============================================================================
@@ -339,11 +376,20 @@ fn test_prompt_with_configured_gates() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check configured gates appear
-    assert!(stdout.contains("Configured gates:"), "Missing gates section");
-    assert!(stdout.contains("lint") && stdout.contains("cargo clippy"), "Missing lint gate");
-    assert!(stdout.contains("test") && stdout.contains("cargo test"), "Missing test gate");
+    assert!(
+        stdout.contains("Configured gates:"),
+        "Missing gates section"
+    );
+    assert!(
+        stdout.contains("lint") && stdout.contains("cargo clippy"),
+        "Missing lint gate"
+    );
+    assert!(
+        stdout.contains("test") && stdout.contains("cargo test"),
+        "Missing test gate"
+    );
 }
 
 #[test]
@@ -384,7 +430,7 @@ fn test_prompt_with_custom_instructions() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Custom instructions should appear if config has them
     // The template includes them with {% for instruction in custom_instructions %}
     // If empty, nothing is shown - this is expected behaviour
@@ -429,10 +475,16 @@ fn test_prompt_with_context_files() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check context files appear in Key Files section
-    assert!(stdout.contains("README.md"), "Missing context file README.md");
-    assert!(stdout.contains("docs/architecture.md"), "Missing context file architecture.md");
+    assert!(
+        stdout.contains("README.md"),
+        "Missing context file README.md"
+    );
+    assert!(
+        stdout.contains("docs/architecture.md"),
+        "Missing context file architecture.md"
+    );
 }
 
 // ============================================================================
@@ -450,10 +502,12 @@ fn test_prompt_bootstrap_includes_afk_commands() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Bootstrap should include afk command reference
-    assert!(stdout.contains("afk done") || stdout.contains("afk verify"), 
-        "Bootstrap should include afk commands");
+    assert!(
+        stdout.contains("afk done") || stdout.contains("afk verify"),
+        "Bootstrap should include afk commands"
+    );
 }
 
 // ============================================================================
@@ -495,10 +549,12 @@ fn test_prompt_respects_iteration_limit() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check iteration limit appears
-    assert!(stdout.contains("/50") || stdout.contains("of 50"), 
-        "Should show custom max iterations");
+    assert!(
+        stdout.contains("/50") || stdout.contains("of 50"),
+        "Should show custom max iterations"
+    );
 }
 
 #[test]
@@ -512,10 +568,12 @@ fn test_prompt_limit_override() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Check override limit appears
-    assert!(stdout.contains("/25") || stdout.contains("of 25"), 
-        "Should show overridden max iterations");
+    assert!(
+        stdout.contains("/25") || stdout.contains("of 25"),
+        "Should show overridden max iterations"
+    );
 }
 
 // ============================================================================
@@ -541,10 +599,12 @@ fn test_prompt_empty_prd() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Empty PRD should show completion signal
-    assert!(stdout.contains("AFK_COMPLETE") || stdout.contains("COMPLETE"), 
-        "Empty PRD should signal completion");
+    assert!(
+        stdout.contains("AFK_COMPLETE") || stdout.contains("COMPLETE"),
+        "Empty PRD should signal completion"
+    );
 }
 
 // ============================================================================
@@ -575,8 +635,10 @@ fn test_prompt_selects_highest_priority() {
         .expect("Failed to run afk");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Should show high-priority as next story
-    assert!(stdout.contains("high-priority") || stdout.contains("P1 task"), 
-        "Should select highest priority task first");
+    assert!(
+        stdout.contains("high-priority") || stdout.contains("P1 task"),
+        "Should select highest priority task first"
+    );
 }

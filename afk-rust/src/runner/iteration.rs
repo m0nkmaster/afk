@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
 use crate::config::AfkConfig;
-use crate::prompt::{generate_prompt_with_root, PromptError};
+use crate::prompt::{PromptError, generate_prompt_with_root};
 
 use super::output_handler::OutputHandler;
 
@@ -139,7 +139,9 @@ impl IterationRunner {
             Some(p) => p,
             None => match generate_prompt_with_root(&self.config, true, None, None) {
                 Ok(result) => result.prompt,
-                Err(e) => return IterationResult::failure(format!("Failed to generate prompt: {e}")),
+                Err(e) => {
+                    return IterationResult::failure(format!("Failed to generate prompt: {e}"));
+                }
             },
         };
 
@@ -320,12 +322,20 @@ mod tests {
         let config = AfkConfig::default();
         let mut runner = IterationRunner::new(config);
 
-        runner.set_iteration_context(5, 10, Some("task-1".to_string()), Some("Description".to_string()));
+        runner.set_iteration_context(
+            5,
+            10,
+            Some("task-1".to_string()),
+            Some("Description".to_string()),
+        );
 
         assert_eq!(runner.current_iteration, 5);
         assert_eq!(runner.max_iterations, 10);
         assert_eq!(runner.current_task_id, Some("task-1".to_string()));
-        assert_eq!(runner.current_task_description, Some("Description".to_string()));
+        assert_eq!(
+            runner.current_task_description,
+            Some("Description".to_string())
+        );
     }
 
     #[test]

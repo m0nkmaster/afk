@@ -501,7 +501,10 @@ impl GoCommand {
         if config.sources.is_empty() {
             let prd = PrdDocument::load(None).unwrap_or_default();
             if !prd.user_stories.is_empty() {
-                println!("\x1b[2mUsing existing .afk/prd.json ({} stories)\x1b[0m", prd.user_stories.len());
+                println!(
+                    "\x1b[2mUsing existing .afk/prd.json ({} stories)\x1b[0m",
+                    prd.user_stories.len()
+                );
             } else {
                 // Try to infer sources
                 let inferred = infer_sources();
@@ -530,9 +533,20 @@ impl GoCommand {
         // Dry run mode
         if self.dry_run {
             println!("\x1b[1mDry run mode - would execute:\x1b[0m");
-            println!("  AI CLI: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
+            println!(
+                "  AI CLI: {} {}",
+                config.ai_cli.command,
+                config.ai_cli.args.join(" ")
+            );
             println!("  Iterations: {}", iterations.unwrap_or(10));
-            println!("  Sources: {:?}", config.sources.iter().map(|s| &s.source_type).collect::<Vec<_>>());
+            println!(
+                "  Sources: {:?}",
+                config
+                    .sources
+                    .iter()
+                    .map(|s| &s.source_type)
+                    .collect::<Vec<_>>()
+            );
             return;
         }
 
@@ -542,7 +556,7 @@ impl GoCommand {
             iterations,
             None, // branch
             self.until_complete,
-            None, // timeout
+            None,  // timeout
             false, // resume
         );
 
@@ -680,8 +694,19 @@ impl InitCommand {
 
         // Show what would be written
         println!("\n\x1b[1mConfiguration:\x1b[0m");
-        println!("  AI CLI: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
-        println!("  Sources: {:?}", config.sources.iter().map(|s| &s.source_type).collect::<Vec<_>>());
+        println!(
+            "  AI CLI: {} {}",
+            config.ai_cli.command,
+            config.ai_cli.args.join(" ")
+        );
+        println!(
+            "  Sources: {:?}",
+            config
+                .sources
+                .iter()
+                .map(|s| &s.source_type)
+                .collect::<Vec<_>>()
+        );
         if let Some(ref cmd) = config.feedback_loops.test {
             println!("  Test: {cmd}");
         }
@@ -736,7 +761,6 @@ impl InitCommand {
     }
 }
 
-
 impl StatusCommand {
     /// Execute the status command.
     pub fn execute(&self) {
@@ -762,7 +786,7 @@ impl StatusCommand {
         // Task summary
         let (pending, completed) = prd.get_story_counts();
         let total = pending + completed;
-        
+
         println!("\x1b[1mTasks\x1b[0m");
         if total == 0 {
             println!("  No tasks configured.");
@@ -781,7 +805,10 @@ impl StatusCommand {
 
         // Session progress
         println!("\x1b[1mSession\x1b[0m");
-        println!("  Started: {}", &progress.started_at[..19].replace('T', " "));
+        println!(
+            "  Started: {}",
+            &progress.started_at[..19].replace('T', " ")
+        );
         println!("  Iterations: {}", progress.iterations);
         let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
         if pend + in_prog + comp + fail + skip > 0 {
@@ -807,7 +834,10 @@ impl StatusCommand {
                         format!("markdown: {}", source.path.as_deref().unwrap_or("?"))
                     }
                     crate::config::SourceType::Github => {
-                        format!("github: {}", source.repo.as_deref().unwrap_or("current repo"))
+                        format!(
+                            "github: {}",
+                            source.repo.as_deref().unwrap_or("current repo")
+                        )
                     }
                 };
                 println!("  {}. {}", i + 1, desc);
@@ -824,13 +854,23 @@ impl StatusCommand {
 
         // AI CLI
         println!("\x1b[1mAI CLI\x1b[0m");
-        println!("  Command: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
+        println!(
+            "  Command: {} {}",
+            config.ai_cli.command,
+            config.ai_cli.args.join(" ")
+        );
         println!();
 
         // Git integration
         println!("\x1b[1mGit Integration\x1b[0m");
-        println!("  Auto-commit: {}", if config.git.auto_commit { "yes" } else { "no" });
-        println!("  Auto-branch: {}", if config.git.auto_branch { "yes" } else { "no" });
+        println!(
+            "  Auto-commit: {}",
+            if config.git.auto_commit { "yes" } else { "no" }
+        );
+        println!(
+            "  Auto-branch: {}",
+            if config.git.auto_branch { "yes" } else { "no" }
+        );
         if config.git.auto_branch {
             println!("  Branch prefix: {}", config.git.branch_prefix);
         }
@@ -838,10 +878,20 @@ impl StatusCommand {
 
         // Archiving
         println!("\x1b[1mArchiving\x1b[0m");
-        println!("  Enabled: {}", if config.archive.enabled { "yes" } else { "no" });
+        println!(
+            "  Enabled: {}",
+            if config.archive.enabled { "yes" } else { "no" }
+        );
         if config.archive.enabled {
             println!("  Directory: {}", config.archive.directory);
-            println!("  On branch change: {}", if config.archive.on_branch_change { "yes" } else { "no" });
+            println!(
+                "  On branch change: {}",
+                if config.archive.on_branch_change {
+                    "yes"
+                } else {
+                    "no"
+                }
+            );
         }
     }
 }
@@ -1003,8 +1053,19 @@ impl ExplainCommand {
 
         // Config summary
         println!("\x1b[1mConfiguration:\x1b[0m");
-        println!("  AI CLI: {} {}", config.ai_cli.command, config.ai_cli.args.join(" "));
-        println!("  Sources: {:?}", config.sources.iter().map(|s| &s.source_type).collect::<Vec<_>>());
+        println!(
+            "  AI CLI: {} {}",
+            config.ai_cli.command,
+            config.ai_cli.args.join(" ")
+        );
+        println!(
+            "  Sources: {:?}",
+            config
+                .sources
+                .iter()
+                .map(|s| &s.source_type)
+                .collect::<Vec<_>>()
+        );
         println!("  Output: {:?}", config.output.default);
 
         // PRD summary
@@ -1012,7 +1073,7 @@ impl ExplainCommand {
         let (pending, completed) = prd.get_story_counts();
         let total = pending + completed;
         println!("  Stories: {completed}/{total} complete ({pending} pending)");
-        
+
         if let Some(next) = prd.get_next_story() {
             println!("  Next: \x1b[1m{}\x1b[0m - {}", next.id, next.title);
         }
@@ -1022,18 +1083,32 @@ impl ExplainCommand {
         println!("  Session started: {}", progress.started_at);
         println!("  Iterations: {}", progress.iterations);
         let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
-        println!("  Tasks: {comp} complete, {in_prog} in-progress, {pend} pending, {fail} failed, {skip} skipped");
+        println!(
+            "  Tasks: {comp} complete, {in_prog} in-progress, {pend} pending, {fail} failed, {skip} skipped"
+        );
 
         // Verbose: show more details
         if self.verbose {
             println!("\n\x1b[1mFeedback Loops:\x1b[0m");
             let fb = &config.feedback_loops;
-            let has_any = fb.types.is_some() || fb.lint.is_some() || fb.test.is_some() || fb.build.is_some() || !fb.custom.is_empty();
+            let has_any = fb.types.is_some()
+                || fb.lint.is_some()
+                || fb.test.is_some()
+                || fb.build.is_some()
+                || !fb.custom.is_empty();
             if has_any {
-                if let Some(ref cmd) = fb.types { println!("  types: {cmd}"); }
-                if let Some(ref cmd) = fb.lint { println!("  lint: {cmd}"); }
-                if let Some(ref cmd) = fb.test { println!("  test: {cmd}"); }
-                if let Some(ref cmd) = fb.build { println!("  build: {cmd}"); }
+                if let Some(ref cmd) = fb.types {
+                    println!("  types: {cmd}");
+                }
+                if let Some(ref cmd) = fb.lint {
+                    println!("  lint: {cmd}");
+                }
+                if let Some(ref cmd) = fb.test {
+                    println!("  test: {cmd}");
+                }
+                if let Some(ref cmd) = fb.build {
+                    println!("  build: {cmd}");
+                }
                 for (name, cmd) in &fb.custom {
                     println!("  {name}: {cmd}");
                 }
@@ -1127,7 +1202,10 @@ impl DoneCommand {
             let _ = prd.save(None);
         }
 
-        println!("\x1b[32m✓\x1b[0m Task \x1b[1m{}\x1b[0m marked complete", self.task_id);
+        println!(
+            "\x1b[32m✓\x1b[0m Task \x1b[1m{}\x1b[0m marked complete",
+            self.task_id
+        );
         if let Some(ref msg) = self.message {
             println!("  \x1b[2m{msg}\x1b[0m");
         }
@@ -1164,7 +1242,10 @@ impl FailCommand {
         let task = progress.get_task(&self.task_id);
         let count = task.map(|t| t.failure_count).unwrap_or(1);
 
-        println!("\x1b[31m✗\x1b[0m Task \x1b[1m{}\x1b[0m marked failed (attempt {count})", self.task_id);
+        println!(
+            "\x1b[31m✗\x1b[0m Task \x1b[1m{}\x1b[0m marked failed (attempt {count})",
+            self.task_id
+        );
         if let Some(ref msg) = self.message {
             println!("  \x1b[2m{msg}\x1b[0m");
         }
@@ -1209,7 +1290,10 @@ impl ResetCommand {
             let _ = prd.save(None);
         }
 
-        println!("\x1b[33m↺\x1b[0m Task \x1b[1m{}\x1b[0m reset to pending", self.task_id);
+        println!(
+            "\x1b[33m↺\x1b[0m Task \x1b[1m{}\x1b[0m reset to pending",
+            self.task_id
+        );
     }
 }
 
@@ -1248,8 +1332,8 @@ impl ArchiveListCommand {
                 println!("\x1b[1mArchived Sessions\x1b[0m");
                 println!();
                 println!(
-                    "{:<24} {:<20} {:<8} {:<10} {}",
-                    "DATE", "BRANCH", "ITERS", "COMPLETED", "REASON"
+                    "{:<24} {:<20} {:<8} {:<10} REASON",
+                    "DATE", "BRANCH", "ITERS", "COMPLETED"
                 );
                 println!("{}", "-".repeat(75));
 
@@ -1259,9 +1343,17 @@ impl ArchiveListCommand {
                     println!(
                         "{:<24} {:<20} {:<8} {:<10} {}",
                         date.replace('T', " "),
-                        if branch.len() > 18 { &branch[..18] } else { branch },
+                        if branch.len() > 18 {
+                            &branch[..18]
+                        } else {
+                            branch
+                        },
                         metadata.iterations,
-                        format!("{}/{}", metadata.tasks_completed, metadata.tasks_completed + metadata.tasks_pending),
+                        format!(
+                            "{}/{}",
+                            metadata.tasks_completed,
+                            metadata.tasks_completed + metadata.tasks_pending
+                        ),
                         metadata.reason
                     );
                 }
@@ -1336,7 +1428,7 @@ impl CompletionsCommand {
     /// Execute the completions command - generates shell completions.
     pub fn execute(&self) {
         use clap::CommandFactory;
-        use clap_complete::{generate, Shell};
+        use clap_complete::{Shell, generate};
         use std::io;
 
         let shell = match self.shell.as_str() {
@@ -1357,7 +1449,9 @@ impl CompletionsCommand {
 impl StartCommand {
     /// Execute the start command (init if needed + run).
     pub fn execute(&self) {
-        use crate::bootstrap::{analyse_project, ensure_ai_cli_configured, generate_config, infer_sources};
+        use crate::bootstrap::{
+            analyse_project, ensure_ai_cli_configured, generate_config, infer_sources,
+        };
         use crate::config::AfkConfig;
         use crate::runner::run_loop;
         use std::fs;
@@ -1372,11 +1466,11 @@ impl StartCommand {
             AfkConfig::load(Some(&config_path)).unwrap_or_default()
         } else {
             println!("\x1b[1mInitialising afk...\x1b[0m");
-            
+
             let analysis = analyse_project(None);
             let mut config = generate_config(&analysis);
             config.sources = infer_sources(None);
-            
+
             // Ensure AI CLI is configured (first-run experience)
             if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
                 config.ai_cli = ai_cli;
@@ -1474,7 +1568,10 @@ impl ResumeCommand {
         let config = AfkConfig::load(None).unwrap_or_default();
 
         println!("\x1b[1mResuming session...\x1b[0m");
-        println!("  Started: {}", &progress.started_at[..19].replace('T', " "));
+        println!(
+            "  Started: {}",
+            &progress.started_at[..19].replace('T', " ")
+        );
         println!("  Iterations so far: {}", progress.iterations);
         println!();
 
@@ -1566,9 +1663,16 @@ mod tests {
 
     #[test]
     fn test_go_command_with_flags() {
-        let cli =
-            Cli::try_parse_from(["afk", "go", "-n", "-u", "--feedback", "minimal", "--no-mascot"])
-                .unwrap();
+        let cli = Cli::try_parse_from([
+            "afk",
+            "go",
+            "-n",
+            "-u",
+            "--feedback",
+            "minimal",
+            "--no-mascot",
+        ])
+        .unwrap();
         match cli.command {
             Some(Commands::Go(cmd)) => {
                 assert!(cmd.dry_run);
@@ -1806,8 +1910,8 @@ mod tests {
 
     #[test]
     fn test_archive_create_command() {
-        let cli = Cli::try_parse_from(["afk", "archive", "create", "-r", "switching branches"])
-            .unwrap();
+        let cli =
+            Cli::try_parse_from(["afk", "archive", "create", "-r", "switching branches"]).unwrap();
         match cli.command {
             Some(Commands::Archive(ArchiveCommands::Create(cmd))) => {
                 assert_eq!(cmd.reason, "switching branches");

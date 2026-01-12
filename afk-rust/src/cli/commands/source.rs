@@ -112,7 +112,11 @@ fn source_list_impl(config_path: Option<&Path>) -> SourceCommandResult {
                 .as_ref()
                 .map(|r| format!(" ({r})"))
                 .unwrap_or_default(),
-            _ => src.path.as_ref().map(|p| format!(" ({p})")).unwrap_or_default(),
+            _ => src
+                .path
+                .as_ref()
+                .map(|p| format!(" ({p})"))
+                .unwrap_or_default(),
         };
         let type_str = source_type_to_str(&src.source_type);
         println!("  {}. \x1b[36m{}\x1b[0m{}", i + 1, type_str, path_info);
@@ -249,7 +253,11 @@ mod tests {
         let json_path = temp.path().join("tasks.json");
         fs::write(&json_path, r#"[]"#).unwrap();
 
-        let result = source_add_impl("json", Some(json_path.to_str().unwrap()), Some(&config_path));
+        let result = source_add_impl(
+            "json",
+            Some(json_path.to_str().unwrap()),
+            Some(&config_path),
+        );
         assert!(result.is_ok());
 
         let config = AfkConfig::load(Some(&config_path)).unwrap();
@@ -262,8 +270,7 @@ mod tests {
     fn test_source_add_json_file_not_found() {
         let (_temp, config_path) = setup_temp_config();
 
-        let result =
-            source_add_impl("json", Some("/nonexistent/path.json"), Some(&config_path));
+        let result = source_add_impl("json", Some("/nonexistent/path.json"), Some(&config_path));
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -275,8 +282,11 @@ mod tests {
     fn test_source_add_markdown_file_not_found() {
         let (_temp, config_path) = setup_temp_config();
 
-        let result =
-            source_add_impl("markdown", Some("/nonexistent/tasks.md"), Some(&config_path));
+        let result = source_add_impl(
+            "markdown",
+            Some("/nonexistent/tasks.md"),
+            Some(&config_path),
+        );
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -418,10 +428,7 @@ mod tests {
 
         let result = source_remove_impl(1, Some(&config_path));
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SourceCommandError::NoSources
-        ));
+        assert!(matches!(result.unwrap_err(), SourceCommandError::NoSources));
     }
 
     #[test]
@@ -475,10 +482,7 @@ mod tests {
         let (_temp, config_path) = setup_temp_config();
 
         let config = AfkConfig {
-            sources: vec![SourceConfig::github(
-                "owner/repo",
-                vec!["bug".to_string()],
-            )],
+            sources: vec![SourceConfig::github("owner/repo", vec!["bug".to_string()])],
             ..Default::default()
         };
         config.save(Some(&config_path)).unwrap();

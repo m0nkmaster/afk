@@ -2,6 +2,8 @@
 //!
 //! These tests invoke the afk binary and verify command output and behaviour.
 
+#![allow(deprecated)] // cargo_bin is deprecated but still works
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
@@ -498,7 +500,11 @@ fn test_next_with_file_output() {
 
     // Check prompt file was created
     let prompt_file = temp.path().join(".afk/prompt.md");
-    assert!(prompt_file.exists(), "Expected prompt file at {:?}", prompt_file);
+    assert!(
+        prompt_file.exists(),
+        "Expected prompt file at {:?}",
+        prompt_file
+    );
     let contents = fs::read_to_string(&prompt_file).unwrap();
     assert!(!contents.is_empty());
 }
@@ -543,7 +549,9 @@ fn test_verify_no_gates_configured() {
         .arg("verify")
         .assert()
         .success()
-        .stdout(predicate::str::contains("No quality gates").or(predicate::str::contains("No gates")));
+        .stdout(
+            predicate::str::contains("No quality gates").or(predicate::str::contains("No gates")),
+        );
 }
 
 #[test]
@@ -634,7 +642,9 @@ fn test_archive_create() {
         .args(["archive", "create", "-r", "test archive"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Archived").or(predicate::str::contains("Session archived")));
+        .stdout(
+            predicate::str::contains("Archived").or(predicate::str::contains("Session archived")),
+        );
 
     // Check archive was created (could be 'archives' or 'archive' dir)
     let archives_dir = temp.path().join(".afk/archives");
@@ -744,7 +754,9 @@ fn test_go_no_sources_no_prd() {
         .arg("go")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("No task sources").or(predicate::str::contains("No AI CLI")));
+        .stderr(
+            predicate::str::contains("No task sources").or(predicate::str::contains("No AI CLI")),
+        );
 }
 
 // ============================================================================

@@ -37,9 +37,7 @@ pub fn get_current_branch() -> Option<String> {
 /// Returns true if successful.
 pub fn create_branch(name: &str) -> bool {
     // First try to checkout existing branch
-    let checkout = Command::new("git")
-        .args(["checkout", name])
-        .output();
+    let checkout = Command::new("git").args(["checkout", name]).output();
 
     if let Ok(output) = checkout {
         if output.status.success() {
@@ -48,18 +46,14 @@ pub fn create_branch(name: &str) -> bool {
     }
 
     // If checkout failed, create new branch
-    let create = Command::new("git")
-        .args(["checkout", "-b", name])
-        .output();
+    let create = Command::new("git").args(["checkout", "-b", name]).output();
 
     create.map(|o| o.status.success()).unwrap_or(false)
 }
 
 /// Check if there are uncommitted changes.
 pub fn has_uncommitted_changes() -> bool {
-    let output = Command::new("git")
-        .args(["status", "--porcelain"])
-        .output();
+    let output = Command::new("git").args(["status", "--porcelain"]).output();
 
     match output {
         Ok(o) if o.status.success() => !o.stdout.is_empty(),
@@ -74,13 +68,11 @@ pub fn get_staged_files() -> Vec<String> {
         .output();
 
     match output {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter(|l| !l.is_empty())
-                .map(|l| l.to_string())
-                .collect()
-        }
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| l.to_string())
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -163,9 +155,10 @@ mod tests {
     use std::process::Command as StdCommand;
     use tempfile::TempDir;
 
+    #[allow(dead_code)]
     fn setup_test_repo() -> TempDir {
         let temp = TempDir::new().unwrap();
-        
+
         // Initialize git repo
         StdCommand::new("git")
             .args(["init"])
@@ -236,8 +229,8 @@ mod tests {
     fn test_get_staged_files() {
         // This test just verifies the function runs and returns a vec
         let files = get_staged_files();
-        // Result should be a valid vec (may be empty)
-        assert!(files.len() >= 0);
+        // Result should be a valid vec (may be empty) - just verify it's callable
+        let _ = files.len();
     }
 
     #[test]

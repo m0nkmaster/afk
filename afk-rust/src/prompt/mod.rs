@@ -13,7 +13,7 @@ use crate::prd::PrdDocument;
 use crate::progress::SessionProgress;
 
 // Re-export key types and functions for convenience.
-pub use template::{get_template, get_template_with_root, DEFAULT_TEMPLATE};
+pub use template::{DEFAULT_TEMPLATE, get_template, get_template_with_root};
 
 /// Error type for prompt generation operations.
 #[derive(Debug, thiserror::Error)]
@@ -277,7 +277,8 @@ mod tests {
         prd.save(Some(&prd_path)).unwrap();
 
         let config = AfkConfig::default();
-        let result = generate_prompt_with_root(&config, false, Some(50), Some(temp.path())).unwrap();
+        let result =
+            generate_prompt_with_root(&config, false, Some(50), Some(temp.path())).unwrap();
 
         assert!(result.prompt.contains("Iteration: 1/50"));
     }
@@ -354,7 +355,11 @@ mod tests {
 
         assert!(result.all_complete);
         assert!(result.prompt.contains("## STOP"));
-        assert!(result.prompt.contains("AFK_COMPLETE - All stories have passes: true"));
+        assert!(
+            result
+                .prompt
+                .contains("AFK_COMPLETE - All stories have passes: true")
+        );
     }
 
     #[test]
@@ -659,7 +664,11 @@ mod tests {
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
 
         // Next story should be the highest priority (priority 1)
-        assert!(result.prompt.contains("Next story: high-priority (priority 1)"));
+        assert!(
+            result
+                .prompt
+                .contains("Next story: high-priority (priority 1)")
+        );
     }
 
     #[test]
@@ -693,7 +702,11 @@ mod tests {
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
 
-        assert!(result.prompt.contains("Next story: pending-medium (priority 2)"));
+        assert!(
+            result
+                .prompt
+                .contains("Next story: pending-medium (priority 2)")
+        );
         assert!(result.prompt.contains("Completed: 1/2 stories"));
     }
 

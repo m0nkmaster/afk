@@ -358,7 +358,10 @@ mod tests {
     #[test]
     fn test_generate_id_from_text() {
         assert_eq!(generate_id_from_text("Hello World"), "hello-world");
-        assert_eq!(generate_id_from_text("Fix bug in login"), "fix-bug-in-login");
+        assert_eq!(
+            generate_id_from_text("Fix bug in login"),
+            "fix-bug-in-login"
+        );
         assert_eq!(
             generate_id_from_text("A very long description that exceeds the limit"),
             "a-very-long-descript"
