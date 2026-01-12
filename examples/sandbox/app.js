@@ -1,9 +1,25 @@
 // Task List Application
 
+const STORAGE_KEY = 'taskList';
+
 document.addEventListener('DOMContentLoaded', () => {
     const taskForm = document.getElementById('task-form');
     const taskInput = document.getElementById('task-input');
     const taskList = document.getElementById('task-list');
+
+    /**
+     * Saves all tasks to localStorage
+     */
+    function saveTasks() {
+        const tasks = [];
+        const taskItems = taskList.querySelectorAll('.task-item');
+        taskItems.forEach((item) => {
+            const text = item.querySelector('.task-text').textContent;
+            const completed = item.classList.contains('completed');
+            tasks.push({ text, completed });
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    }
 
     /**
      * Creates a task list item element
@@ -60,12 +76,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const checkbox = taskElement.querySelector('input[type="checkbox"]');
         checkbox.addEventListener('change', () => {
             toggleTaskComplete(taskElement, checkbox.checked);
+            saveTasks();
         });
         
         // Add delete button click handler
         const deleteBtn = taskElement.querySelector('.delete-btn');
         deleteBtn.addEventListener('click', () => {
             deleteTask(taskElement);
+            saveTasks();
         });
         
         taskList.appendChild(taskElement);
@@ -77,6 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = taskInput.value.trim();
         if (text) {
             addTask(text);
+            saveTasks();
             taskInput.value = '';
             taskInput.focus();
         }
