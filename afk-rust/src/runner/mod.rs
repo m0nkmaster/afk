@@ -6,10 +6,15 @@
 mod controller;
 mod iteration;
 mod output_handler;
+mod quality_gates;
 
 pub use controller::{run_loop, LoopController};
 pub use iteration::{run_iteration, IterationResult, IterationRunner};
 pub use output_handler::{OutputHandler, COMPLETION_SIGNALS};
+pub use quality_gates::{
+    get_configured_gate_names, has_configured_gates, run_quality_gates, GateResult,
+    QualityGateResult,
+};
 
 /// Reasons for stopping the runner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

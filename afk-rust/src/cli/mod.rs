@@ -641,10 +641,43 @@ impl ExplainCommand {
 }
 
 impl VerifyCommand {
-    /// Execute the verify command (stub).
+    /// Execute the verify command.
     pub fn execute(&self) {
-        println!("afk verify: not implemented");
-        println!("  verbose: {}", self.verbose);
+        use crate::config::AfkConfig;
+        use crate::runner::{has_configured_gates, run_quality_gates};
+
+        // Load config
+        let config = match AfkConfig::load(None) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to load config: {e}");
+                std::process::exit(1);
+            }
+        };
+
+        // Check if any gates are configured
+        if !has_configured_gates(&config.feedback_loops) {
+            println!("\x1b[33mNo quality gates configured.\x1b[0m");
+            println!();
+            println!("Configure gates in .afk/config.json:");
+            println!("  {{");
+            println!("    \"feedbackLoops\": {{");
+            println!("      \"lint\": \"cargo clippy\",");
+            println!("      \"test\": \"cargo test\"");
+            println!("    }}");
+            println!("  }}");
+            std::process::exit(0);
+        }
+
+        // Run quality gates
+        let result = run_quality_gates(&config.feedback_loops, self.verbose);
+
+        // Exit with appropriate code
+        if result.all_passed {
+            std::process::exit(0);
+        } else {
+            std::process::exit(1);
+        }
     }
 }
 
