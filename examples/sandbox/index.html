@@ -136,6 +136,76 @@
             display: none;
         }
 
+        /* Task item styling */
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--colour-border);
+            transition: background-color 0.15s ease;
+        }
+
+        .task-item:last-child {
+            border-bottom: none;
+        }
+
+        .task-item:hover {
+            background-color: var(--colour-background);
+        }
+
+        /* Checkbox styling */
+        .task-checkbox {
+            width: 1.25rem;
+            height: 1.25rem;
+            cursor: pointer;
+            accent-color: var(--colour-primary);
+            flex-shrink: 0;
+        }
+
+        .task-checkbox:focus {
+            outline: 2px solid var(--colour-primary);
+            outline-offset: 2px;
+        }
+
+        /* Task text styling */
+        .task-text {
+            flex: 1;
+            font-size: 1rem;
+            color: var(--colour-text);
+            word-break: break-word;
+        }
+
+        /* Delete button styling */
+        .task-delete-btn {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            font-size: 0.875rem;
+            font-family: inherit;
+            background-color: transparent;
+            color: var(--colour-text-muted);
+            border: 1px solid transparent;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+        }
+
+        .task-item:hover .task-delete-btn,
+        .task-delete-btn:focus {
+            opacity: 1;
+        }
+
+        .task-delete-btn:hover {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--colour-danger);
+            border-color: var(--colour-danger);
+        }
+
+        .task-delete-btn:focus {
+            outline: none;
+            border-color: var(--colour-danger);
+        }
+
         /* Footer styling */
         footer {
             background-color: var(--colour-surface);
@@ -166,7 +236,14 @@
 
         <!-- Task list container -->
         <ul id="task-list" class="task-list" aria-label="Task list">
-            <!-- Task items will be dynamically added here -->
+            <!-- 
+                Task item structure (added by JavaScript):
+                <li class="task-item">
+                    <input type="checkbox" class="task-checkbox" aria-label="Mark task complete">
+                    <span class="task-text">Task description here</span>
+                    <button type="button" class="task-delete-btn" aria-label="Delete task">Delete</button>
+                </li>
+            -->
         </ul>
     </main>
 
