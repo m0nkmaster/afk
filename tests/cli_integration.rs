@@ -101,12 +101,52 @@ fn test_version_flag() {
 // Init command tests
 // ============================================================================
 
+/// Helper to create a mock AI CLI in a temp directory and return the PATH.
+#[cfg(unix)]
+fn setup_mock_ai_cli(temp: &TempDir) -> String {
+    use std::os::unix::fs::PermissionsExt;
+
+    let bin_dir = temp.path().join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+
+    // Create a mock 'claude' script that responds to --version
+    let mock_cli = bin_dir.join("claude");
+    fs::write(&mock_cli, "#!/bin/sh\necho 'claude 1.0.0'\n").unwrap();
+    fs::set_permissions(&mock_cli, fs::Permissions::from_mode(0o755)).unwrap();
+
+    // Return modified PATH with our bin dir first
+    format!(
+        "{}:{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+#[cfg(windows)]
+fn setup_mock_ai_cli(temp: &TempDir) -> String {
+    let bin_dir = temp.path().join("bin");
+    fs::create_dir_all(&bin_dir).unwrap();
+
+    // Create a mock 'claude.cmd' batch file
+    let mock_cli = bin_dir.join("claude.cmd");
+    fs::write(&mock_cli, "@echo claude 1.0.0\n").unwrap();
+
+    // Return modified PATH with our bin dir first
+    format!(
+        "{};{}",
+        bin_dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
 #[test]
 fn test_init_creates_afk_directory() {
     let temp = TempDir::new().unwrap();
+    let path_with_mock = setup_mock_ai_cli(&temp);
 
     afk()
         .current_dir(temp.path())
+        .env("PATH", &path_with_mock)
         .args(["init", "-y"])
         .assert()
         .success()
@@ -119,9 +159,11 @@ fn test_init_creates_afk_directory() {
 #[test]
 fn test_init_dry_run_does_not_create_files() {
     let temp = TempDir::new().unwrap();
+    let path_with_mock = setup_mock_ai_cli(&temp);
 
     afk()
         .current_dir(temp.path())
+        .env("PATH", &path_with_mock)
         .args(["init", "-n", "-y"])
         .assert()
         .success()
