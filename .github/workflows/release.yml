@@ -106,7 +106,7 @@ jobs:
         run: |
           mkdir -p release
           for dir in artifacts/*/; do
-            cp "\${dir}"* release/ 2>/dev/null || true
+            cp "${dir}"* release/ 2>/dev/null || true
           done
           chmod +x release/afk-linux-* release/afk-darwin-* 2>/dev/null || true
           ls -la release/
