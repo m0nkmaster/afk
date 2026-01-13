@@ -10,7 +10,7 @@ use std::process::{Command, Stdio};
 use crate::bootstrap::ensure_ai_cli_configured;
 use crate::cli::output::{get_effective_mode, output_prompt};
 use crate::config::AfkConfig;
-use crate::prd::{PrdDocument, PrdError, generate_prd_prompt, load_prd_file, sync_prd_with_root};
+use crate::prd::{generate_prd_prompt, load_prd_file, sync_prd_with_root, PrdDocument, PrdError};
 
 /// Result type for PRD command operations.
 pub type PrdCommandResult = Result<(), PrdCommandError>;

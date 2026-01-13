@@ -477,7 +477,7 @@ impl GoCommand {
         use crate::bootstrap::ensure_ai_cli_configured;
         use crate::config::{AfkConfig, SourceConfig};
         use crate::prd::PrdDocument;
-        use crate::runner::{RunOptions, run_loop_with_options, run_loop_with_tui};
+        use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
         use std::path::Path;
 
         // Parse iterations_or_source
@@ -632,7 +632,7 @@ impl RunCommand {
     /// Execute the run command.
     pub fn execute(&self) {
         use crate::config::AfkConfig;
-        use crate::runner::{RunOptions, run_loop_with_options, run_loop_with_tui};
+        use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
 
         // Load config
         let config = match AfkConfig::load(None) {
@@ -1455,7 +1455,7 @@ impl CompletionsCommand {
     /// Execute the completions command - generates shell completions.
     pub fn execute(&self) {
         use clap::CommandFactory;
-        use clap_complete::{Shell, generate};
+        use clap_complete::{generate, Shell};
         use std::io;
 
         let shell = match self.shell.as_str() {

@@ -6,7 +6,7 @@
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{Receiver, sync_channel};
+use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -249,11 +249,9 @@ mod tests {
     fn test_default_ignore_patterns() {
         let watcher = FileWatcher::new("/tmp");
         assert!(watcher.ignore_patterns.contains(&".git".to_string()));
-        assert!(
-            watcher
-                .ignore_patterns
-                .contains(&"node_modules".to_string())
-        );
+        assert!(watcher
+            .ignore_patterns
+            .contains(&"node_modules".to_string()));
         assert!(watcher.ignore_patterns.contains(&".afk".to_string()));
     }
 

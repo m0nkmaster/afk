@@ -7,6 +7,6 @@ mod art;
 mod display;
 mod metrics;
 
-pub use art::{MASCOT_STATES, SPINNERS, get_mascot, get_spinner_frame};
+pub use art::{get_mascot, get_spinner_frame, MASCOT_STATES, SPINNERS};
 pub use display::{DisplayMode, FeedbackDisplay};
 pub use metrics::{ActivityState, IterationMetrics, MetricsCollector};

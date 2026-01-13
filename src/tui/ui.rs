@@ -1,7 +1,6 @@
 //! TUI rendering with ratatui.
 
 use ratatui::{
-    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols,
@@ -9,6 +8,7 @@ use ratatui::{
     widgets::{
         Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
     },
+    Frame,
 };
 
 use super::app::TuiState;

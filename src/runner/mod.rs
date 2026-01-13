@@ -8,9 +8,9 @@ mod iteration;
 mod output_handler;
 mod quality_gates;
 
-pub use controller::{LoopController, run_loop, run_loop_with_options, run_loop_with_tui};
-pub use iteration::{IterationResult, IterationRunner, run_iteration};
-pub use output_handler::{COMPLETION_SIGNALS, FeedbackMode, OutputHandler};
+pub use controller::{run_loop, run_loop_with_options, run_loop_with_tui, LoopController};
+pub use iteration::{run_iteration, IterationResult, IterationRunner};
+pub use output_handler::{FeedbackMode, OutputHandler, COMPLETION_SIGNALS};
 
 /// Options for running the loop with feedback display.
 #[derive(Debug, Clone, Default)]
@@ -100,8 +100,8 @@ impl RunOptions {
     }
 }
 pub use quality_gates::{
-    GateResult, QualityGateResult, get_configured_gate_names, has_configured_gates,
-    run_quality_gates,
+    get_configured_gate_names, has_configured_gates, run_quality_gates, GateResult,
+    QualityGateResult,
 };
 
 /// Reasons for stopping the runner.

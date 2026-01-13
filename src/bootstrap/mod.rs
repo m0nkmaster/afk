@@ -4,7 +4,7 @@
 //! Also handles the first-run experience for AI CLI selection.
 
 use crate::config::{
-    AFK_DIR, AfkConfig, AiCliConfig, CONFIG_FILE, FeedbackLoopsConfig, SourceConfig,
+    AfkConfig, AiCliConfig, FeedbackLoopsConfig, SourceConfig, AFK_DIR, CONFIG_FILE,
 };
 use std::collections::HashMap;
 use std::io::{self, Write};

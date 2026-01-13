@@ -6,7 +6,7 @@ use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
 use crate::config::AfkConfig;
-use crate::prompt::{PromptError, generate_prompt_with_root};
+use crate::prompt::{generate_prompt_with_root, PromptError};
 
 use super::output_handler::OutputHandler;
 

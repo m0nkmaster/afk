@@ -3,12 +3,12 @@
 //! This module implements the main loop lifecycle, including limits,
 //! stop conditions, and session management.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::config::AfkConfig;
-use crate::prd::{PrdDocument, mark_story_in_progress, sync_prd_with_root};
+use crate::prd::{mark_story_in_progress, sync_prd_with_root, PrdDocument};
 
 use super::iteration::IterationRunner;
 use super::output_handler::{FeedbackMode, OutputHandler};
