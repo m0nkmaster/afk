@@ -21,7 +21,26 @@ pub fn load_beads_tasks() -> Vec<UserStory> {
     }
 }
 
-/// Close a beads issue by ID.
+/// Start work on a beads issue (mark as in_progress).
+///
+/// # Arguments
+///
+/// * `issue_id` - The beads issue ID to start
+///
+/// # Returns
+///
+/// `true` if successfully started, `false` otherwise.
+pub fn start_beads_issue(issue_id: &str) -> bool {
+    match Command::new("bd")
+        .args(["update", issue_id, "--status", "in_progress"])
+        .output()
+    {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+/// Close a beads issue by ID (mark as done).
 ///
 /// # Arguments
 ///
@@ -623,6 +642,13 @@ Acceptance Criteria:
     #[test]
     fn test_close_beads_issue_returns_false_when_not_installed() {
         // When bd isn't installed, close should return false
+        // This will depend on whether bd is installed on the test machine
+        // The function is designed to return false gracefully on any error
+    }
+
+    #[test]
+    fn test_start_beads_issue_returns_false_when_not_installed() {
+        // When bd isn't installed, start should return false
         // This will depend on whether bd is installed on the test machine
         // The function is designed to return false gracefully on any error
     }

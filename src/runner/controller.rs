@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use crate::config::AfkConfig;
-use crate::prd::{PrdDocument, sync_prd_with_root};
+use crate::prd::{PrdDocument, mark_story_in_progress, sync_prd_with_root};
 
 use super::iteration::IterationRunner;
 use super::output_handler::{FeedbackMode, OutputHandler};
@@ -33,7 +33,11 @@ impl LoopController {
     }
 
     /// Create with specific feedback settings.
-    pub fn with_feedback(config: AfkConfig, feedback_mode: FeedbackMode, show_mascot: bool) -> Self {
+    pub fn with_feedback(
+        config: AfkConfig,
+        feedback_mode: FeedbackMode,
+        show_mascot: bool,
+    ) -> Self {
         let mut output = OutputHandler::with_feedback(feedback_mode, show_mascot);
         output.set_feedback_mode(feedback_mode);
         output.set_show_mascot(show_mascot);
@@ -210,16 +214,42 @@ impl LoopController {
             }
 
             // Reload PRD to check completion
-            let current_prd = match PrdDocument::load(None) {
+            let mut current_prd = match PrdDocument::load(None) {
                 Ok(p) => p,
                 Err(_) => prd.clone(),
             };
 
-            // Check if all tasks complete
+            // Check if all local tasks complete - if so, try to sync more from sources
             if current_prd.all_stories_complete() {
-                stop_reason = StopReason::Complete;
-                self.output.success("All tasks completed!");
-                break;
+                if !self.config.sources.is_empty() {
+                    // Re-sync from sources to get more tasks
+                    self.output
+                        .info("Local tasks complete, checking sources for more work...");
+                    match sync_prd_with_root(&self.config, None, None) {
+                        Ok(new_prd) => {
+                            if !new_prd.get_pending_stories().is_empty() {
+                                self.output.info(&format!(
+                                    "Found {} more tasks from sources",
+                                    new_prd.get_pending_stories().len()
+                                ));
+                                current_prd = new_prd;
+                            } else {
+                                stop_reason = StopReason::Complete;
+                                self.output.success("All tasks completed!");
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            stop_reason = StopReason::Complete;
+                            self.output.success("All tasks completed!");
+                            break;
+                        }
+                    }
+                } else {
+                    stop_reason = StopReason::Complete;
+                    self.output.success("All tasks completed!");
+                    break;
+                }
             }
 
             // Get next task
@@ -228,6 +258,11 @@ impl LoopController {
                 stop_reason = StopReason::NoTasks;
                 self.output.info("No more pending tasks");
                 break;
+            }
+
+            // Mark current task as in progress in source (e.g. beads)
+            if let Some(task) = pending.first() {
+                let _ = mark_story_in_progress(&task.id);
             }
 
             // Run iteration
@@ -407,9 +442,8 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     });
 
     // Spawn the runner in a background thread
-    let runner_handle = thread::spawn(move || {
-        run_loop_with_tui_sender(&config_clone, options_clone, tx)
-    });
+    let runner_handle =
+        thread::spawn(move || run_loop_with_tui_sender(&config_clone, options_clone, tx));
 
     // Run TUI in main thread (handles input and rendering)
     if let Err(e) = tui_app.run() {
@@ -450,7 +484,9 @@ fn run_loop_with_tui_sender(
     let max_iter = if options.until_complete {
         u32::MAX
     } else {
-        options.max_iterations.unwrap_or(config.limits.max_iterations)
+        options
+            .max_iterations
+            .unwrap_or(config.limits.max_iterations)
     };
 
     // Sync PRD before loop
@@ -515,7 +551,9 @@ fn run_loop_with_tui_sender(
     #[allow(unused_assignments)]
     let mut stop_reason = super::StopReason::Complete;
 
-    let timeout_minutes = options.timeout_minutes.unwrap_or(config.limits.timeout_minutes);
+    let timeout_minutes = options
+        .timeout_minutes
+        .unwrap_or(config.limits.timeout_minutes);
     let timeout_duration = std::time::Duration::from_secs(timeout_minutes as u64 * 60);
 
     loop {
@@ -532,15 +570,40 @@ fn run_loop_with_tui_sender(
         }
 
         // Reload PRD to check completion
-        let current_prd = match PrdDocument::load(None) {
+        let mut current_prd = match PrdDocument::load(None) {
             Ok(p) => p,
             Err(_) => prd.clone(),
         };
 
-        // Check if all tasks complete
+        // Check if all local tasks complete - if so, try to sync more from sources
         if current_prd.all_stories_complete() {
-            stop_reason = super::StopReason::Complete;
-            break;
+            if !config.sources.is_empty() {
+                // Re-sync from sources to get more tasks
+                let _ = tx.send(TuiEvent::OutputLine(
+                    "Local tasks complete, checking sources for more work...".to_string(),
+                ));
+                match sync_prd_with_root(config, None, None) {
+                    Ok(new_prd) => {
+                        if !new_prd.get_pending_stories().is_empty() {
+                            let _ = tx.send(TuiEvent::OutputLine(format!(
+                                "Found {} more tasks from sources",
+                                new_prd.get_pending_stories().len()
+                            )));
+                            current_prd = new_prd;
+                        } else {
+                            stop_reason = super::StopReason::Complete;
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        stop_reason = super::StopReason::Complete;
+                        break;
+                    }
+                }
+            } else {
+                stop_reason = super::StopReason::Complete;
+                break;
+            }
         }
 
         // Get next task
@@ -548,6 +611,11 @@ fn run_loop_with_tui_sender(
         if pending.is_empty() && !options.until_complete {
             stop_reason = super::StopReason::NoTasks;
             break;
+        }
+
+        // Mark current task as in progress in source (e.g. beads)
+        if let Some(task) = pending.first() {
+            let _ = mark_story_in_progress(&task.id);
         }
 
         // Send iteration start event
@@ -672,7 +740,11 @@ fn run_iteration_with_tui(
     let command = &cmd_parts[0];
     let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
 
-    let _ = tx.send(TuiEvent::OutputLine(format!("$ {} {}", command, args.join(" "))));
+    let _ = tx.send(TuiEvent::OutputLine(format!(
+        "$ {} {}",
+        command,
+        args.join(" ")
+    )));
 
     // Build and spawn command
     let mut cmd = Command::new(command);
@@ -723,7 +795,9 @@ fn run_iteration_with_tui(
                         || line.contains("AFK_STOP")
                     {
                         completion_detected = true;
-                        let _ = tx.send(TuiEvent::OutputLine("✓ Completion signal detected".to_string()));
+                        let _ = tx.send(TuiEvent::OutputLine(
+                            "✓ Completion signal detected".to_string(),
+                        ));
                         let _ = child.kill();
                         break;
                     }

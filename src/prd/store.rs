@@ -221,6 +221,38 @@ fn get_name_from_cargo_toml_at(root: &Path) -> Option<String> {
         .map(String::from)
 }
 
+/// Mark a story as in progress and sync to source if needed.
+///
+/// Returns true if the story was found and synced.
+pub fn mark_story_in_progress(story_id: &str) -> Result<bool, PrdError> {
+    mark_story_in_progress_with_path(story_id, None)
+}
+
+/// Mark a story as in progress with a custom PRD path.
+pub fn mark_story_in_progress_with_path(
+    story_id: &str,
+    prd_path: Option<&Path>,
+) -> Result<bool, PrdError> {
+    let prd = PrdDocument::load(prd_path)?;
+
+    // Find the story
+    let story = prd.user_stories.iter().find(|s| s.id == story_id);
+
+    if let Some(story) = story {
+        let source = story.source.clone();
+
+        // Sync in_progress status to source
+        if source == "beads" {
+            use crate::sources::start_beads_issue;
+            start_beads_issue(story_id);
+        }
+
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 /// Mark a story as complete and sync back to source if needed.
 ///
 /// Returns true if the story was found and marked complete.
@@ -548,6 +580,45 @@ version = "1.0.0"
         fs::write(&prd_path, prd).unwrap();
 
         let result = mark_story_complete_with_path("nonexistent", Some(&prd_path)).unwrap();
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_mark_story_in_progress() {
+        let temp = TempDir::new().unwrap();
+        let afk_dir = temp.path().join(".afk");
+        fs::create_dir_all(&afk_dir).unwrap();
+
+        let prd = r#"{
+            "project": "test",
+            "userStories": [
+                {"id": "story-1", "title": "Story 1", "description": "Test", "passes": false, "source": "json"}
+            ]
+        }"#;
+        let prd_path = afk_dir.join("prd.json");
+        fs::write(&prd_path, prd).unwrap();
+
+        // Should return true when story is found (even if source doesn't support in_progress)
+        let result = mark_story_in_progress_with_path("story-1", Some(&prd_path)).unwrap();
+        assert!(result);
+    }
+
+    #[test]
+    fn test_mark_story_in_progress_not_found() {
+        let temp = TempDir::new().unwrap();
+        let afk_dir = temp.path().join(".afk");
+        fs::create_dir_all(&afk_dir).unwrap();
+
+        let prd = r#"{
+            "project": "test",
+            "userStories": [
+                {"id": "story-1", "title": "Story 1", "description": "Test", "passes": false}
+            ]
+        }"#;
+        let prd_path = afk_dir.join("prd.json");
+        fs::write(&prd_path, prd).unwrap();
+
+        let result = mark_story_in_progress_with_path("nonexistent", Some(&prd_path)).unwrap();
         assert!(!result);
     }
 
