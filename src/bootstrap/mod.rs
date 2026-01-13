@@ -404,11 +404,23 @@ fn file_contains(path: impl AsRef<Path>, pattern: &str) -> bool {
 }
 
 fn command_exists(cmd: &str) -> bool {
-    Command::new(cmd)
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    #[cfg(windows)]
+    {
+        // On Windows, use cmd.exe /c to properly resolve .cmd/.bat extensions via PATH
+        Command::new("cmd")
+            .args(["/c", cmd, "--version"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        Command::new(cmd)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
 }
 
 // ============================================================================
