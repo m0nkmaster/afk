@@ -8,7 +8,7 @@ license = "MIT"
 authors = ["Rob MacDonald"]
 keywords = ["ai", "coding", "automation", "cli"]
 categories = ["command-line-utilities", "development-tools"]
-repository = "https://github.com/robo-mac/afk"
+repository = "https://github.com/m0nkmaster/afk"
 readme = "README.md"
 
 [dependencies]

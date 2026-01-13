@@ -451,10 +451,10 @@ AGENTS.md            # Long-term project knowledge (at project root or in subfol
 
 ```bash
 # One-liner (recommended)
-curl -fsSL https://raw.githubusercontent.com/robo-mac/afk/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.sh | bash
 
 # From source
-git clone https://github.com/robo-mac/afk.git && cd afk
+git clone https://github.com/m0nkmaster/afk.git && cd afk
 cargo build --release
 # Binary at target/release/afk
 ```

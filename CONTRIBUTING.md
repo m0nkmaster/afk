@@ -13,7 +13,7 @@ Thank you for your interest in contributing to afk! This document provides guide
 
 ```bash
 # Clone the repository
-git clone https://github.com/robo-mac/afk.git
+git clone https://github.com/m0nkmaster/afk.git
 cd afk
 
 # Build in debug mode
