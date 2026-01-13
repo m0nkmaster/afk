@@ -160,10 +160,7 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
                 let exit_code = status.code().unwrap_or(-1);
                 eprintln!("\x1b[31mError:\x1b[0m AI CLI exited with code {exit_code}");
                 return Err(PrdCommandError::PrdError(PrdError::ReadError(
-                    std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("AI CLI exited with code {exit_code}"),
-                    ),
+                    std::io::Error::other(format!("AI CLI exited with code {exit_code}")),
                 )));
             }
         }
