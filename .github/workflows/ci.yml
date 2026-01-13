@@ -47,7 +47,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run clippy
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --locked --all-targets --all-features
 
   test:
     name: Test (${{ matrix.os }})
@@ -66,10 +66,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        run: cargo test --release -- --test-threads=1
+        run: cargo test --locked --release -- --test-threads=1
 
       - name: Build
-        run: cargo build --release
+        run: cargo build --locked --release
 
   ci-success:
     name: CI Success
