@@ -129,10 +129,7 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
         Ok(child) => child,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
-                eprintln!(
-                    "\x1b[31mError:\x1b[0m AI CLI not found: {}",
-                    command
-                );
+                eprintln!("\x1b[31mError:\x1b[0m AI CLI not found: {}", command);
                 eprintln!("\x1b[2mIs it installed and in your PATH?\x1b[0m");
                 return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
             }
@@ -161,9 +158,7 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
         Ok(status) => {
             if !status.success() {
                 let exit_code = status.code().unwrap_or(-1);
-                eprintln!(
-                    "\x1b[31mError:\x1b[0m AI CLI exited with code {exit_code}"
-                );
+                eprintln!("\x1b[31mError:\x1b[0m AI CLI exited with code {exit_code}");
                 return Err(PrdCommandError::PrdError(PrdError::ReadError(
                     std::io::Error::new(
                         std::io::ErrorKind::Other,
@@ -810,9 +805,9 @@ mod tests {
         let result = prd_parse_impl(
             input_file.to_str().unwrap(),
             ".afk/prd.json",
-            false,  // copy
-            false,  // file
-            false,  // stdout - no output flags!
+            false, // copy
+            false, // file
+            false, // stdout - no output flags!
             Some(&config_path),
         );
 
@@ -837,7 +832,7 @@ mod tests {
         let result = prd_parse_impl(
             input_file.to_str().unwrap(),
             ".afk/prd.json",
-            true,   // copy - output flag set
+            true, // copy - output flag set
             false,
             false,
             Some(&config_path),

@@ -1,12 +1,14 @@
 //! TUI rendering with ratatui.
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
-    Frame,
+    widgets::{
+        Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    },
 };
 
 use super::app::TuiState;
@@ -35,9 +37,9 @@ pub fn draw(f: &mut Frame, state: &TuiState) {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Header
-            Constraint::Min(10),    // Body
-            Constraint::Length(3),  // Footer
+            Constraint::Length(3), // Header
+            Constraint::Min(10),   // Body
+            Constraint::Length(3), // Footer
         ])
         .split(area);
 
@@ -58,10 +60,25 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
 
     // Build header spans
     let mut spans = vec![
-        Span::styled(" ◉ ", Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD)),
-        Span::styled("afk", Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            " ◉ ",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
+        Span::styled(
+            "afk",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(" │ ", Style::default().fg(Color::DarkGray)),
-        Span::styled(spinner, Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            spinner,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(" ", Style::default()),
     ];
 
@@ -70,9 +87,17 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
         let iter_str = if state.iteration_max == u32::MAX {
             format!("Iteration {}", state.iteration_current)
         } else {
-            format!("Iteration {}/{}", state.iteration_current, state.iteration_max)
+            format!(
+                "Iteration {}/{}",
+                state.iteration_current, state.iteration_max
+            )
         };
-        spans.push(Span::styled(iter_str, Style::default().fg(Color::White).add_modifier(ratatui::style::Modifier::BOLD)));
+        spans.push(Span::styled(
+            iter_str,
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
     }
 
     spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
@@ -96,12 +121,19 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
     spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
     spans.push(Span::styled(
         format!("{}", stats.tool_calls),
-        Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(ratatui::style::Modifier::BOLD),
     ));
-    spans.push(Span::styled(" calls ", Style::default().fg(Color::DarkGray)));
+    spans.push(Span::styled(
+        " calls ",
+        Style::default().fg(Color::DarkGray),
+    ));
     spans.push(Span::styled(
         format!("{}", stats.files_changed + stats.files_created),
-        Style::default().fg(Color::Magenta).add_modifier(ratatui::style::Modifier::BOLD),
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(ratatui::style::Modifier::BOLD),
     ));
     spans.push(Span::styled(" files", Style::default().fg(Color::DarkGray)));
 
@@ -109,17 +141,18 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
         spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
         spans.push(Span::styled(
             format!("{} errors", stats.errors),
-            Style::default().fg(Color::Red).add_modifier(ratatui::style::Modifier::BOLD),
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(ratatui::style::Modifier::BOLD),
         ));
     }
 
-    let header = Paragraph::new(Line::from(spans))
-        .block(
-            Block::default()
-                .borders(Borders::BOTTOM)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .border_set(symbols::border::ROUNDED),
-        );
+    let header = Paragraph::new(Line::from(spans)).block(
+        Block::default()
+            .borders(Borders::BOTTOM)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .border_set(symbols::border::ROUNDED),
+    );
 
     f.render_widget(header, area);
 }
@@ -130,8 +163,8 @@ fn draw_body(f: &mut Frame, area: Rect, state: &TuiState) {
     let body_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Min(40),      // Output (main)
-            Constraint::Length(32),   // Sidebar
+            Constraint::Min(40),    // Output (main)
+            Constraint::Length(32), // Sidebar
         ])
         .split(area);
 
@@ -150,7 +183,9 @@ fn draw_output_panel(f: &mut Frame, area: Rect, state: &TuiState) {
 
     // Get visible lines
     let start = if total_lines > visible_height {
-        total_lines.saturating_sub(visible_height).saturating_sub(scroll_offset)
+        total_lines
+            .saturating_sub(visible_height)
+            .saturating_sub(scroll_offset)
     } else {
         0
     };
@@ -166,13 +201,18 @@ fn draw_output_panel(f: &mut Frame, area: Rect, state: &TuiState) {
             } else if line.contains("WARN") || line.contains("⚠") {
                 Style::default().fg(Color::Yellow)
             } else if line.starts_with("━━━") {
-                Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(ratatui::style::Modifier::BOLD)
             } else if line.contains("✓") || line.contains("complete") {
                 Style::default().fg(Color::Green)
             } else {
                 Style::default().fg(Color::White)
             };
-            ListItem::new(Span::styled(truncate_line(line, area.width as usize - 4), style))
+            ListItem::new(Span::styled(
+                truncate_line(line, area.width as usize - 4),
+                style,
+            ))
         })
         .collect();
 
@@ -182,15 +222,18 @@ fn draw_output_panel(f: &mut Frame, area: Rect, state: &TuiState) {
         " AI Output [scroll: ↑/↓ or j/k] "
     };
 
-    let output = List::new(items)
-        .block(
-            Block::default()
-                .title(title)
-                .title_style(Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .border_set(symbols::border::ROUNDED),
-        );
+    let output = List::new(items).block(
+        Block::default()
+            .title(title)
+            .title_style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .border_set(symbols::border::ROUNDED),
+    );
 
     f.render_widget(output, area);
 
@@ -202,12 +245,14 @@ fn draw_output_panel(f: &mut Frame, area: Rect, state: &TuiState) {
             .track_symbol(Some("│"))
             .thumb_symbol("█");
 
-        let mut scrollbar_state = ScrollbarState::new(total_lines)
-            .position(start);
+        let mut scrollbar_state = ScrollbarState::new(total_lines).position(start);
 
         f.render_stateful_widget(
             scrollbar,
-            area.inner(ratatui::layout::Margin { vertical: 1, horizontal: 0 }),
+            area.inner(ratatui::layout::Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
             &mut scrollbar_state,
         );
     }
@@ -218,9 +263,9 @@ fn draw_sidebar(f: &mut Frame, area: Rect, state: &TuiState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(7),   // Task info
-            Constraint::Length(9),   // Stats
-            Constraint::Min(5),      // Recent files
+            Constraint::Length(7), // Task info
+            Constraint::Length(9), // Stats
+            Constraint::Min(5),    // Recent files
         ])
         .split(area);
 
@@ -236,7 +281,12 @@ fn draw_task_panel(f: &mut Frame, area: Rect, state: &TuiState) {
     if let Some(ref task_id) = state.task_id {
         lines.push(Line::from(vec![
             Span::styled("Task: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(task_id.clone(), Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
+            Span::styled(
+                task_id.clone(),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            ),
         ]));
     }
 
@@ -248,7 +298,9 @@ fn draw_task_panel(f: &mut Frame, area: Rect, state: &TuiState) {
         };
         lines.push(Line::from(Span::styled(
             truncated,
-            Style::default().fg(Color::White).add_modifier(ratatui::style::Modifier::ITALIC),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(ratatui::style::Modifier::ITALIC),
         )));
     }
 
@@ -280,15 +332,18 @@ fn draw_task_panel(f: &mut Frame, area: Rect, state: &TuiState) {
         ),
     ]));
 
-    let panel = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(" Current Task ")
-                .title_style(Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .border_set(symbols::border::ROUNDED),
-        );
+    let panel = Paragraph::new(lines).block(
+        Block::default()
+            .title(" Current Task ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .border_set(symbols::border::ROUNDED),
+    );
 
     f.render_widget(panel, area);
 }
@@ -301,7 +356,9 @@ fn draw_stats_panel(f: &mut Frame, area: Rect, state: &TuiState) {
     // Pulse effect for non-zero stats
     let pulse_style = |value: u32, base_color: Color| -> Style {
         if value > 0 && frame % 10 < 5 {
-            Style::default().fg(base_color).add_modifier(ratatui::style::Modifier::BOLD)
+            Style::default()
+                .fg(base_color)
+                .add_modifier(ratatui::style::Modifier::BOLD)
         } else {
             Style::default().fg(base_color)
         }
@@ -334,7 +391,9 @@ fn draw_stats_panel(f: &mut Frame, area: Rect, state: &TuiState) {
             Span::styled(
                 format!("{:>5}", stats.errors),
                 if stats.errors > 0 {
-                    Style::default().fg(Color::Red).add_modifier(ratatui::style::Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(ratatui::style::Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::DarkGray)
                 },
@@ -353,15 +412,18 @@ fn draw_stats_panel(f: &mut Frame, area: Rect, state: &TuiState) {
         ]),
     ];
 
-    let panel = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(" Statistics ")
-                .title_style(Style::default().fg(Color::Magenta).add_modifier(ratatui::style::Modifier::BOLD))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .border_set(symbols::border::ROUNDED),
-        );
+    let panel = Paragraph::new(lines).block(
+        Block::default()
+            .title(" Statistics ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .border_set(symbols::border::ROUNDED),
+    );
 
     f.render_widget(panel, area);
 }
@@ -395,15 +457,18 @@ fn draw_files_panel(f: &mut Frame, area: Rect, state: &TuiState) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(" Recent Files ")
-                .title_style(Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .border_set(symbols::border::ROUNDED),
-        );
+    let list = List::new(items).block(
+        Block::default()
+            .title(" Recent Files ")
+            .title_style(
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            )
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .border_set(symbols::border::ROUNDED),
+    );
 
     f.render_widget(list, area);
 }
@@ -411,23 +476,42 @@ fn draw_files_panel(f: &mut Frame, area: Rect, state: &TuiState) {
 /// Draw the footer bar.
 fn draw_footer(f: &mut Frame, area: Rect) {
     let help = vec![
-        Span::styled(" q", Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            " q",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(" quit  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("↑↓", Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            "↑↓",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(" scroll  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("space", Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            "space",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(" auto-scroll  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("g/G", Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD)),
+        Span::styled(
+            "g/G",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
         Span::styled(" top/bottom", Style::default().fg(Color::DarkGray)),
     ];
 
-    let footer = Paragraph::new(Line::from(help))
-        .block(
-            Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(Color::DarkGray))
-                .border_set(symbols::border::ROUNDED),
-        );
+    let footer = Paragraph::new(Line::from(help)).block(
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .border_set(symbols::border::ROUNDED),
+    );
 
     f.render_widget(footer, area);
 }
@@ -478,11 +562,21 @@ fn draw_session_complete(
         Line::from(""),
         Line::from(vec![
             Span::styled("  Iterations:     ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", iterations), Style::default().fg(Color::Cyan).add_modifier(ratatui::style::Modifier::BOLD)),
+            Span::styled(
+                format!("{}", iterations),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Tasks completed:", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!(" {}", tasks), Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD)),
+            Span::styled(
+                format!(" {}", tasks),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Duration:       ", Style::default().fg(Color::DarkGray)),
@@ -500,7 +594,9 @@ fn draw_session_complete(
         Line::from(""),
         Line::from(Span::styled(
             "Press any key to exit...",
-            Style::default().fg(Color::DarkGray).add_modifier(ratatui::style::Modifier::ITALIC),
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(ratatui::style::Modifier::ITALIC),
         )),
     ];
 
@@ -508,7 +604,11 @@ fn draw_session_complete(
         .block(
             Block::default()
                 .title(title)
-                .title_style(Style::default().fg(border_color).add_modifier(ratatui::style::Modifier::BOLD))
+                .title_style(
+                    Style::default()
+                        .fg(border_color)
+                        .add_modifier(ratatui::style::Modifier::BOLD),
+                )
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(border_color))
                 .border_set(symbols::border::DOUBLE),

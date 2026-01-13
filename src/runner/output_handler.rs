@@ -235,10 +235,7 @@ impl OutputHandler {
         use crate::feedback::get_spinner_frame;
 
         let spinner = get_spinner_frame("dots", 0);
-        println!(
-            "\x1b[36m{}\x1b[0m \x1b[2mAI is working...\x1b[0m",
-            spinner
-        );
+        println!("\x1b[36m{}\x1b[0m \x1b[2mAI is working...\x1b[0m", spinner);
         println!();
     }
 
