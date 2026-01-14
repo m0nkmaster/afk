@@ -90,6 +90,8 @@ cargo install afk
 | `afk go 20` | Run 20 iterations |
 | `afk go -u` | Run until all tasks complete |
 | `afk go TODO.md 5` | Use TODO.md as source, run 5 iterations |
+| `afk go --init` | Re-run setup, then start loop |
+| `afk go -b feat/foo` | Create/checkout branch before running |
 
 ### Task Management
 
@@ -113,6 +115,7 @@ cargo install afk
 | `afk source add beads` | Add beads as task source |
 | `afk source add markdown TODO.md` | Add markdown file source |
 | `afk source list` | List configured sources |
+| `afk source remove <index>` | Remove a source by index (1-based) |
 
 ### Quality & Debug
 
