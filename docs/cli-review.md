@@ -16,12 +16,12 @@ AFK currently has **17 top-level commands** (plus subcommands). This review cons
 `go` becomes the single entry point:
 - First run with no `.afk/` → auto-detects project, **prompts user to confirm AI CLI selection**, creates config
 - Existing config → uses it
-- `--continue` → resumes previous session
+- Always resumes previous session automatically
 - `--init` → deletes existing config and re-runs setup (start fresh)
 
-### 2. Remove Top-Level `sync` ✅
+### 2. Top-Level `sync` as Alias ✅
 
-Use `afk prd sync` instead. No top-level alias needed.
+`afk sync` is an alias for `afk tasks sync`. Convenient shorthand.
 
 ### 3. Merge `explain` into `status` ✅
 
@@ -42,9 +42,9 @@ No change to these commands.
 
 Clearer name. No backwards compatibility needed.
 
-### 6. Keep Archive Subcommands As-Is ✅
+### 6. Simplify Archive Commands ✅
 
-`archive create/list/clear` — explicit and discoverable.
+`archive` (archives and clears) and `archive list` — simple and discoverable.
 
 ### 7. Rename `next` to `prompt` ✅
 
@@ -80,8 +80,9 @@ Clearer name. Update description to clarify it shows "the prompt that will be se
 | Group | Commands | Purpose |
 |-------|----------|---------|
 | `source` | `add`, `list`, `remove` | Manage task sources |
-| `prd` | `import`, `sync`, `show` | Manage PRD/tasks |
-| `archive` | `create`, `list`, `clear` | Session history |
+| `prd` | `import` | Import requirements |
+| `tasks` | `sync`, `show` | Manage tasks |
+| `archive` | (default), `list` | Session history |
 
 ### Removed Commands
 
@@ -89,8 +90,8 @@ Clearer name. Update description to clarify it shows "the prompt that will be se
 |---------|-------------|
 | `run` | `go` |
 | `start` | `go` (auto-inits if needed) |
-| `resume` | `go --continue` |
-| `sync` | `prd sync` |
+| `resume` | `go` (always resumes automatically) |
+| `sync` | `afk sync` (alias for `tasks sync`) |
 | `explain` | `status -v` |
 | `next` | `prompt` |
 
@@ -153,16 +154,18 @@ Deletes existing `.afk/config.json` and re-runs the setup flow. Useful when:
 afk go --init   # Wipe config, reconfigure, then run
 ```
 
-#### `--continue` Flag
+#### Resume Behaviour
 
-Preserves `progress.json` and continues from where you left off:
+`afk go` always preserves `progress.json` and continues from where you left off:
 - Keeps iteration count
 - Keeps task status
 - Keeps learnings
 
+Use `--fresh` to start with a clean session:
+
 ```bash
-afk go --continue      # Continue with 10 more iterations
-afk go --continue 20   # Continue with 20 more iterations
+afk go           # Continue from last session
+afk go --fresh   # Clear progress and start fresh
 ```
 
 ---
@@ -342,42 +345,43 @@ These commands remain as currently implemented:
 | `update [--beta] [--check]` | Self-update |
 | `completions <shell>` | Generate shell completions |
 | `source add/list/remove` | Manage sources |
-| `prd sync/show` | Sync and display PRD |
-| `archive create/list/clear` | Manage archives |
+| `sync` | Sync from all sources |
+| `tasks sync/show` | Sync and display tasks |
+| `archive [list]` | Manage archives |
 
 ---
 
 ## Implementation Checklist
 
 ### Remove Commands
-- [ ] Delete `run` command
-- [ ] Delete `start` command
-- [ ] Delete `resume` command
-- [ ] Delete `sync` command (top-level)
-- [ ] Delete `explain` command
-- [ ] Delete `next` command
+- [x] Delete `run` command
+- [x] Delete `start` command
+- [x] Delete `resume` command
+- [x] Keep `sync` as alias for `tasks sync`
+- [x] Delete `explain` command
+- [x] Delete `next` command
 
 ### Modify Commands
-- [ ] `go`: Add `--continue` flag (from resume)
-- [ ] `go`: Add `--init` flag (delete config + reconfigure)
-- [ ] `go`: Ensure first-run prompts for AI CLI confirmation
-- [ ] `status`: Add `-v` flag with explain behaviour
-- [ ] `status -v`: Include last 5 learnings
+- [x] `go`: Always resumes; use `--fresh` to start clean
+- [x] `go`: Add `--init` flag (delete config + reconfigure)
+- [x] `go`: Ensure first-run prompts for AI CLI confirmation
+- [x] `status`: Add `-v` flag with explain behaviour
+- [x] `status -v`: Include last 5 learnings
 
 ### Add Commands
-- [ ] `list`: New command with `--limit`, `--pending`, `--complete` flags
-- [ ] `task <id>`: New command to show task details
-- [ ] `prompt`: Rename from `next`
+- [x] `list`: New command with `--limit`, `--pending`, `--complete` flags
+- [x] `task <id>`: New command to show task details
+- [x] `prompt`: Renamed from `next`
 
 ### Rename Commands
-- [ ] `next` → `prompt`
-- [ ] `prd parse` → `prd import`
+- [x] `next` → `prompt`
+- [x] `prd parse` → `prd import`
 
 ### Update Documentation
-- [ ] Update README.md
-- [ ] Update docs/user-guide.md
-- [ ] Update AGENTS.md command examples
-- [ ] Update shell completion generation
+- [x] Update README.md
+- [x] Update docs/user-guide.md
+- [x] Update AGENTS.md command examples
+- [x] Update shell completion generation
 
 ---
 
@@ -395,6 +399,7 @@ afk
 ├── done            # Mark complete
 ├── fail            # Mark failed
 ├── reset           # Reset task
+├── sync            # Sync from sources (alias for tasks sync)
 ├── update          # Self-update
 ├── completions     # Shell completions
 ├── source
@@ -402,14 +407,12 @@ afk
 │   ├── list
 │   └── remove
 ├── prd
-│   ├── import      # (was parse)
+│   └── import      # Import requirements doc
+├── tasks
 │   ├── sync
 │   └── show
 └── archive
-    ├── create
-    ├── list
-    └── clear
+    └── list
 ```
 
-**Total: 12 primary commands + 9 subcommands = 21 commands**
-(Down from 17 primary + 9 subcommands = 26 commands)
+**Total: 13 primary commands + 6 subcommands = 19 commands**

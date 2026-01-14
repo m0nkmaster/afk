@@ -171,8 +171,8 @@ For legacy text-only output (no streaming):
 ## Usage
 
 ```bash
-afk go           # Uses stream-json by default, shows real-time output
-afk go --tui     # Full TUI mode with scrollable output
+afk go                 # Uses stream-json by default, TUI mode with scrollable output
+afk go --feedback off  # Disable TUI, minimal output
 ```
 
 ## Scope & Limitations

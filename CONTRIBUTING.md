@@ -6,7 +6,7 @@ Thank you for your interest in contributing to afk! This document provides guide
 
 ### Prerequisites
 
-- **Rust 1.85+** — Install via [rustup](https://rustup.rs/)
+- **Rust 1.80+** — Install via [rustup](https://rustup.rs/)
 - **Git** — For version control
 
 ### Getting Started

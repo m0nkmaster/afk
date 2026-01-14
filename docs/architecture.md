@@ -48,9 +48,14 @@ src/
 │   ├── display.rs   # Progress display
 │   └── art.rs       # ASCII art spinners and mascots
 ├── parser/          # Output parsing
-│   └── mod.rs       # AI CLI output parsing (regex patterns)
+│   ├── mod.rs       # AI CLI output parsing (regex patterns)
+│   └── stream_json.rs # Streaming JSON parser for AI CLI output
 ├── watcher/         # File watching
 │   └── mod.rs       # File system monitoring (notify crate)
+├── tui/             # Terminal UI
+│   ├── mod.rs       # Module exports
+│   ├── app.rs       # TUI application state
+│   └── ui.rs        # Ratatui UI rendering
 └── sources/         # Task sources
     ├── mod.rs       # aggregate_tasks() dispatcher
     ├── beads.rs     # Beads (bd) integration
@@ -71,6 +76,8 @@ src/
 | `chrono` | Timestamps for progress and archives |
 | `arboard` | Cross-platform clipboard access |
 | `ctrlc` | Signal handling for graceful shutdown |
+| `ratatui` / `crossterm` | Terminal UI framework for TUI mode |
+| `tokio` | Async runtime |
 | `reqwest` | HTTP client for self-update |
 | `anyhow` / `thiserror` | Error handling |
 

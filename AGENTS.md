@@ -58,6 +58,7 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 
 | Module | Description |
 |--------|-------------|
+| `cli` | CLI parsing and command structure |
 | `config` | Configuration loading and serialisation |
 | `progress` | Session and task progress tracking |
 | `bootstrap` | Project analysis and AI CLI detection |
@@ -111,11 +112,17 @@ src/
 ├── feedback/
 │   ├── mod.rs       # Module exports
 │   ├── metrics.rs   # Iteration metrics collection
+│   ├── display.rs   # Progress display
 │   └── art.rs       # ASCII art spinners and mascots
 ├── parser/
-│   └── mod.rs       # AI CLI output parsing (regex patterns)
+│   ├── mod.rs       # AI CLI output parsing (regex patterns)
+│   └── stream_json.rs # Streaming JSON parser for AI CLI output
 ├── watcher/
 │   └── mod.rs       # File system monitoring (notify crate)
+├── tui/
+│   ├── mod.rs       # Module exports
+│   ├── app.rs       # TUI application state
+│   └── ui.rs        # Ratatui UI rendering
 └── sources/
     ├── mod.rs       # aggregate_tasks() dispatcher
     ├── beads.rs     # Beads (bd) integration
@@ -136,6 +143,8 @@ src/
 | `chrono` | Timestamps |
 | `arboard` | Clipboard access |
 | `ctrlc` | Signal handling |
+| `ratatui` / `crossterm` | Terminal UI |
+| `tokio` | Async runtime |
 
 ## Key Patterns
 

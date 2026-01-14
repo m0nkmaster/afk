@@ -40,22 +40,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Commands
 
 - `afk go [N]` — Zero-config entry point, runs N iterations (default 10)
-- `afk run [N]` — Run N iterations with configured settings
-- `afk start` — Init if needed, then run
-- `afk resume` — Continue from last session
+- `afk go --init` — Re-run setup, then start loop
+- `afk go --fresh` — Clear session and start fresh
 - `afk init` — Analyse project and generate config
 - `afk status` — Show current configuration
-- `afk explain` — Debug current loop state
-- `afk next` — Preview next prompt
+- `afk list` — List tasks from current PRD
+- `afk task <id>` — Show task details
+- `afk prompt` — Preview next prompt
 - `afk verify` — Run quality gates
 - `afk done <id>` — Mark task complete
 - `afk fail <id>` — Mark task failed
 - `afk reset <id>` — Reset stuck task
-- `afk prd parse <file>` — Parse requirements into JSON
-- `afk prd sync` — Sync from all sources
-- `afk prd show` — Display current tasks
+- `afk prd import <file>` — Import requirements into JSON tasks
+- `afk sync` — Sync from all sources
+- `afk tasks show` — Display current tasks
 - `afk source add|list|remove` — Manage task sources
-- `afk archive create|list|clear` — Session archives
+- `afk archive` — Archive and clear current session
+- `afk archive list` — List archived sessions
 - `afk update` — Self-update to latest version
 - `afk completions <shell>` — Generate shell completions
 
@@ -70,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical
 
-- Built with Rust 1.85 (2024 edition)
+- Built with Rust 1.80+ (2021 edition)
 - Cross-platform: Linux (x86_64, arm64), macOS (Intel, Apple Silicon), Windows
 - Single static binary, no dependencies
 - ~580 unit and integration tests

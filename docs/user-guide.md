@@ -171,6 +171,7 @@ The AI reads these files directly and updates them as it works.
 | `afk prd import requirements.md` | Import requirements into .afk/tasks.json |
 | `afk prd import PRD.md --copy` | Copy prompt to clipboard |
 | `afk prd import PRD.md -o custom.json` | Custom output path |
+| `afk sync` | Sync from all sources (alias: `afk tasks sync`) |
 | `afk tasks sync` | Sync from all sources |
 | `afk tasks show` | Show current task list |
 | `afk tasks show --pending` | Show only pending tasks |
@@ -179,6 +180,8 @@ The AI reads these files directly and updates them as it works.
 
 | Command | Description |
 |---------|-------------|
+| `afk init` | Initialise afk (auto-detects project settings) |
+| `afk init -f` | Force re-initialise existing project |
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
 
@@ -318,9 +321,11 @@ afk works with any CLI that accepts prompts as the final argument. On first run,
 | **Claude Code** | `{"command": "claude", "args": ["--dangerously-skip-permissions", "-p"]}` |
 | **Cursor Agent** | `{"command": "agent", "args": ["-p", "--force"]}` |
 | **Codex** | `{"command": "codex", "args": ["--approval-mode", "full-auto", "-q"]}` |
-| **Aider** | `{"command": "aider", "args": ["--yes"]}` |
+| **Aider** | `{"command": "aider", "args": ["--yes", "--message"]}` |
 | **Amp** | `{"command": "amp", "args": ["--dangerously-allow-all"]}` |
 | **Kiro** | `{"command": "kiro", "args": ["--auto"]}` |
+
+**Note:** afk automatically appends streaming output flags (`--output-format stream-json`) for supported CLIs. The `args` above are the base configuration only. To disable streaming, set `"output_format": "text"` in your config.
 
 ### Completion Signals
 
