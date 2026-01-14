@@ -131,9 +131,11 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
-// Generate initial palette on page load
-generatePalette();
-updateUrlHash();
+// On page load: restore from hash if present, otherwise generate new palette
+if (!restoreFromHash()) {
+  generatePalette();
+  updateUrlHash();
+}
 
 // Export functionality
 const exportBtn = document.getElementById('export-btn');
@@ -248,6 +250,63 @@ function updateUrlHash() {
   window.location.hash = hash;
 }
 
+/**
+ * Decodes the URL hash into palette state.
+ * @param {string} hash - The URL hash (without leading #)
+ * @returns {Array<{colour: string, locked: boolean}>|null} Palette state or null if invalid
+ */
+function decodeFromHash(hash) {
+  if (!hash) return null;
+  
+  const parts = hash.split('-');
+  if (parts.length !== 5) return null;
+  
+  const palette = [];
+  for (const part of parts) {
+    // Check if locked (ends with L)
+    const locked = part.endsWith('L');
+    const colourHex = locked ? part.slice(0, -1) : part;
+    
+    // Validate hex format (6 characters, valid hex)
+    if (!/^[0-9A-Fa-f]{6}$/.test(colourHex)) {
+      return null;
+    }
+    
+    palette.push({
+      colour: `#${colourHex.toUpperCase()}`,
+      locked: locked
+    });
+  }
+  
+  return palette;
+}
+
+/**
+ * Restores the palette from the URL hash.
+ * @returns {boolean} True if successfully restored from hash
+ */
+function restoreFromHash() {
+  const hash = window.location.hash.slice(1); // Remove leading #
+  const palette = decodeFromHash(hash);
+  
+  if (!palette) return false;
+  
+  palette.forEach((item, index) => {
+    const swatch = swatches[index];
+    if (swatch) {
+      applyColourToSwatch(swatch, item.colour);
+      // Set or remove locked class based on saved state
+      if (item.locked) {
+        swatch.classList.add('locked');
+      } else {
+        swatch.classList.remove('locked');
+      }
+    }
+  });
+  
+  return true;
+}
+
 // Expose to window for browser console access
 window.generateRandomColour = generateRandomColour;
 window.generatePalette = generatePalette;
@@ -259,3 +318,5 @@ window.exportAsCSS = exportAsCSS;
 window.copyToClipboard = copyToClipboard;
 window.encodeToHash = encodeToHash;
 window.updateUrlHash = updateUrlHash;
+window.decodeFromHash = decodeFromHash;
+window.restoreFromHash = restoreFromHash;
