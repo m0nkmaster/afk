@@ -1,4 +1,4 @@
-/* Memory Card Game Styles */
+/* Colour Palette Generator Styles */
 
 * {
   margin: 0;
@@ -6,343 +6,49 @@
   box-sizing: border-box;
 }
 
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
 body {
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
-.container {
-  text-align: center;
-  padding: 1rem;
-}
-
-h1 {
-  color: #e94560;
-  margin-bottom: 1rem;
-  font-size: 2rem;
-}
-
-/* Game controls section */
-.game-controls {
-  margin-bottom: 1rem;
-}
-
-/* Game stats (timer, moves, etc.) */
-.game-stats {
-  margin-bottom: 0.75rem;
+/* Main palette container - holds all 5 swatches */
+.palette-container {
   display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-}
-
-.timer {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #4ecdc4;
-  background: rgba(78, 205, 196, 0.1);
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(78, 205, 196, 0.3);
-  min-width: 4rem;
-}
-
-.moves {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #f39c12;
-  background: rgba(243, 156, 18, 0.1);
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  border: 1px solid rgba(243, 156, 18, 0.3);
-  min-width: 6rem;
-}
-
-/* New Game button */
-.btn-new-game {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #e94560 0%, #c73e54 100%);
-  border: none;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3);
-}
-
-.btn-new-game:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
-  background: linear-gradient(135deg, #ff6b8a 0%, #e94560 100%);
-}
-
-.btn-new-game:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(233, 69, 96, 0.3);
-}
-
-/* 4x4 Grid Layout */
-.game-board {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-  gap: 0.75rem;
-  max-width: 400px;
-  aspect-ratio: 1;
-  margin: 0 auto;
-  padding: 1rem;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 1rem;
-}
-
-/* Card container - provides 3D perspective */
-.card {
-  aspect-ratio: 1;
-  min-width: 60px;
-  min-height: 60px;
-  perspective: 1000px;
-  cursor: pointer;
-}
-
-/* Inner card that rotates */
-.card-inner {
-  position: relative;
   width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.5s ease;
+  height: 100vh;
 }
 
-/* Flip animation when card is flipped */
-.card.flipped .card-inner {
-  transform: rotateY(180deg);
-}
-
-/* Common styles for both card faces */
-.card-front,
-.card-back {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 0.5rem;
-  border: 2px solid #e94560;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Front of card (face-down) */
-.card-front {
-  /* Base gradient for card back */
-  background: 
-    linear-gradient(135deg, #1a1a4e 25%, transparent 25%),
-    linear-gradient(225deg, #1a1a4e 25%, transparent 25%),
-    linear-gradient(45deg, #1a1a4e 25%, transparent 25%),
-    linear-gradient(315deg, #1a1a4e 25%, #0f3460 25%);
-  background-size: 20px 20px;
-  background-color: #0f3460;
-  
-  /* Subtle shadow for depth */
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    inset 0 0 20px rgba(233, 69, 96, 0.1);
-}
-
-/* Question mark icon on card front */
-.card-front::before {
-  content: '?';
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: rgba(233, 69, 96, 0.6);
-  text-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
-}
-
-/* Back of card (symbol face) - rotated 180deg so it shows when flipped */
-.card-back {
-  background: linear-gradient(135deg, #2d2d5a 0%, #1f1f4a 100%);
-  border-color: #4ecdc4;
-  transform: rotateY(180deg);
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    inset 0 0 20px rgba(78, 205, 196, 0.1);
-}
-
-/* Symbol text on card back */
-.card-face {
-  font-size: 2rem;
-}
-
-/* Hover effect for interactivity (only on unflipped cards) */
-.card:not(.flipped):not(.matched):hover .card-inner {
-  transform: scale(1.03);
-}
-
-.card:not(.flipped):not(.matched):hover .card-front {
-  box-shadow: 
-    0 4px 8px rgba(0, 0, 0, 0.4),
-    inset 0 0 20px rgba(233, 69, 96, 0.2);
-  border-color: #ff6b8a;
-}
-
-/* Flipped card state - disable hover effects */
-.card.flipped {
-  cursor: default;
-}
-
-/* Matched card state - green tint */
-.card.matched .card-back {
-  background: linear-gradient(135deg, #1a4a3a 0%, #0f3a2a 100%);
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    inset 0 0 25px rgba(78, 205, 196, 0.2);
-}
-
-.card.matched {
-  cursor: default;
-}
-
-/* Responsive adjustments */
-@media (max-width: 480px) {
-  .game-board {
-    max-width: 320px;
-    gap: 0.5rem;
-    padding: 0.75rem;
-  }
-  
-  .card {
-    min-width: 50px;
-    min-height: 50px;
-  }
-  
-  .card-front {
-    background-size: 16px 16px;
-  }
-  
-  .card-front::before {
-    font-size: 1.25rem;
-  }
-  
-  h1 {
-    font-size: 1.5rem;
-  }
-}
-
-@media (max-width: 360px) {
-  .game-board {
-    max-width: 280px;
-    gap: 0.4rem;
-  }
-  
-  .card {
-    min-width: 40px;
-    min-height: 40px;
-  }
-  
-  .card-front {
-    background-size: 12px 12px;
-  }
-  
-  .card-front::before {
-    font-size: 1rem;
-  }
-}
-
-/* Win screen overlay */
-.win-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.win-overlay.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-.win-modal {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border: 2px solid #4ecdc4;
-  border-radius: 1rem;
-  padding: 2rem 3rem;
-  text-align: center;
-  box-shadow: 0 8px 32px rgba(78, 205, 196, 0.3);
-  transform: scale(0.8);
-  transition: transform 0.3s ease;
-}
-
-.win-overlay.visible .win-modal {
-  transform: scale(1);
-}
-
-.win-modal h2 {
-  color: #4ecdc4;
-  font-size: 2rem;
-  margin-bottom: 1.5rem;
-}
-
-.win-stats {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-  margin-bottom: 1.5rem;
-}
-
-.win-stat {
+/* Individual swatch */
+.swatch {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-}
-
-.win-stat-label {
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.win-stat-value {
-  color: #f39c12;
-  font-size: 1.75rem;
-  font-weight: 700;
-}
-
-.btn-play-again {
-  padding: 0.75rem 2rem;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #4ecdc4 0%, #3ab8b0 100%);
-  border: none;
-  border-radius: 0.5rem;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  box-shadow: 0 2px 8px rgba(78, 205, 196, 0.3);
+  transition: flex 0.3s ease;
 }
 
-.btn-play-again:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(78, 205, 196, 0.4);
-  background: linear-gradient(135deg, #5fd9d1 0%, #4ecdc4 100%);
+/* The coloured portion of the swatch */
+.swatch-colour {
+  flex: 1;
+  background-color: #cccccc;
 }
 
-.btn-play-again:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(78, 205, 196, 0.3);
+/* Info section at bottom of swatch */
+.swatch-info {
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+/* Hex code display */
+.hex-code {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
 }

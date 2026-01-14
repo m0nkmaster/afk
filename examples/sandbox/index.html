@@ -3,39 +3,40 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Memory Card Game</title>
+  <title>Colour Palette Generator</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="container">
-    <h1>Memory Game</h1>
-    <div class="game-controls">
-      <div class="game-stats">
-        <span class="timer" id="timer">0:00</span>
-        <span class="moves" id="moves">Moves: 0</span>
+  <div class="palette-container">
+    <div class="swatch" data-index="0">
+      <div class="swatch-colour"></div>
+      <div class="swatch-info">
+        <span class="hex-code">#000000</span>
       </div>
-      <button id="new-game-btn" class="btn-new-game">New Game</button>
     </div>
-    <div class="game-board" id="game-board">
-      <!-- Cards rendered dynamically by JavaScript -->
-    </div>
-  </div>
-
-  <!-- Win screen overlay -->
-  <div class="win-overlay" id="win-overlay">
-    <div class="win-modal">
-      <h2>🎉 You Won! 🎉</h2>
-      <div class="win-stats">
-        <div class="win-stat">
-          <span class="win-stat-label">Time</span>
-          <span class="win-stat-value" id="win-time">0:00</span>
-        </div>
-        <div class="win-stat">
-          <span class="win-stat-label">Moves</span>
-          <span class="win-stat-value" id="win-moves">0</span>
-        </div>
+    <div class="swatch" data-index="1">
+      <div class="swatch-colour"></div>
+      <div class="swatch-info">
+        <span class="hex-code">#000000</span>
       </div>
-      <button id="play-again-btn" class="btn-play-again">Play Again</button>
+    </div>
+    <div class="swatch" data-index="2">
+      <div class="swatch-colour"></div>
+      <div class="swatch-info">
+        <span class="hex-code">#000000</span>
+      </div>
+    </div>
+    <div class="swatch" data-index="3">
+      <div class="swatch-colour"></div>
+      <div class="swatch-info">
+        <span class="hex-code">#000000</span>
+      </div>
+    </div>
+    <div class="swatch" data-index="4">
+      <div class="swatch-colour"></div>
+      <div class="swatch-info">
+        <span class="hex-code">#000000</span>
+      </div>
     </div>
   </div>
 
