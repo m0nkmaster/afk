@@ -68,18 +68,23 @@ pub enum UpdateError {
 }
 
 /// Get the platform-specific binary name.
+///
+/// Binary names must match what's produced by the release workflow:
+/// - Linux: afk-linux-x86_64, afk-linux-arm64
+/// - macOS: afk-darwin-x86_64, afk-darwin-arm64
+/// - Windows: afk-windows-x86_64.exe
 pub fn get_platform_binary() -> &'static str {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     return "afk-linux-x86_64";
 
     #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-    return "afk-linux-aarch64";
+    return "afk-linux-arm64";
 
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    return "afk-macos-x86_64";
+    return "afk-darwin-x86_64";
 
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    return "afk-macos-aarch64";
+    return "afk-darwin-arm64";
 
     #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
     return "afk-windows-x86_64.exe";
