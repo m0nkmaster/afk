@@ -277,7 +277,10 @@ impl IterationRunner {
                                 if let Some(event) = parser.parse_line(&line) {
                                     // Check for completion signal only in assistant messages
                                     // (not in user messages which may contain the prompt with examples)
-                                    if let crate::parser::StreamEvent::AssistantMessage { ref text } = event {
+                                    if let crate::parser::StreamEvent::AssistantMessage {
+                                        ref text,
+                                    } = event
+                                    {
                                         if self.output.contains_completion_signal(text) {
                                             completion_detected = true;
                                             self.output.completion_detected();
@@ -286,15 +289,17 @@ impl IterationRunner {
                                             break;
                                         }
                                     }
-                                    
+
                                     // Convert event to display text and emit TUI event
                                     let (display, tui_event) = self.stream_event_to_display(&event);
-                                    
+
                                     // Send TUI event if we have a sender
-                                    if let (Some(ref sender), Some(tui_event)) = (&self.tui_sender, tui_event) {
+                                    if let (Some(ref sender), Some(tui_event)) =
+                                        (&self.tui_sender, tui_event)
+                                    {
                                         let _ = sender.send(tui_event);
                                     }
-                                    
+
                                     if let Some(display) = display {
                                         self.output.stream_line(&format!("{display}\n"));
                                     }

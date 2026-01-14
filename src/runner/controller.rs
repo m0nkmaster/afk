@@ -805,7 +805,7 @@ fn run_iteration_with_tui(
                                     break;
                                 }
                             }
-                            
+
                             match &event {
                                 StreamEvent::AssistantMessage { text } => {
                                     // Truncate long messages for display
@@ -922,7 +922,7 @@ fn run_iteration_with_tui(
                         if line.contains("antml:invoke") || line.contains("<tool_call>") {
                             let _ = tx.send(TuiEvent::ToolCall("tool".to_string()));
                         }
-                        
+
                         // Check for completion signal in plain text mode
                         if line.contains("<promise>COMPLETE</promise>")
                             || line.contains("AFK_COMPLETE")

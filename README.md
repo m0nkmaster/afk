@@ -77,7 +77,7 @@ cargo build --release
 ### Cargo
 
 ```bash
-cargo install afk
+cargo install --git https://github.com/m0nkmaster/afk
 ```
 
 ## 🎮 Commands
