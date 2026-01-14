@@ -575,6 +575,10 @@ fn draw_session_complete(
         (Color::Cyan, " Session Ended ")
     };
 
+    // Format stats with consistent alignment
+    let label_style = Style::default().fg(Color::DarkGray);
+    let label_width = 16; // "Tasks completed:" is longest at 16 chars
+
     let lines = vec![
         Line::from(""),
         Line::from(Span::styled(
@@ -583,16 +587,16 @@ fn draw_session_complete(
         )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Iterations:     ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{:>label_width$}", "Iterations:"), label_style),
             Span::styled(
-                format!("{}", iterations),
+                format!(" {}", iterations),
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(ratatui::style::Modifier::BOLD),
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Tasks completed:", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{:>label_width$}", "Tasks completed:"), label_style),
             Span::styled(
                 format!(" {}", tasks),
                 Style::default()
@@ -601,12 +605,12 @@ fn draw_session_complete(
             ),
         ]),
         Line::from(vec![
-            Span::styled("  Duration:       ", Style::default().fg(Color::DarkGray)),
-            Span::styled(duration_str, Style::default().fg(Color::Blue)),
+            Span::styled(format!("{:>label_width$}", "Duration:"), label_style),
+            Span::styled(format!(" {}", duration_str), Style::default().fg(Color::Blue)),
         ]),
         Line::from(vec![
-            Span::styled("  Reason:         ", Style::default().fg(Color::DarkGray)),
-            Span::styled(reason.to_string(), Style::default().fg(Color::White)),
+            Span::styled(format!("{:>label_width$}", "Reason:"), label_style),
+            Span::styled(format!(" {}", reason), Style::default().fg(Color::White)),
         ]),
         Line::from(""),
         Line::from(Span::styled(
