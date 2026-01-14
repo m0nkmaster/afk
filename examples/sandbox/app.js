@@ -88,6 +88,29 @@
         taskInput.focus();
     }
 
+    /**
+     * Loads tasks from localStorage and displays them in the list.
+     */
+    function loadTasks() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        
+        if (!stored) {
+            return;
+        }
+        
+        try {
+            const tasks = JSON.parse(stored);
+            
+            tasks.forEach(function(task) {
+                const taskElement = createTaskElement(task.text, task.completed);
+                taskList.appendChild(taskElement);
+            });
+        } catch (e) {
+            // Invalid JSON in localStorage - ignore and start fresh
+            console.warn('Could not parse tasks from localStorage:', e);
+        }
+    }
+
     // Event listeners
     addButton.addEventListener('click', addTask);
     
@@ -97,4 +120,7 @@
             addTask();
         }
     });
+
+    // Load saved tasks on page load
+    loadTasks();
 })();
