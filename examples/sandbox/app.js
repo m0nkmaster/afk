@@ -1,10 +1,46 @@
 'use strict';
 
 (function() {
+  // Constants
+  const STORAGE_KEY = 'taskList';
+  
   // DOM references
   const form = document.getElementById('task-form');
   const input = document.getElementById('task-input');
   const taskList = document.getElementById('task-list');
+
+  /**
+   * Save all tasks to localStorage
+   */
+  function saveTasks() {
+    const tasks = [];
+    taskList.querySelectorAll('li').forEach(function(li) {
+      tasks.push({
+        text: li.querySelector('.task-text').textContent,
+        completed: li.classList.contains('completed')
+      });
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  }
+
+  /**
+   * Load tasks from localStorage
+   */
+  function loadTasks() {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) return;
+      
+      const tasks = JSON.parse(stored);
+      tasks.forEach(function(task) {
+        const taskElement = createTaskElement(task.text, task.completed);
+        taskList.appendChild(taskElement);
+      });
+    } catch (e) {
+      // Handle corrupted localStorage data gracefully
+      console.warn('Failed to load tasks from localStorage:', e);
+    }
+  }
 
   /**
    * Create a task list item element
@@ -33,6 +69,7 @@
     deleteBtn.addEventListener('click', function(e) {
       e.stopPropagation(); // Prevent triggering completion toggle
       li.remove();
+      saveTasks();
     });
     
     li.appendChild(textSpan);
@@ -41,6 +78,7 @@
     // Click handler to toggle completed state
     li.addEventListener('click', function() {
       li.classList.toggle('completed');
+      saveTasks();
     });
     
     return li;
@@ -59,6 +97,7 @@
     
     const taskElement = createTaskElement(text);
     taskList.appendChild(taskElement);
+    saveTasks();
     
     // Clear input and refocus for next task
     input.value = '';
@@ -70,4 +109,7 @@
     e.preventDefault();
     addTask();
   });
+
+  // Load tasks from localStorage on page load
+  loadTasks();
 })();
