@@ -243,6 +243,28 @@ h1 {
     border: 0;
 }
 
+/* Firework Particles */
+.firework-particle {
+    position: fixed;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    animation: firework-burst 0.8s ease-out forwards;
+}
+
+@keyframes firework-burst {
+    0% {
+        opacity: 1;
+        transform: translate(0, 0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--dx), var(--dy)) scale(0.3);
+    }
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
     body {

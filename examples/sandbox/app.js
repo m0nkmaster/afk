@@ -97,9 +97,18 @@
         }
         
         // Toggle complete status on click
-        li.addEventListener('click', function() {
+        li.addEventListener('click', function(e) {
+            var wasCompleted = li.classList.contains('completed');
             li.classList.toggle('completed');
             saveTasks();
+
+            // Trigger fireworks only when marking as complete
+            if (!wasCompleted) {
+                var rect = li.getBoundingClientRect();
+                var centreX = rect.left + rect.width / 2;
+                var centreY = rect.top + rect.height / 2;
+                createFireworks(centreX, centreY);
+            }
         });
         
         return li;
@@ -122,6 +131,45 @@
         // Clear the input field
         taskInput.value = '';
         taskInput.focus();
+    }
+
+    /**
+     * Creates a firework burst effect at the given position.
+     * @param {number} x - Centre X position
+     * @param {number} y - Centre Y position
+     */
+    function createFireworks(x, y) {
+        const colours = ['#ff6b6b', '#feca57', '#48dbfb', '#ff9ff3', '#54a0ff', '#5f27cd', '#00d2d3', '#1dd1a1'];
+        const particleCount = 20;
+
+        for (var i = 0; i < particleCount; i++) {
+            var particle = document.createElement('div');
+            particle.className = 'firework-particle';
+
+            // Random colour
+            particle.style.backgroundColor = colours[Math.floor(Math.random() * colours.length)];
+
+            // Position at burst centre
+            particle.style.left = x + 'px';
+            particle.style.top = y + 'px';
+
+            // Random direction and distance
+            var angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+            var distance = 50 + Math.random() * 80;
+            var dx = Math.cos(angle) * distance;
+            var dy = Math.sin(angle) * distance;
+
+            // Set CSS custom properties for animation end position
+            particle.style.setProperty('--dx', dx + 'px');
+            particle.style.setProperty('--dy', dy + 'px');
+
+            document.body.appendChild(particle);
+
+            // Remove particle after animation completes
+            particle.addEventListener('animationend', function() {
+                particle.remove();
+            });
+        }
     }
 
     /**
