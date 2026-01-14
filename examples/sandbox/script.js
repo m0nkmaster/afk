@@ -129,8 +129,98 @@ document.addEventListener('keydown', (event) => {
 // Generate initial palette on page load
 generatePalette();
 
+// Export functionality
+const exportBtn = document.getElementById('export-btn');
+const exportDropdown = document.getElementById('export-dropdown');
+
+/**
+ * Gets the current palette as an array of hex codes.
+ * @returns {string[]} Array of 5 hex colour codes
+ */
+function getCurrentPalette() {
+  const palette = [];
+  swatches.forEach((swatch) => {
+    const hexCode = swatch.querySelector('.hex-code').textContent;
+    palette.push(hexCode);
+  });
+  return palette;
+}
+
+/**
+ * Downloads a file with the given content.
+ * @param {string} content - The file content
+ * @param {string} filename - The filename to save as
+ * @param {string} mimeType - The MIME type of the file
+ */
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Exports the current palette as JSON.
+ */
+function exportAsJSON() {
+  const palette = getCurrentPalette();
+  const data = {
+    palette: palette,
+    exportedAt: new Date().toISOString()
+  };
+  const json = JSON.stringify(data, null, 2);
+  downloadFile(json, 'palette.json', 'application/json');
+}
+
+/**
+ * Exports the current palette as CSS variables.
+ */
+function exportAsCSS() {
+  const palette = getCurrentPalette();
+  const cssLines = [':root {'];
+  palette.forEach((colour, index) => {
+    cssLines.push(`  --colour-${index + 1}: ${colour};`);
+  });
+  cssLines.push('}');
+  const css = cssLines.join('\n');
+  downloadFile(css, 'palette.css', 'text/css');
+}
+
+// Toggle export dropdown
+exportBtn.addEventListener('click', (event) => {
+  event.stopPropagation();
+  exportDropdown.classList.toggle('open');
+});
+
+// Handle export format selection
+document.querySelectorAll('.export-option').forEach((option) => {
+  option.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const format = option.dataset.format;
+    if (format === 'json') {
+      exportAsJSON();
+    } else if (format === 'css') {
+      exportAsCSS();
+    }
+    exportDropdown.classList.remove('open');
+  });
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', () => {
+  exportDropdown.classList.remove('open');
+});
+
 // Expose to window for browser console access
 window.generateRandomColour = generateRandomColour;
 window.generatePalette = generatePalette;
 window.toggleLock = toggleLock;
 window.isLocked = isLocked;
+window.getCurrentPalette = getCurrentPalette;
+window.exportAsJSON = exportAsJSON;
+window.exportAsCSS = exportAsCSS;
