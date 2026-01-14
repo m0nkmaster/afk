@@ -126,7 +126,7 @@ The AI reads these files directly and updates them as it works.
 | `afk go 20` | Run 20 iterations |
 | `afk go -u` | Run until all tasks complete |
 | `afk go --init` | Re-run setup, then run |
-| `afk go -b feature-name` | Create feature branch first |
+| `afk go --fresh` | Clear session progress and start fresh |
 | `afk go TODO.md 5` | Use specific source, run 5 iterations |
 
 ### Task Management Commands
@@ -219,13 +219,11 @@ All config lives in `.afk/config.json`:
   },
   "git": {
     "autoCommit": true,
-    "autoBranch": false,
-    "branchPrefix": "afk/"
+    "commitMessageTemplate": "afk: {task_id} - {message}"
   },
   "archive": {
     "enabled": true,
-    "directory": ".afk/archive",
-    "onBranchChange": true
+    "directory": ".afk/archive"
   }
 }
 ```
@@ -384,18 +382,26 @@ afk go 20
 # Run until complete
 afk go -u
 
-# To start fresh, clear the session first
+# To start fresh, use the --fresh flag
+afk go --fresh
+
+# Or clear the session manually first
 afk archive clear -y
 afk go
 ```
 
-### Creating a Feature Branch
+### Working with Branches
+
+afk manages commits but not branches. Create your own branch first, then use afk:
 
 ```bash
-# Create branch and run
-afk go 10 -b my-feature
+# Create your feature branch
+git checkout -b my-feature
 
-# This creates: afk/my-feature
+# Run afk on this branch
+afk go 10
+
+# When done, raise a PR as usual
 ```
 
 ## Debugging

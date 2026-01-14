@@ -107,14 +107,13 @@ afk go                       # Run 10 iterations (default)
 afk go 20                    # Run 20 iterations
 afk go -u, --until-complete  # Run until all tasks complete
 afk go -n, --dry-run         # Show what would happen
-afk go -c, --continue        # Continue previous session
-afk go -b, --branch <name>   # Create/checkout feature branch
 afk go -t, --timeout <mins>  # Set timeout in minutes
 afk go TODO.md               # Use specific source file
 afk go TODO.md 5             # Source file + iteration count
 afk go --feedback <mode>     # tui | full | minimal | off
 afk go --no-mascot           # Disable ASCII mascot
 afk go --init                # Delete config and re-run setup
+afk go --fresh               # Clear session progress and start fresh
 ```
 
 #### First-Run Behaviour

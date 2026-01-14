@@ -107,7 +107,7 @@ src/
 │   ├── output_handler.rs # Console output
 │   └── quality_gates.rs  # Lint, test, type checks
 ├── git/
-│   └── mod.rs       # Git operations (branch, commit, archive)
+│   └── mod.rs       # Git operations (commit, archive)
 ├── feedback/
 │   ├── mod.rs       # Module exports
 │   ├── metrics.rs   # Iteration metrics collection
@@ -148,7 +148,7 @@ src/
 - **Runner**: Implements Ralph Wiggum pattern — spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
-- **Archiving**: Sessions archived on completion, branch change, or manually
+- **Archiving**: Sessions archived on completion or manually via `afk archive`
 
 ## Key Commands
 
@@ -156,10 +156,12 @@ src/
 afk go                 # Zero-config: auto-detect PRD/sources and run
 afk go 20              # Run 20 iterations
 afk go --init          # Re-run setup, then run
+afk go --fresh         # Clear session progress and start fresh
 afk status             # Show current status
 afk status -v          # Verbose status with learnings
 afk list               # List tasks from PRD
 afk task <id>          # Show task details
+afk sync               # Sync tasks from configured sources
 afk verify             # Run quality gates (lint, test, types)
 afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed

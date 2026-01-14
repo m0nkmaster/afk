@@ -41,7 +41,7 @@ src/
 │   ├── output_handler.rs # Console output
 │   └── quality_gates.rs  # Lint, test, type checks
 ├── git/             # Git integration
-│   └── mod.rs       # Branch, commit, archive operations
+│   └── mod.rs       # Commit and archive operations
 ├── feedback/        # User feedback
 │   ├── mod.rs       # Module exports
 │   ├── metrics.rs   # Iteration metrics collection
