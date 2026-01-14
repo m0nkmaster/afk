@@ -35,12 +35,15 @@ function applyColourToSwatch(swatch, colour) {
 }
 
 /**
- * Generates and applies random colours to all swatches.
+ * Generates and applies random colours to all unlocked swatches.
+ * Locked swatches retain their current colour.
  */
 function generatePalette() {
   swatches.forEach((swatch) => {
-    const colour = generateRandomColour();
-    applyColourToSwatch(swatch, colour);
+    if (!isLocked(swatch)) {
+      const colour = generateRandomColour();
+      applyColourToSwatch(swatch, colour);
+    }
   });
 }
 
@@ -66,6 +69,15 @@ swatches.forEach((swatch) => {
   swatch.addEventListener('click', () => {
     toggleLock(swatch);
   });
+});
+
+// Add keyboard handler for spacebar to regenerate palette
+document.addEventListener('keydown', (event) => {
+  if (event.code === 'Space') {
+    // Prevent default scrolling behaviour
+    event.preventDefault();
+    generatePalette();
+  }
 });
 
 // Generate initial palette on page load
