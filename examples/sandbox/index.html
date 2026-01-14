@@ -1,38 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Task List</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task List</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <main>
-        <header>
-            <h1>Task List</h1>
-            <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
-                ☀️
-            </button>
-        </header>
-        
-        <section class="task-input">
-            <label for="new-task" class="visually-hidden">New task</label>
-            <input 
-                type="text" 
-                id="new-task" 
-                placeholder="Add a new task..."
-                autocomplete="off"
-            >
-            <button type="button" id="add-task-btn">Add</button>
-        </section>
-        
-        <section class="task-list-container">
-            <ul id="task-list" aria-label="Tasks">
-                <!-- Tasks will be added here dynamically -->
-            </ul>
-        </section>
-    </main>
-    
-    <script src="app.js"></script>
+  <main class="container">
+    <header>
+      <h1>Task List</h1>
+    </header>
+
+    <form id="task-form" class="task-form" aria-label="Add new task">
+      <label for="task-input" class="visually-hidden">New task</label>
+      <input
+        type="text"
+        id="task-input"
+        name="task"
+        placeholder="Add a new task..."
+        autocomplete="off"
+        required
+      >
+      <button type="submit">Add</button>
+    </form>
+
+    <section aria-label="Task list">
+      <ul id="task-list" class="task-list" role="list">
+        <!-- Tasks will be added here dynamically -->
+      </ul>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
