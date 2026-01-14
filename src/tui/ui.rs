@@ -606,7 +606,10 @@ fn draw_session_complete(
         ]),
         Line::from(vec![
             Span::styled(format!("{:>label_width$}", "Duration:"), label_style),
-            Span::styled(format!(" {}", duration_str), Style::default().fg(Color::Blue)),
+            Span::styled(
+                format!(" {}", duration_str),
+                Style::default().fg(Color::Blue),
+            ),
         ]),
         Line::from(vec![
             Span::styled(format!("{:>label_width$}", "Reason:"), label_style),
