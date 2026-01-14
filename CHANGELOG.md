@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-01-14
+
+### Added
+
+- **Default iterations from config** — `afk go` now uses `config.limits.max_iterations` as default when no argument provided
+
+### Fixed
+
+- **Deduplicate file changes** — Parser now deduplicates file changes across absolute and relative paths
+
 ## [0.4.7] - 2026-01-14
 
 ### Changed
