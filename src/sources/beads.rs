@@ -183,10 +183,22 @@ fn parse_beads_text_output() -> Result<Vec<UserStory>, BeadsError> {
     let tasks: Vec<UserStory> = stdout
         .lines()
         .filter(|line| !line.trim().is_empty())
+        .filter(|line| !is_informational_message(line))
         .map(parse_text_line)
         .collect();
 
     Ok(tasks)
+}
+
+/// Check if a line is an informational message rather than a task.
+///
+/// Filters out messages like "✨ No open issues" that bd outputs when
+/// there are no tasks to display.
+fn is_informational_message(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.contains("no open issues")
+        || lower.contains("no issues")
+        || lower.contains("nothing to do")
 }
 
 /// Parse a single line from `bd ready` text output.
@@ -671,5 +683,21 @@ Acceptance Criteria:
         // When bd isn't installed, start should return false
         // This will depend on whether bd is installed on the test machine
         // The function is designed to return false gracefully on any error
+    }
+
+    #[test]
+    fn test_is_informational_message() {
+        // Should filter out "no issues" messages
+        assert!(is_informational_message("✨ No open issues"));
+        assert!(is_informational_message("No open issues"));
+        assert!(is_informational_message("  no issues  "));
+        assert!(is_informational_message("Nothing to do"));
+
+        // Should NOT filter out real tasks
+        assert!(!is_informational_message("ISSUE-123: Fix the bug"));
+        assert!(!is_informational_message(
+            "implement-feature: Add new feature"
+        ));
+        assert!(!is_informational_message("fix-issue-with-login"));
     }
 }

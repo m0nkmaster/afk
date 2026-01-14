@@ -777,8 +777,8 @@ impl StatusCommand {
         println!();
 
         // Task summary
-        let (pending, completed) = prd.get_story_counts();
-        let total = pending + completed;
+        let (completed, total) = prd.get_story_counts();
+        let pending = total - completed;
 
         println!("\x1b[1mTasks\x1b[0m");
         if total == 0 {
@@ -975,13 +975,12 @@ impl ListCommand {
         }
 
         // Print summary
-        let (pending, completed) = prd.get_story_counts();
+        let (completed, total) = prd.get_story_counts();
+        let pending = total - completed;
         println!();
         println!(
             "{} tasks ({} pending, {} complete)",
-            pending + completed,
-            pending,
-            completed
+            total, pending, completed
         );
     }
 }
