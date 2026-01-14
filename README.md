@@ -54,7 +54,7 @@ The UI should be clean and mobile-friendly.
 ### Step 2: Generate tasks
 
 ```bash
-afk prd import requirements.md
+afk import requirements.md
 ```
 
 This runs your AI CLI to analyse the PRD and break it down into small, AI-sized tasks. The output goes to `.afk/tasks.json`.
@@ -79,7 +79,7 @@ afk go 20                # Run 20 iterations
 afk go -u                # Run until all tasks complete
 ```
 
-**Note:** These expect task lists, not raw PRDs. Use `afk prd import` to parse requirements into tasks.
+**Note:** These expect task lists, not raw PRDs. Use `afk import` to parse requirements into tasks.
 
 ## 📦 Installation
 
@@ -134,11 +134,11 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk fail <id>` | Mark task failed |
 | `afk reset <id>` | Reset stuck task to pending |
 
-### PRD & Task Sources
+### Import & Task Sources
 
 | Command | Description |
 |---------|-------------|
-| `afk prd import <file>` | Import requirements doc into .afk/tasks.json |
+| `afk import <file>` | Import requirements doc into .afk/tasks.json |
 | `afk tasks show` | Show current task list |
 | `afk sync` | Sync from configured sources (alias: `afk tasks sync`) |
 | `afk source add beads` | Add beads as task source |

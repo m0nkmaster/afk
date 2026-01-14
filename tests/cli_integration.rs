@@ -291,26 +291,26 @@ fn test_tasks_sync_creates_tasks_file() {
 }
 
 #[test]
-fn test_prd_import_file_not_found() {
+fn test_import_file_not_found() {
     let temp = setup_project();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "import", "nonexistent.md"])
+        .args(["import", "nonexistent.md"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found").or(predicate::str::contains("No such file")));
 }
 
 #[test]
-fn test_prd_import_generates_prompt() {
+fn test_import_generates_prompt() {
     let temp = setup_project();
     let requirements = temp.path().join("requirements.md");
     fs::write(&requirements, "# My App\n\n- Feature 1\n- Feature 2").unwrap();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "import", "requirements.md", "-s"])
+        .args(["import", "requirements.md", "-s"])
         .assert()
         .success()
         .stdout(predicate::str::contains("My App").or(predicate::str::contains("Feature")));

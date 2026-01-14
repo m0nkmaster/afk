@@ -85,9 +85,14 @@ pub enum Commands {
     #[command(subcommand)]
     Source(SourceCommands),
 
-    /// Import product requirements documents.
-    #[command(subcommand)]
-    Prd(PrdCommands),
+    /// Import a requirements document into structured JSON tasks.
+    ///
+    /// Takes a product requirements document (markdown, text, etc.) and runs the
+    /// configured AI CLI to convert it into structured JSON format in .afk/tasks.json.
+    ///
+    /// By default, runs the AI CLI directly. Use --stdout, --copy, or --file
+    /// to output the prompt for manual use instead.
+    Import(ImportCommand),
 
     /// Manage the task list (.afk/tasks.json).
     #[command(subcommand)]
@@ -261,19 +266,6 @@ pub struct SourceRemoveCommand {
     pub index: usize,
 }
 
-/// Subcommands for PRD import.
-#[derive(Subcommand, Debug)]
-pub enum PrdCommands {
-    /// Import a requirements document into structured JSON tasks.
-    ///
-    /// Takes a product requirements document (markdown, text, etc.) and runs the
-    /// configured AI CLI to convert it into structured JSON format in .afk/tasks.json.
-    ///
-    /// By default, runs the AI CLI directly. Use --stdout, --copy, or --file
-    /// to output the prompt for manual use instead.
-    Import(PrdImportCommand),
-}
-
 /// Subcommands for task list management.
 #[derive(Subcommand, Debug)]
 pub enum TasksCommands {
@@ -289,9 +281,9 @@ pub enum TasksCommands {
     Show(TasksShowCommand),
 }
 
-/// Arguments for 'prd import' command.
+/// Arguments for 'import' command.
 #[derive(Args, Debug)]
-pub struct PrdImportCommand {
+pub struct ImportCommand {
     /// Input file to import.
     pub input_file: String,
 
@@ -517,7 +509,7 @@ impl GoCommand {
                     eprintln!();
                     eprintln!("Try one of:");
                     eprintln!("  afk go TODO.md           # Use a markdown file");
-                    eprintln!("  afk prd import spec.md   # Import a requirements doc");
+                    eprintln!("  afk import spec.md       # Import a requirements doc");
                     eprintln!("  afk source add beads     # Use beads issues");
                     std::process::exit(1);
                 }
@@ -750,7 +742,7 @@ impl InitCommand {
         if config.sources.is_empty() {
             println!("  1. Add a task source:");
             println!("     afk source add beads      # Use beads issues");
-            println!("     afk prd import spec.md    # Import a requirements doc");
+            println!("     afk import spec.md        # Import a requirements doc");
         } else {
             println!("  1. afk go   # Start working through tasks");
         }
@@ -925,7 +917,7 @@ impl ListCommand {
 
         if prd.user_stories.is_empty() {
             println!("No tasks found.");
-            println!("\x1b[2mRun `afk prd import <file>` to import tasks.\x1b[0m");
+            println!("\x1b[2mRun `afk import <file>` to import tasks.\x1b[0m");
             return;
         }
 
@@ -1104,10 +1096,10 @@ impl SourceRemoveCommand {
     }
 }
 
-impl PrdImportCommand {
-    /// Execute the prd import command.
+impl ImportCommand {
+    /// Execute the import command.
     pub fn execute(&self) {
-        match commands::prd::prd_import(
+        match commands::import::import(
             &self.input_file,
             &self.output,
             self.copy,
@@ -1126,7 +1118,7 @@ impl PrdImportCommand {
 impl TasksSyncCommand {
     /// Execute the tasks sync command.
     pub fn execute(&self) {
-        match commands::prd::tasks_sync() {
+        match commands::import::tasks_sync() {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("\x1b[31mError:\x1b[0m {e}");
@@ -1139,7 +1131,7 @@ impl TasksSyncCommand {
 impl TasksShowCommand {
     /// Execute the tasks show command.
     pub fn execute(&self) {
-        match commands::prd::tasks_show(self.pending) {
+        match commands::import::tasks_show(self.pending) {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("\x1b[31mError:\x1b[0m {e}");
@@ -1754,14 +1746,14 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_import_command() {
-        let cli = Cli::try_parse_from(["afk", "prd", "import", "requirements.md", "-c"]).unwrap();
+    fn test_import_command() {
+        let cli = Cli::try_parse_from(["afk", "import", "requirements.md", "-c"]).unwrap();
         match cli.command {
-            Some(Commands::Prd(PrdCommands::Import(cmd))) => {
+            Some(Commands::Import(cmd)) => {
                 assert_eq!(cmd.input_file, "requirements.md");
                 assert!(cmd.copy);
             }
-            _ => panic!("Expected Prd Import command"),
+            _ => panic!("Expected Import command"),
         }
     }
 

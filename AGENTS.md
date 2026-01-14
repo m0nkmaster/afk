@@ -185,7 +185,7 @@ afk archive list       # List archived sessions
 The recommended workflow for new projects:
 
 ```bash
-afk prd import requirements.md  # Creates .afk/tasks.json
+afk import requirements.md  # Creates .afk/tasks.json
 afk go                          # Starts working through tasks
 ```
 

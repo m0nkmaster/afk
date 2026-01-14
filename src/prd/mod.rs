@@ -192,7 +192,7 @@ impl PrdDocument {
     ///
     /// Supports multiple key names for stories:
     /// - `userStories` (canonical)
-    /// - `tasks` (afk prd parse output)
+    /// - `tasks` (afk import output)
     /// - `items` (legacy)
     pub fn from_json_value(data: &serde_json::Value) -> Self {
         let project = data

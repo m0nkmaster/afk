@@ -38,7 +38,7 @@ No change to these commands.
 - `afk list [--limit N]` — list tasks with optional limit
 - `afk task <id>` — show details of a specific task
 
-### 5. Rename `prd parse` to `prd import` ✅
+### 5. `prd` subcommand → `import` ✅
 
 Clearer name. No backwards compatibility needed.
 
@@ -317,15 +317,15 @@ afk init -y, --yes       # Accept defaults without prompting
 
 ---
 
-### `afk prd import`
+### `afk import`
 
 Import a requirements document and convert to structured JSON tasks.
 
 ```bash
-afk prd import requirements.md           # Parse and create .afk/tasks.json
-afk prd import PRD.md -o tasks.json      # Custom output path
-afk prd import spec.md --copy            # Copy prompt to clipboard (manual mode)
-afk prd import spec.md --stdout          # Print prompt to stdout (manual mode)
+afk import requirements.md           # Parse and create .afk/tasks.json
+afk import PRD.md -o tasks.json      # Custom output path
+afk import spec.md --copy            # Copy prompt to clipboard (manual mode)
+afk import spec.md --stdout          # Print prompt to stdout (manual mode)
 ```
 
 By default, runs the AI CLI to perform the conversion. Use `--copy` or `--stdout` to get the prompt for manual use.
@@ -375,7 +375,7 @@ These commands remain as currently implemented:
 
 ### Rename Commands
 - [x] `next` → `prompt`
-- [x] `prd parse` → `prd import`
+- [x] `prd` subcommand → `import` top-level command
 
 ### Update Documentation
 - [x] Update README.md

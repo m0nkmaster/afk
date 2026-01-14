@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `afk done <id>` — Mark task complete
 - `afk fail <id>` — Mark task failed
 - `afk reset <id>` — Reset stuck task
-- `afk prd import <file>` — Import requirements into JSON tasks
+- `afk import <file>` — Import requirements into JSON tasks
 - `afk sync` — Sync from all sources
 - `afk tasks show` — Display current tasks
 - `afk source add|list|remove` — Manage task sources

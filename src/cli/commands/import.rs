@@ -1,7 +1,7 @@
-//! PRD and tasks command implementations.
+//! Import and tasks command implementations.
 //!
 //! This module implements:
-//! - `afk prd import` - Import a requirements document into tasks.json
+//! - `afk import` - Import a requirements document into tasks.json
 //! - `afk tasks sync` - Sync tasks from configured sources
 //! - `afk tasks show` - Display current task list
 
@@ -14,19 +14,19 @@ use crate::cli::output::{get_effective_mode, output_prompt};
 use crate::config::AfkConfig;
 use crate::prd::{generate_prd_prompt, load_prd_file, sync_prd_with_root, PrdDocument, PrdError};
 
-/// Result type for PRD command operations.
-pub type PrdCommandResult = Result<(), PrdCommandError>;
+/// Result type for import command operations.
+pub type ImportCommandResult = Result<(), ImportCommandError>;
 
-/// Error type for PRD command operations.
+/// Error type for import command operations.
 #[derive(Debug, thiserror::Error)]
-pub enum PrdCommandError {
-    #[error("PRD error: {0}")]
-    PrdError(#[from] PrdError),
+pub enum ImportCommandError {
+    #[error("Import error: {0}")]
+    ImportError(#[from] PrdError),
     #[error("Config error: {0}")]
     ConfigError(#[from] crate::config::ConfigError),
-    #[error("No tasks found. Run `afk tasks sync` or `afk prd import` first.")]
+    #[error("No tasks found. Run `afk tasks sync` or `afk import` first.")]
     NoTasks,
-    #[error("PRD parse error: {0}")]
+    #[error("Parse error: {0}")]
     ParseError(#[from] crate::prd::PrdParseError),
     #[error("Output error: {0}")]
     OutputError(#[from] crate::cli::output::OutputError),
@@ -34,7 +34,7 @@ pub enum PrdCommandError {
     FileNotFound(String),
 }
 
-/// Import a PRD file into structured JSON.
+/// Import a requirements file into structured JSON.
 ///
 /// Takes a product requirements document (markdown, text, etc.) and generates
 /// an AI prompt to convert it into the structured JSON format.
@@ -50,31 +50,31 @@ pub enum PrdCommandError {
 /// # Returns
 ///
 /// Ok(()) on success, or an error if import fails.
-pub fn prd_import(
+pub fn import(
     input_file: &str,
     output: &str,
     copy: bool,
     file: bool,
     stdout: bool,
-) -> PrdCommandResult {
-    prd_import_impl(input_file, output, copy, file, stdout, None)
+) -> ImportCommandResult {
+    import_impl(input_file, output, copy, file, stdout, None)
 }
 
-/// Internal implementation of prd_import with optional config path for testing.
-pub fn prd_import_impl(
+/// Internal implementation of import with optional config path for testing.
+pub fn import_impl(
     input_file: &str,
     output: &str,
     copy: bool,
     file: bool,
     stdout: bool,
     config_path: Option<&Path>,
-) -> PrdCommandResult {
+) -> ImportCommandResult {
     let mut config = AfkConfig::load(config_path)?;
 
     // Load the input file
     let input_path = Path::new(input_file);
     if !input_path.exists() {
-        return Err(PrdCommandError::FileNotFound(input_file.to_string()));
+        return Err(ImportCommandError::FileNotFound(input_file.to_string()));
     }
 
     let prd_content = load_prd_file(input_path)?;
@@ -100,20 +100,20 @@ pub fn prd_import_impl(
     if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
         config.ai_cli = ai_cli;
     } else {
-        return Err(PrdCommandError::NoTasks); // No AI CLI available
+        return Err(ImportCommandError::NoTasks); // No AI CLI available
     }
 
     // Run the AI CLI with the prompt
-    run_ai_cli_for_prd(&config, &prompt, output)
+    run_ai_cli_for_import(&config, &prompt, output)
 }
 
-/// Run the AI CLI with the PRD parsing prompt.
-fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdCommandResult {
+/// Run the AI CLI with the import prompt.
+fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> ImportCommandResult {
     let command = &config.ai_cli.command;
     let args: Vec<&str> = config.ai_cli.args.iter().map(|s| s.as_str()).collect();
 
     println!(
-        "\x1b[1mImporting PRD with {}...\x1b[0m",
+        "\x1b[1mImporting requirements with {}...\x1b[0m",
         config.ai_cli.command
     );
     println!();
@@ -133,9 +133,9 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
             if e.kind() == std::io::ErrorKind::NotFound {
                 eprintln!("\x1b[31mError:\x1b[0m AI CLI not found: {}", command);
                 eprintln!("\x1b[2mIs it installed and in your PATH?\x1b[0m");
-                return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
+                return Err(ImportCommandError::ImportError(PrdError::ReadError(e)));
             }
-            return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
+            return Err(ImportCommandError::ImportError(PrdError::ReadError(e)));
         }
     };
 
@@ -161,13 +161,13 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
             if !status.success() {
                 let exit_code = status.code().unwrap_or(-1);
                 eprintln!("\x1b[31mError:\x1b[0m AI CLI exited with code {exit_code}");
-                return Err(PrdCommandError::PrdError(PrdError::ReadError(
+                return Err(ImportCommandError::ImportError(PrdError::ReadError(
                     std::io::Error::other(format!("AI CLI exited with code {exit_code}")),
                 )));
             }
         }
         Err(e) => {
-            return Err(PrdCommandError::PrdError(PrdError::ReadError(e)));
+            return Err(ImportCommandError::ImportError(PrdError::ReadError(e)));
         }
     }
 
@@ -175,7 +175,7 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
     let output_path = Path::new(output);
     if output_path.exists() {
         println!();
-        println!("\x1b[32m✓\x1b[0m PRD imported successfully");
+        println!("\x1b[32m✓\x1b[0m Requirements imported successfully");
         println!("  Output: \x1b[36m{output}\x1b[0m");
         println!();
         println!("\x1b[2mStart working on tasks with:\x1b[0m");
@@ -197,12 +197,12 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
 /// # Returns
 ///
 /// Ok(()) on success, or an error if sync fails.
-pub fn tasks_sync() -> PrdCommandResult {
+pub fn tasks_sync() -> ImportCommandResult {
     tasks_sync_impl(None, None)
 }
 
 /// Internal implementation of tasks_sync with optional paths for testing.
-pub fn tasks_sync_impl(config_path: Option<&Path>, root: Option<&Path>) -> PrdCommandResult {
+pub fn tasks_sync_impl(config_path: Option<&Path>, root: Option<&Path>) -> ImportCommandResult {
     let config = AfkConfig::load(config_path)?;
 
     let prd = sync_prd_with_root(&config, None, root)?;
@@ -237,19 +237,19 @@ pub fn tasks_sync_impl(config_path: Option<&Path>, root: Option<&Path>) -> PrdCo
 /// # Returns
 ///
 /// Ok(()) on success, or an error if tasks cannot be loaded.
-pub fn tasks_show(pending_only: bool) -> PrdCommandResult {
+pub fn tasks_show(pending_only: bool) -> ImportCommandResult {
     tasks_show_impl(pending_only, None)
 }
 
 /// Internal implementation of tasks_show with optional path for testing.
-pub fn tasks_show_impl(pending_only: bool, tasks_path: Option<&Path>) -> PrdCommandResult {
+pub fn tasks_show_impl(pending_only: bool, tasks_path: Option<&Path>) -> ImportCommandResult {
     let prd = PrdDocument::load(tasks_path)?;
 
     if prd.user_stories.is_empty() {
         println!("\x1b[2mNo tasks found.\x1b[0m");
         println!();
         println!("Run \x1b[36mafk tasks sync\x1b[0m to aggregate from sources,");
-        println!("or \x1b[36mafk prd import <file>\x1b[0m to import a requirements doc.");
+        println!("or \x1b[36mafk import <file>\x1b[0m to import a requirements doc.");
         return Ok(());
     }
 
@@ -584,11 +584,11 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_command_error_display() {
-        let err = PrdCommandError::NoTasks;
+    fn test_import_command_error_display() {
+        let err = ImportCommandError::NoTasks;
         assert_eq!(
             err.to_string(),
-            "No tasks found. Run `afk tasks sync` or `afk prd import` first."
+            "No tasks found. Run `afk tasks sync` or `afk import` first."
         );
     }
 
@@ -659,16 +659,16 @@ mod tests {
         assert!(prd.user_stories[0].passes);
     }
 
-    // Tests for prd_import command
+    // Tests for import command
 
     #[test]
-    fn test_prd_import_file_not_found() {
+    fn test_import_file_not_found() {
         let (_temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_import_impl(
+        let result = import_impl(
             "/nonexistent/file.md",
             ".afk/tasks.json",
             false,
@@ -679,7 +679,7 @@ mod tests {
 
         assert!(result.is_err());
         match result.unwrap_err() {
-            PrdCommandError::FileNotFound(path) => {
+            ImportCommandError::FileNotFound(path) => {
                 assert!(path.contains("nonexistent"));
             }
             _ => panic!("Expected FileNotFound error"),
@@ -687,7 +687,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_import_generates_prompt_to_stdout() {
+    fn test_import_generates_prompt_to_stdout() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -699,7 +699,7 @@ mod tests {
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_import_impl(
+        let result = import_impl(
             input_file.to_str().unwrap(),
             ".afk/tasks.json",
             false,
@@ -713,7 +713,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_import_custom_output_path() {
+    fn test_import_custom_output_path() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -725,7 +725,7 @@ mod tests {
         config.save(Some(&config_path)).unwrap();
 
         // Use custom output path
-        let result = prd_import_impl(
+        let result = import_impl(
             input_file.to_str().unwrap(),
             "custom/output/tasks.json",
             false,
@@ -738,13 +738,13 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_command_error_variants() {
+    fn test_import_command_error_variants() {
         // Test error display for all variants
-        let file_err = PrdCommandError::FileNotFound("test.md".to_string());
+        let file_err = ImportCommandError::FileNotFound("test.md".to_string());
         assert!(file_err.to_string().contains("File not found"));
         assert!(file_err.to_string().contains("test.md"));
 
-        let no_tasks = PrdCommandError::NoTasks;
+        let no_tasks = ImportCommandError::NoTasks;
         assert!(no_tasks.to_string().contains("No tasks found"));
     }
 
@@ -768,8 +768,8 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_import_without_output_flags_tries_ai_cli() {
-        // When no output flags are provided, prd_import should try to run the AI CLI.
+    fn test_import_without_output_flags_tries_ai_cli() {
+        // When no output flags are provided, import should try to run the AI CLI.
         // Since the AI CLI won't exist in the test environment, it will fail,
         // but we can verify it doesn't use the prompt output path.
         let (temp, afk_dir) = setup_temp_dir();
@@ -791,7 +791,7 @@ mod tests {
         config.save(Some(&config_path)).unwrap();
 
         // No output flags - should try to run AI CLI and fail
-        let result = prd_import_impl(
+        let result = import_impl(
             input_file.to_str().unwrap(),
             ".afk/tasks.json",
             false, // copy
@@ -805,7 +805,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_import_with_copy_flag_outputs_prompt() {
+    fn test_import_with_copy_flag_outputs_prompt() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -818,7 +818,7 @@ mod tests {
 
         // With copy flag, should output prompt (not run AI CLI)
         // This will fail due to clipboard access in CI, but that's expected
-        let result = prd_import_impl(
+        let result = import_impl(
             input_file.to_str().unwrap(),
             ".afk/tasks.json",
             true, // copy - output flag set

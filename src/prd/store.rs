@@ -20,7 +20,7 @@ use crate::sources::aggregate_tasks;
 /// Existing completion status (passes: true) is preserved for matching IDs.
 ///
 /// If no sources are configured but .afk/tasks.json exists with tasks,
-/// it's used directly as the source of truth (created by afk prd import
+/// it's used directly as the source of truth (created by afk import
 /// or placed there manually).
 ///
 /// # Arguments
@@ -51,7 +51,7 @@ pub fn sync_prd_with_root(
     let existing_prd = PrdDocument::load(prd_path.as_deref())?;
 
     // If no sources configured but tasks.json exists with tasks, use it directly.
-    // This handles the case where user created .afk/tasks.json via afk prd import
+    // This handles the case where user created .afk/tasks.json via afk import
     // or placed it there manually — we don't want to overwrite it.
     if config.sources.is_empty() && !existing_prd.user_stories.is_empty() {
         return Ok(existing_prd);

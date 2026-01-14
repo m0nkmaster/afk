@@ -20,7 +20,7 @@ Complete reference for **afk** — autonomous AI coding loops, Ralph Wiggum styl
 
 ```bash
 # Import a requirements document and start working
-afk prd import requirements.md   # Creates .afk/tasks.json
+afk import requirements.md   # Creates .afk/tasks.json
 afk go                           # Runs the loop (auto-detects everything)
 ```
 
@@ -168,9 +168,9 @@ The AI reads these files directly and updates them as it works.
 
 | Command | Description |
 |---------|-------------|
-| `afk prd import requirements.md` | Import requirements into .afk/tasks.json |
-| `afk prd import PRD.md --copy` | Copy prompt to clipboard |
-| `afk prd import PRD.md -o custom.json` | Custom output path |
+| `afk import requirements.md` | Import requirements into .afk/tasks.json |
+| `afk import PRD.md --copy` | Copy prompt to clipboard |
+| `afk import PRD.md -o custom.json` | Custom output path |
 | `afk sync` | Sync from all sources (alias: `afk tasks sync`) |
 | `afk tasks sync` | Sync from all sources |
 | `afk tasks show` | Show current task list |
@@ -354,7 +354,7 @@ cat > requirements.md << 'EOF'
 EOF
 
 # 2. Import into structured tasks
-afk prd import requirements.md
+afk import requirements.md
 
 # 3. Start the autonomous loop
 afk go
@@ -441,7 +441,7 @@ cargo clippy
 cargo test
 ```
 
-**Context overflow**: Tasks are too large. Split them via `afk prd import`.
+**Context overflow**: Tasks are too large. Split them via `afk import`.
 
 ### Inspect Files Directly
 
