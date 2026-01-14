@@ -76,4 +76,15 @@ body {
   cursor: pointer;
   color: #1a1a1a;
   letter-spacing: 0.05em;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.hex-code:hover {
+  color: #0066cc;
+}
+
+/* Copy feedback state */
+.hex-code.copied {
+  color: #22c55e;
+  transform: scale(1.05);
 }

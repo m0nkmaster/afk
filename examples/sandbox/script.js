@@ -66,8 +66,54 @@ function isLocked(swatch) {
 
 // Add click handlers to toggle lock state
 swatches.forEach((swatch) => {
-  swatch.addEventListener('click', () => {
+  swatch.addEventListener('click', (event) => {
+    // Don't toggle lock if hex code was clicked
+    if (event.target.classList.contains('hex-code')) {
+      return;
+    }
     toggleLock(swatch);
+  });
+});
+
+/**
+ * Copies text to the system clipboard.
+ * @param {string} text - The text to copy
+ * @returns {Promise<boolean>} True if copy succeeded
+ */
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    console.error('Failed to copy to clipboard:', err);
+    return false;
+  }
+}
+
+/**
+ * Shows copy feedback on a hex code element.
+ * @param {HTMLElement} hexCodeElement - The hex code element
+ */
+function showCopyFeedback(hexCodeElement) {
+  const originalText = hexCodeElement.textContent;
+  hexCodeElement.textContent = 'Copied!';
+  hexCodeElement.classList.add('copied');
+  
+  setTimeout(() => {
+    hexCodeElement.textContent = originalText;
+    hexCodeElement.classList.remove('copied');
+  }, 1500);
+}
+
+// Add click handlers to hex codes for copy functionality
+document.querySelectorAll('.hex-code').forEach((hexCode) => {
+  hexCode.addEventListener('click', async (event) => {
+    event.stopPropagation(); // Prevent swatch lock toggle
+    const text = hexCode.textContent;
+    const success = await copyToClipboard(text);
+    if (success) {
+      showCopyFeedback(hexCode);
+    }
   });
 });
 
