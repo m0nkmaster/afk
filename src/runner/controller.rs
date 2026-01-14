@@ -881,6 +881,10 @@ fn run_iteration_with_tui(
                                     // Skip these
                                 }
                             }
+                        } else {
+                            // Parsing failed - fall back to raw line display
+                            // (CLI may not support stream-json)
+                            let _ = tx.send(TuiEvent::OutputLine(line.clone()));
                         }
                     } else {
                         // Plain text mode: send line as-is

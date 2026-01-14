@@ -272,8 +272,15 @@ impl IterationRunner {
                         // Parse and display based on output format
                         if self.stream_parser.is_some() {
                             // NDJSON mode: parse and convert to display text
-                            if let Some(display) = self.process_output_line(&line) {
-                                self.output.stream_line(&format!("{display}\n"));
+                            // Falls back to raw line if parsing fails (CLI doesn't support stream-json)
+                            match self.process_output_line(&line) {
+                                Some(display) => {
+                                    self.output.stream_line(&format!("{display}\n"));
+                                }
+                                None => {
+                                    // Parsing failed - display raw line as fallback
+                                    self.output.stream_line(&format!("{line}\n"));
+                                }
                             }
                         } else {
                             // Plain text mode: display as-is
