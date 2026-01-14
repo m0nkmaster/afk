@@ -14,13 +14,15 @@ function createCards() {
     cards.push({
       id: index * 2,
       symbol: symbol,
-      isFlipped: false
+      isFlipped: false,
+      isMatched: false
     });
     // Second card of the pair
     cards.push({
       id: index * 2 + 1,
       symbol: symbol,
-      isFlipped: false
+      isFlipped: false,
+      isMatched: false
     });
   });
   
@@ -63,6 +65,11 @@ function renderCards() {
       cardElement.classList.add('flipped');
     }
     
+    // Add matched class if card is matched
+    if (card.isMatched) {
+      cardElement.classList.add('matched');
+    }
+    
     // Create card face (shows symbol when flipped)
     const cardFace = document.createElement('span');
     cardFace.className = 'card-face';
@@ -80,17 +87,58 @@ function renderCards() {
 function handleCardClick(cardId) {
   const card = gameState.cards.find(c => c.id === cardId);
   
-  // Ignore clicks on already flipped cards
-  if (card.isFlipped) {
+  // Ignore clicks on already flipped or matched cards
+  if (card.isFlipped || card.isMatched) {
     return;
   }
   
   // Flip the card
   card.isFlipped = true;
+  gameState.flippedCards.push(card);
   
   // Update the DOM
   const cardElement = document.querySelector(`[data-id="${cardId}"]`);
   cardElement.classList.add('flipped');
+  
+  // Check for match when two cards are flipped
+  if (gameState.flippedCards.length === 2) {
+    checkForMatch();
+  }
+}
+
+// Check if the two flipped cards are a match
+function checkForMatch() {
+  const [firstCard, secondCard] = gameState.flippedCards;
+  
+  if (firstCard.symbol === secondCard.symbol) {
+    // Match found - mark cards as matched
+    handleMatch(firstCard, secondCard);
+  } else {
+    // No match - will be handled by non-match-flip-back story
+    // For now, just clear flipped cards
+    gameState.flippedCards = [];
+  }
+}
+
+// Handle a successful match
+function handleMatch(firstCard, secondCard) {
+  // Mark cards as matched
+  firstCard.isMatched = true;
+  secondCard.isMatched = true;
+  
+  // Update the DOM - add matched class
+  const firstElement = document.querySelector(`[data-id="${firstCard.id}"]`);
+  const secondElement = document.querySelector(`[data-id="${secondCard.id}"]`);
+  firstElement.classList.add('matched');
+  secondElement.classList.add('matched');
+  
+  // Increment matched pairs count
+  gameState.matchedPairs++;
+  
+  // Clear the flipped cards array
+  gameState.flippedCards = [];
+  
+  console.log(`Match found! Total pairs: ${gameState.matchedPairs}/8`);
 }
 
 // Reset game to initial state with shuffled cards

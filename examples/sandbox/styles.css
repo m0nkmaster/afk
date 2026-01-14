@@ -158,6 +158,25 @@ h1 {
   border-color: #4ecdc4;
 }
 
+/* Matched card state - permanently revealed */
+.card.matched {
+  background: linear-gradient(135deg, #1a4a3a 0%, #0f3a2a 100%);
+  border-color: #4ecdc4;
+  cursor: default;
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 0 25px rgba(78, 205, 196, 0.2);
+}
+
+/* Remove hover effect on matched cards */
+.card.matched:hover {
+  transform: none;
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 0 25px rgba(78, 205, 196, 0.2);
+  border-color: #4ecdc4;
+}
+
 /* Responsive adjustments */
 @media (max-width: 480px) {
   .game-board {
