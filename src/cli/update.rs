@@ -17,7 +17,7 @@ const GITHUB_REPO: &str = "m0nkmaster/afk";
 /// GitHub API URL for releases.
 const GITHUB_API_URL: &str = "https://api.github.com/repos";
 
-/// Current version with build timestamp.
+/// Current version from Cargo.toml.
 const CURRENT_VERSION: &str = crate::VERSION;
 
 /// GitHub release asset information.
@@ -147,14 +147,12 @@ fn is_newer_version(current: &str, new: &str) -> bool {
     for i in 0..3 {
         let current_num: u32 = current_parts
             .get(i)
-            .and_then(|s| s.split('-').next())
-            .and_then(|s| s.split('+').next()) // Strip build metadata
+            .and_then(|s| s.split('-').next()) // Strip prerelease suffix
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
         let new_num: u32 = new_parts
             .get(i)
-            .and_then(|s| s.split('-').next())
-            .and_then(|s| s.split('+').next()) // Strip build metadata
+            .and_then(|s| s.split('-').next()) // Strip prerelease suffix
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
@@ -388,19 +386,6 @@ mod tests {
         assert!(is_newer_version("0.3.2", "0.4.0"));
         assert!(is_newer_version("0.3.2", "0.3.3"));
         assert!(!is_newer_version("1.0.0", "0.9.9"));
-    }
-
-    #[test]
-    fn test_is_newer_version_with_build_metadata() {
-        // Build metadata (+timestamp) should be ignored in comparison
-        assert!(!is_newer_version("1.0.0+20250114", "1.0.0"));
-        assert!(!is_newer_version("0.4.0+20250114123456", "0.4.0"));
-        assert!(!is_newer_version("0.4.1+20250114123456", "0.4.1"));
-        // Still detect actual updates
-        assert!(is_newer_version("0.4.0+20250114123456", "0.4.1"));
-        assert!(is_newer_version("0.4.0+20250114123456", "0.5.0"));
-        // Local is newer than remote (no update needed)
-        assert!(!is_newer_version("0.4.1+20250114123456", "0.4.0"));
     }
 
     #[test]

@@ -4,10 +4,9 @@
 //! implementing the Ralph Wiggum pattern for autonomous AI coding.
 //!
 //! See AGENTS.md for project conventions and architecture overview.
-//!
 
-// Include the generated version string
-include!(concat!(env!("OUT_DIR"), "/version.rs"));
+/// Version string from Cargo.toml.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Module declarations - to be implemented in future stories
 pub mod bootstrap;
