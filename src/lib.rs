@@ -3,6 +3,8 @@
 //! This library provides the core functionality for the afk CLI tool,
 //! implementing the Ralph Wiggum pattern for autonomous AI coding.
 //!
+//! See AGENTS.md for project conventions and architecture overview.
+//!
 
 // Include the generated version string
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
