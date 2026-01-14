@@ -90,9 +90,9 @@ pub fn generate_prompt_with_root(
     let progress_path = root.map(|r| r.join(".afk/progress.json"));
     let mut progress = SessionProgress::load(progress_path.as_deref())?;
 
-    // Load PRD
-    let prd_path = root.map(|r| r.join(".afk/prd.json"));
-    let prd = PrdDocument::load(prd_path.as_deref())?;
+    // Load tasks
+    let tasks_path = root.map(|r| r.join(".afk/tasks.json"));
+    let prd = PrdDocument::load(tasks_path.as_deref())?;
 
     // Calculate counts
     let pending_stories = prd.get_pending_stories();
@@ -184,15 +184,15 @@ mod tests {
         fs::create_dir_all(&afk_dir).unwrap();
 
         let progress_path = afk_dir.join("progress.json");
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
-        (progress_path, prd_path)
+        (progress_path, tasks_path)
     }
 
     #[test]
     fn test_generate_prompt_basic() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         // Create initial progress
         let progress = SessionProgress::new();
@@ -220,7 +220,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_increments_iteration() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         // Create initial progress with 5 iterations
         let mut progress = SessionProgress::new();
@@ -248,7 +248,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_limit_override() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -274,7 +274,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result =
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_bootstrap() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -295,7 +295,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, true, None, Some(temp.path())).unwrap();
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_without_bootstrap() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -316,7 +316,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_all_complete() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -348,7 +348,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -363,14 +363,14 @@ mod tests {
     #[test]
     fn test_generate_prompt_empty_prd() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
 
         // Empty PRD (no stories)
         let prd = PrdDocument::default();
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -383,7 +383,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_feedback_loops() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -392,7 +392,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig {
             feedback_loops: FeedbackLoopsConfig {
@@ -413,7 +413,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_no_feedback_loops() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -422,7 +422,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -433,7 +433,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_custom_feedback_loops() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -442,7 +442,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let mut custom = HashMap::new();
         custom.insert("format".to_string(), "cargo fmt --check".to_string());
@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_context_files() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -474,7 +474,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig {
             prompt: PromptConfig {
@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_custom_instructions() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -502,7 +502,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig {
             prompt: PromptConfig {
@@ -524,7 +524,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_custom_limits() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -533,7 +533,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig {
             limits: LimitsConfig {
@@ -551,7 +551,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_with_custom_template() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -560,7 +560,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         // Create custom template
         let template_path = temp.path().join(".afk/custom-prompt.txt");
@@ -587,7 +587,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_missing_prd() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, _prd_path) = setup_test_env(&temp);
+        let (progress_path, _tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -607,7 +607,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         // Don't create progress file - it should create a new one
 
@@ -615,7 +615,7 @@ mod tests {
             user_stories: vec![UserStory::new("story-1", "Test Story")],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -627,7 +627,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_stories_sorted_by_priority() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -656,7 +656,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
@@ -670,7 +670,7 @@ mod tests {
     #[test]
     fn test_generate_prompt_only_pending_stories_in_next() {
         let temp = TempDir::new().unwrap();
-        let (progress_path, prd_path) = setup_test_env(&temp);
+        let (progress_path, tasks_path) = setup_test_env(&temp);
 
         let progress = SessionProgress::new();
         progress.save(Some(&progress_path)).unwrap();
@@ -693,7 +693,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();

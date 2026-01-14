@@ -19,8 +19,8 @@ Complete reference for **afk** — autonomous AI coding loops, Ralph Wiggum styl
 ### Zero-Config (Recommended)
 
 ```bash
-# Parse a requirements document and start working
-afk prd parse requirements.md    # Creates .afk/prd.json
+# Import a requirements document and start working
+afk prd import requirements.md   # Creates .afk/tasks.json
 afk go                           # Runs the loop (auto-detects everything)
 ```
 
@@ -29,18 +29,18 @@ afk go                           # Runs the loop (auto-detects everything)
 ```bash
 afk init                         # Auto-detect project settings
 afk source add beads             # Add task source
-afk run 10                       # Run 10 iterations
+afk go 10                        # Run 10 iterations
 ```
 
 ### How `afk go` Works
 
 `afk go` is the zero-config entry point:
 
-1. **If `.afk/prd.json` exists with tasks** → uses it directly as the source of truth
-2. **If no PRD but sources detected** (TODO.md, beads, etc.) → syncs from those
+1. **If `.afk/tasks.json` exists with tasks** → uses it directly as the source of truth
+2. **If no tasks but sources detected** (TODO.md, beads, etc.) → syncs from those
 3. **If nothing found** → shows helpful error with next steps
 
-This means you can just drop a `prd.json` in `.afk/` and run `afk go` — no configuration needed.
+This means you can just drop a `tasks.json` in `.afk/` and run `afk go` — no configuration needed.
 
 ## Core Concepts
 
@@ -125,30 +125,31 @@ The AI reads these files directly and updates them as it works.
 | `afk go` | Zero-config: auto-detect and run 10 iterations |
 | `afk go 20` | Run 20 iterations |
 | `afk go -u` | Run until all tasks complete |
+| `afk go --init` | Re-run setup, then run |
+| `afk go -b feature-name` | Create feature branch first |
 | `afk go TODO.md 5` | Use specific source, run 5 iterations |
-| `afk start [N]` | Init if needed + run N iterations (default: 10) |
-| `afk run [N]` | Run N iterations with configured AI CLI (default: 5) |
-| `afk run --until-complete` | Run until all tasks done |
-| `afk run -b feature-name` | Create feature branch first |
-| `afk resume [N]` | Continue from last session without archiving |
 
 ### Task Management Commands
 
 | Command | Description |
 |---------|-------------|
+| `afk list` | List tasks from current PRD |
+| `afk list -p` | Show only pending tasks |
+| `afk list -l 10` | Limit to 10 tasks |
+| `afk task <id>` | Show details of a specific task |
 | `afk done <task-id>` | Mark task complete |
 | `afk done <id> -m "msg"` | Mark complete with message |
 | `afk fail <task-id>` | Mark task failed |
 | `afk reset <task-id>` | Reset stuck task to pending |
 
-### Debugging Commands
+### Status and Debugging Commands
 
 | Command | Description |
 |---------|-------------|
-| `afk status` | Show configuration |
-| `afk explain` | Show current loop state |
-| `afk explain -v` | Verbose: include learnings and failures |
-| `afk next` | Preview next prompt (without running) |
+| `afk status` | Show current status and tasks |
+| `afk status -v` | Verbose: include learnings and session details |
+| `afk prompt` | Preview next prompt (without running) |
+| `afk prompt -c` | Copy prompt to clipboard |
 | `afk verify` | Run quality gates |
 | `afk verify -v` | Show full output from failed gates |
 
@@ -157,22 +158,22 @@ The AI reads these files directly and updates them as it works.
 | Command | Description |
 |---------|-------------|
 | `afk source add beads` | Add beads issue tracker |
-| `afk source add json prd.json` | Add JSON PRD file |
+| `afk source add json tasks.json` | Add JSON tasks file |
 | `afk source add markdown TODO.md` | Add markdown checklist |
 | `afk source add github` | Add GitHub issues |
 | `afk source list` | List configured sources |
 | `afk source remove 1` | Remove source by index |
 
-### PRD Commands
+### PRD & Tasks Commands
 
 | Command | Description |
 |---------|-------------|
-| `afk prd parse requirements.md` | Generate parsing prompt |
-| `afk prd parse PRD.md --copy` | Copy prompt to clipboard |
-| `afk prd parse PRD.md -o tasks.json` | Custom output path |
-| `afk prd sync` | Sync from all sources |
-| `afk prd show` | Show current PRD state |
-| `afk prd show --pending` | Show only pending stories |
+| `afk prd import requirements.md` | Import requirements into .afk/tasks.json |
+| `afk prd import PRD.md --copy` | Copy prompt to clipboard |
+| `afk prd import PRD.md -o custom.json` | Custom output path |
+| `afk tasks sync` | Sync from all sources |
+| `afk tasks show` | Show current task list |
+| `afk tasks show --pending` | Show only pending tasks |
 
 ### Session/Archive Commands
 
@@ -200,7 +201,7 @@ All config lives in `.afk/config.json`:
 {
   "sources": [
     {"type": "beads"},
-    {"type": "json", "path": "prd.json"}
+    {"type": "json", "path": "tasks.json"}
   ],
   "feedbackLoops": {
     "types": "cargo check",
@@ -237,7 +238,7 @@ All config lives in `.afk/config.json`:
 {
   "sources": [
     {"type": "beads"},
-    {"type": "json", "path": "prd.json"},
+    {"type": "json", "path": "tasks.json"},
     {"type": "markdown", "path": "TODO.md"},
     {"type": "github", "labels": ["afk"]}
   ]
@@ -350,8 +351,8 @@ cat > requirements.md << 'EOF'
 - Protected routes require authentication
 EOF
 
-# 2. Parse into structured tasks
-afk prd parse requirements.md
+# 2. Import into structured tasks
+afk prd import requirements.md
 
 # 3. Start the autonomous loop
 afk go
@@ -364,8 +365,8 @@ afk go
 afk source add beads
 
 # Sync and show tasks
-afk prd sync
-afk prd show
+afk tasks sync
+afk tasks show
 
 # Start working
 afk go
@@ -374,21 +375,25 @@ afk go
 ### Resuming Work
 
 ```bash
-# Continue from where you left off
-afk resume
+# afk always continues from where you left off
+afk go
 
-# Or run more iterations
-afk resume 20
+# Run more iterations
+afk go 20
 
-# Or run until complete
-afk resume --until-complete
+# Run until complete
+afk go -u
+
+# To start fresh, clear the session first
+afk archive clear -y
+afk go
 ```
 
 ### Creating a Feature Branch
 
 ```bash
 # Create branch and run
-afk run 10 --branch my-feature
+afk go 10 -b my-feature
 
 # This creates: afk/my-feature
 ```
@@ -398,19 +403,25 @@ afk run 10 --branch my-feature
 ### Check Current State
 
 ```bash
-# What's the loop doing?
-afk explain
+# What's the current status?
+afk status
 
-# What tasks exist? (verbose)
-afk explain -v
+# Verbose: include learnings and details
+afk status -v
+
+# List all tasks
+afk list
+
+# Show details of a specific task
+afk task <id>
 
 # Preview next prompt without running
-afk next
+afk prompt
 ```
 
 ### Common Issues
 
-**Loop not progressing**: Check `afk explain` for stuck tasks. Use `afk reset <id>` to retry.
+**Loop not progressing**: Check `afk status -v` for stuck tasks. Use `afk reset <id>` to retry.
 
 **Quality gates failing**: Run the gate commands manually to see errors:
 
@@ -420,14 +431,14 @@ cargo clippy
 cargo test
 ```
 
-**Context overflow**: Tasks are too large. Split them via `afk prd parse`.
+**Context overflow**: Tasks are too large. Split them via `afk prd import`.
 
 ### Inspect Files Directly
 
 ```bash
 cat .afk/progress.json     # Task completion state and per-task learnings
 cat .afk/config.json       # Configuration
-cat .afk/prd.json          # Current task list
+cat .afk/tasks.json        # Current task list
 cat AGENTS.md              # Long-term project knowledge
 ls .afk/archive/           # Previous sessions
 ```
@@ -437,7 +448,7 @@ ls .afk/archive/           # Previous sessions
 ```
 .afk/
 ├── config.json      # Configuration
-├── prd.json         # Current task list (source of truth)
+├── tasks.json       # Current task list (source of truth)
 ├── progress.json    # Session state (iterations, task status, per-task learnings)
 └── archive/         # Previous sessions
     └── 2026-01-12_12-30-00_main_complete/

@@ -1,7 +1,7 @@
-//! PRD sync and storage operations.
+//! Task sync and storage operations.
 //!
 //! This module implements the Ralph pattern: aggregating tasks from all sources
-//! into a unified prd.json file that the AI reads directly.
+//! into a unified tasks.json file that the AI reads directly.
 
 use std::collections::HashMap;
 use std::fs;
@@ -14,14 +14,14 @@ use crate::config::AfkConfig;
 use crate::prd::{PrdDocument, PrdError};
 use crate::sources::aggregate_tasks;
 
-/// Sync PRD from all configured sources.
+/// Sync tasks from all configured sources.
 ///
-/// This aggregates tasks from all sources and writes them to prd.json.
+/// This aggregates tasks from all sources and writes them to tasks.json.
 /// Existing completion status (passes: true) is preserved for matching IDs.
 ///
-/// If no sources are configured but .afk/prd.json exists with stories,
-/// it's used directly as the source of truth (created by afk prd parse
-/// or placed it there manually).
+/// If no sources are configured but .afk/tasks.json exists with tasks,
+/// it's used directly as the source of truth (created by afk prd import
+/// or placed there manually).
 ///
 /// # Arguments
 ///
@@ -35,7 +35,7 @@ pub fn sync_prd(config: &AfkConfig, branch_name: Option<&str>) -> Result<PrdDocu
     sync_prd_with_root(config, branch_name, None)
 }
 
-/// Sync PRD from all configured sources with a custom root directory.
+/// Sync tasks from all configured sources with a custom root directory.
 ///
 /// This is the internal implementation that allows specifying a root directory
 /// for testing purposes.
@@ -44,14 +44,14 @@ pub fn sync_prd_with_root(
     branch_name: Option<&str>,
     root: Option<&Path>,
 ) -> Result<PrdDocument, PrdError> {
-    // Determine PRD path
-    let prd_path = root.map(|r| r.join(".afk/prd.json"));
+    // Determine tasks path
+    let prd_path = root.map(|r| r.join(".afk/tasks.json"));
 
-    // Load existing PRD
+    // Load existing tasks
     let existing_prd = PrdDocument::load(prd_path.as_deref())?;
 
-    // If no sources configured but PRD exists with stories, use it directly.
-    // This handles the case where user created .afk/prd.json via afk prd parse
+    // If no sources configured but tasks.json exists with tasks, use it directly.
+    // This handles the case where user created .afk/tasks.json via afk prd import
     // or placed it there manually — we don't want to overwrite it.
     if config.sources.is_empty() && !existing_prd.user_stories.is_empty() {
         return Ok(existing_prd);
@@ -293,46 +293,46 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_sync_prd_no_sources_with_existing_prd() {
+    fn test_sync_tasks_no_sources_with_existing_tasks() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        // Create existing PRD with stories
-        let existing_prd = r#"{
+        // Create existing tasks with stories
+        let existing_tasks = r#"{
             "project": "test-project",
             "branchName": "main",
             "userStories": [
                 {"id": "story-1", "title": "Existing Story", "description": "Test", "priority": 1, "passes": false}
             ]
         }"#;
-        fs::write(afk_dir.join("prd.json"), existing_prd).unwrap();
+        fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
 
         // Config with no sources
         let config = AfkConfig::default();
 
         let result = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
 
-        // Should return existing PRD as-is
+        // Should return existing tasks as-is
         assert_eq!(result.project, "test-project");
         assert_eq!(result.user_stories.len(), 1);
         assert_eq!(result.user_stories[0].id, "story-1");
     }
 
     #[test]
-    fn test_sync_prd_empty_sync_preserves_existing() {
+    fn test_sync_tasks_empty_sync_preserves_existing() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        // Create existing PRD with stories
-        let existing_prd = r#"{
+        // Create existing tasks with stories
+        let existing_tasks = r#"{
             "project": "test-project",
             "userStories": [
                 {"id": "story-1", "title": "Existing Story", "description": "Test", "priority": 1}
             ]
         }"#;
-        fs::write(afk_dir.join("prd.json"), existing_prd).unwrap();
+        fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
 
         // Config with a source that returns empty (non-existent file)
         let config = AfkConfig {
@@ -342,26 +342,26 @@ mod tests {
 
         let result = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
 
-        // Should preserve existing PRD
+        // Should preserve existing tasks
         assert_eq!(result.user_stories.len(), 1);
         assert_eq!(result.user_stories[0].id, "story-1");
     }
 
     #[test]
-    fn test_sync_prd_preserves_passes_status() {
+    fn test_sync_tasks_preserves_passes_status() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        // Create existing PRD with a completed story
-        let existing_prd = r#"{
+        // Create existing tasks with a completed story
+        let existing_tasks = r#"{
             "project": "test-project",
             "userStories": [
                 {"id": "story-1", "title": "Story 1", "description": "Test", "priority": 1, "passes": true},
                 {"id": "story-2", "title": "Story 2", "description": "Test", "priority": 2, "passes": false}
             ]
         }"#;
-        fs::write(afk_dir.join("prd.json"), existing_prd).unwrap();
+        fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
 
         // Create source file with the same stories
         let source_json = r#"[
@@ -392,7 +392,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_prd_sorts_by_priority() {
+    fn test_sync_tasks_sorts_by_priority() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
@@ -422,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_prd_sets_last_synced() {
+    fn test_sync_tasks_sets_last_synced() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
@@ -447,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_prd_with_branch_name_override() {
+    fn test_sync_tasks_with_branch_name_override() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
@@ -545,21 +545,21 @@ version = "1.0.0"
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        let prd = r#"{
+        let tasks = r#"{
             "project": "test",
             "userStories": [
                 {"id": "story-1", "title": "Story 1", "description": "Test", "passes": false},
                 {"id": "story-2", "title": "Story 2", "description": "Test", "passes": false}
             ]
         }"#;
-        let prd_path = afk_dir.join("prd.json");
-        fs::write(&prd_path, prd).unwrap();
+        let tasks_path = afk_dir.join("tasks.json");
+        fs::write(&tasks_path, tasks).unwrap();
 
-        let result = mark_story_complete_with_path("story-1", Some(&prd_path)).unwrap();
+        let result = mark_story_complete_with_path("story-1", Some(&tasks_path)).unwrap();
         assert!(result);
 
         // Reload and verify
-        let prd = PrdDocument::load(Some(&prd_path)).unwrap();
+        let prd = PrdDocument::load(Some(&tasks_path)).unwrap();
         assert!(prd.user_stories[0].passes);
         assert!(!prd.user_stories[1].passes);
     }
@@ -570,16 +570,16 @@ version = "1.0.0"
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        let prd = r#"{
+        let tasks = r#"{
             "project": "test",
             "userStories": [
                 {"id": "story-1", "title": "Story 1", "description": "Test", "passes": false}
             ]
         }"#;
-        let prd_path = afk_dir.join("prd.json");
-        fs::write(&prd_path, prd).unwrap();
+        let tasks_path = afk_dir.join("tasks.json");
+        fs::write(&tasks_path, tasks).unwrap();
 
-        let result = mark_story_complete_with_path("nonexistent", Some(&prd_path)).unwrap();
+        let result = mark_story_complete_with_path("nonexistent", Some(&tasks_path)).unwrap();
         assert!(!result);
     }
 
@@ -589,17 +589,17 @@ version = "1.0.0"
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        let prd = r#"{
+        let tasks = r#"{
             "project": "test",
             "userStories": [
                 {"id": "story-1", "title": "Story 1", "description": "Test", "passes": false, "source": "json"}
             ]
         }"#;
-        let prd_path = afk_dir.join("prd.json");
-        fs::write(&prd_path, prd).unwrap();
+        let tasks_path = afk_dir.join("tasks.json");
+        fs::write(&tasks_path, tasks).unwrap();
 
         // Should return true when story is found (even if source doesn't support in_progress)
-        let result = mark_story_in_progress_with_path("story-1", Some(&prd_path)).unwrap();
+        let result = mark_story_in_progress_with_path("story-1", Some(&tasks_path)).unwrap();
         assert!(result);
     }
 
@@ -609,32 +609,32 @@ version = "1.0.0"
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        let prd = r#"{
+        let tasks = r#"{
             "project": "test",
             "userStories": [
                 {"id": "story-1", "title": "Story 1", "description": "Test", "passes": false}
             ]
         }"#;
-        let prd_path = afk_dir.join("prd.json");
-        fs::write(&prd_path, prd).unwrap();
+        let tasks_path = afk_dir.join("tasks.json");
+        fs::write(&tasks_path, tasks).unwrap();
 
-        let result = mark_story_in_progress_with_path("nonexistent", Some(&prd_path)).unwrap();
+        let result = mark_story_in_progress_with_path("nonexistent", Some(&tasks_path)).unwrap();
         assert!(!result);
     }
 
     #[test]
-    fn test_sync_prd_preserves_existing_description() {
+    fn test_sync_tasks_preserves_existing_description() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        // Create existing PRD with a custom description
-        let existing_prd = r#"{
+        // Create existing tasks with a custom description
+        let existing_tasks = r#"{
             "project": "test-project",
             "description": "My custom description",
             "userStories": []
         }"#;
-        fs::write(afk_dir.join("prd.json"), existing_prd).unwrap();
+        fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
 
         // Create source file
         let source_json = r#"[{"id": "task-1", "title": "Task 1"}]"#;
@@ -655,7 +655,7 @@ version = "1.0.0"
     }
 
     #[test]
-    fn test_sync_prd_sets_default_description() {
+    fn test_sync_tasks_sets_default_description() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
@@ -679,7 +679,7 @@ version = "1.0.0"
     }
 
     #[test]
-    fn test_sync_prd_writes_to_disk() {
+    fn test_sync_tasks_writes_to_disk() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
@@ -698,11 +698,11 @@ version = "1.0.0"
         let _ = sync_prd_with_root(&config, Some("test-branch"), Some(temp.path())).unwrap();
 
         // Verify file was written
-        let prd_path = afk_dir.join("prd.json");
-        assert!(prd_path.exists());
+        let tasks_path = afk_dir.join("tasks.json");
+        assert!(tasks_path.exists());
 
         // Verify contents
-        let contents = fs::read_to_string(&prd_path).unwrap();
+        let contents = fs::read_to_string(&tasks_path).unwrap();
         assert!(contents.contains("task-1"));
         assert!(contents.contains("test-branch"));
     }

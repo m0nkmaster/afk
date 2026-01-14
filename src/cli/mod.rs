@@ -24,54 +24,45 @@ pub struct Cli {
 /// Top-level commands for afk.
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Quick start with zero config.
+    /// Run the loop with zero config.
     ///
     /// Auto-detects project type, available tools, and task sources.
-    /// Runs the loop with sensible defaults.
+    /// On first run, prompts to confirm AI CLI selection.
+    /// Always continues from previous session if one exists.
     ///
     /// Examples:
     ///   afk go                 # Auto-detect, run 10 iterations
-    ///   afk go 20              # Auto-detect, run 20 iterations
+    ///   afk go 20              # Run 20 iterations
     ///   afk go -u              # Run until all tasks complete
     ///   afk go TODO.md 5       # Use TODO.md as source, run 5 iterations
+    ///   afk go --init          # Re-run setup, then run
     Go(GoCommand),
 
-    /// Run multiple iterations using configured AI CLI.
-    ///
-    /// Implements the Ralph Wiggum pattern: each iteration spawns a fresh
-    /// AI CLI instance with clean context.
-    Run(RunCommand),
-
-    /// Initialize afk by analysing the project.
+    /// Initialise afk by analysing the project.
     ///
     /// Detects project type, available tools, task sources, and context files
     /// to generate a sensible configuration.
     Init(InitCommand),
 
     /// Show current status and tasks.
+    ///
+    /// Use -v for verbose output including learnings.
     Status(StatusCommand),
 
-    /// Manage task sources.
-    #[command(subcommand)]
-    Source(SourceCommands),
-
-    /// Manage product requirements documents.
-    #[command(subcommand)]
-    Prd(PrdCommands),
-
-    /// Sync PRD from all configured sources.
+    /// List tasks from the current PRD.
     ///
-    /// Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
-    /// .afk/prd.json file that the AI reads directly (Ralph pattern).
-    Sync(SyncCommand),
+    /// Shows task IDs, status, priority, and titles.
+    List(ListCommand),
 
-    /// Generate prompt for next iteration.
-    Next(NextCommand),
-
-    /// Explain current loop state for debugging.
+    /// Show details of a specific task.
     ///
-    /// Shows what task would be selected next, why, and session statistics.
-    Explain(ExplainCommand),
+    /// Displays full task information including acceptance criteria and learnings.
+    Task(TaskCommand),
+
+    /// Preview the prompt for the next iteration.
+    ///
+    /// Shows what will be sent to the AI CLI on the next iteration.
+    Prompt(PromptCommand),
 
     /// Run quality gates and report results.
     ///
@@ -90,6 +81,18 @@ pub enum Commands {
     /// Clears failure count and sets status back to pending.
     Reset(ResetCommand),
 
+    /// Manage task sources.
+    #[command(subcommand)]
+    Source(SourceCommands),
+
+    /// Import product requirements documents.
+    #[command(subcommand)]
+    Prd(PrdCommands),
+
+    /// Manage the task list (.afk/tasks.json).
+    #[command(subcommand)]
+    Tasks(TasksCommands),
+
     /// Manage session archives.
     #[command(subcommand)]
     Archive(ArchiveCommands),
@@ -103,17 +106,6 @@ pub enum Commands {
     ///
     /// Outputs completion script to stdout for bash, zsh, or fish.
     Completions(CompletionsCommand),
-
-    /// Quick start: init if needed, then run the loop.
-    ///
-    /// Convenience command that combines init and run with sensible defaults.
-    Start(StartCommand),
-
-    /// Resume from last session without archiving.
-    ///
-    /// Continues the loop from where it left off, preserving existing
-    /// progress and iteration count.
-    Resume(ResumeCommand),
 }
 
 /// Arguments for the 'go' command.
@@ -138,39 +130,19 @@ pub struct GoCommand {
     #[arg(short = 'u', long)]
     pub until_complete: bool,
 
-    /// Feedback display mode.
+    /// Delete config and re-run setup.
     ///
-    /// Options: tui (rich dashboard), full, minimal, off
-    #[arg(long, value_parser = ["tui", "full", "minimal", "off"], default_value = "tui")]
-    pub feedback: Option<String>,
-
-    /// Disable ASCII mascot in feedback display.
+    /// Wipes existing .afk/config.json and prompts for reconfiguration.
     #[arg(long)]
-    pub no_mascot: bool,
-}
+    pub init: bool,
 
-/// Arguments for the 'run' command.
-#[derive(Args, Debug)]
-pub struct RunCommand {
-    /// Number of iterations to run.
-    #[arg(default_value = "5")]
-    pub iterations: u32,
-
-    /// Run until all tasks complete.
-    #[arg(short = 'u', long)]
-    pub until_complete: bool,
+    /// Create/checkout feature branch before running.
+    #[arg(short = 'b', long)]
+    pub branch: Option<String>,
 
     /// Override timeout in minutes.
     #[arg(short = 't', long)]
     pub timeout: Option<u32>,
-
-    /// Create/checkout feature branch.
-    #[arg(short = 'b', long)]
-    pub branch: Option<String>,
-
-    /// Continue from last session.
-    #[arg(short = 'c', long = "continue")]
-    pub resume_session: bool,
 
     /// Feedback display mode.
     ///
@@ -201,7 +173,34 @@ pub struct InitCommand {
 
 /// Arguments for the 'status' command.
 #[derive(Args, Debug)]
-pub struct StatusCommand {}
+pub struct StatusCommand {
+    /// Show verbose output including learnings.
+    #[arg(short = 'v', long)]
+    pub verbose: bool,
+}
+
+/// Arguments for the 'list' command.
+#[derive(Args, Debug)]
+pub struct ListCommand {
+    /// Maximum number of tasks to show.
+    #[arg(short = 'l', long, default_value = "20")]
+    pub limit: usize,
+
+    /// Show only pending tasks.
+    #[arg(short = 'p', long)]
+    pub pending: bool,
+
+    /// Show only completed tasks.
+    #[arg(long)]
+    pub complete: bool,
+}
+
+/// Arguments for the 'task' command.
+#[derive(Args, Debug)]
+pub struct TaskCommand {
+    /// Task ID to show details for.
+    pub task_id: String,
+}
 
 /// Subcommands for source management.
 #[derive(Subcommand, Debug)]
@@ -238,38 +237,42 @@ pub struct SourceRemoveCommand {
     pub index: usize,
 }
 
-/// Subcommands for PRD management.
+/// Subcommands for PRD import.
 #[derive(Subcommand, Debug)]
 pub enum PrdCommands {
-    /// Parse a PRD into a structured JSON feature list.
+    /// Import a requirements document into structured JSON tasks.
     ///
     /// Takes a product requirements document (markdown, text, etc.) and runs the
-    /// configured AI CLI to convert it into structured JSON format.
+    /// configured AI CLI to convert it into structured JSON format in .afk/tasks.json.
     ///
     /// By default, runs the AI CLI directly. Use --stdout, --copy, or --file
     /// to output the prompt for manual use instead.
-    Parse(PrdParseCommand),
-
-    /// Sync PRD from all configured sources.
-    ///
-    /// Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
-    /// .afk/prd.json file.
-    Sync(PrdSyncCommand),
-
-    /// Show the current PRD state.
-    ///
-    /// Displays user stories from .afk/prd.json with their completion status.
-    Show(PrdShowCommand),
+    Import(PrdImportCommand),
 }
 
-/// Arguments for 'prd parse' command.
+/// Subcommands for task list management.
+#[derive(Subcommand, Debug)]
+pub enum TasksCommands {
+    /// Sync tasks from all configured sources.
+    ///
+    /// Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
+    /// .afk/tasks.json file.
+    Sync(TasksSyncCommand),
+
+    /// Show the current task list.
+    ///
+    /// Displays tasks from .afk/tasks.json with their completion status.
+    Show(TasksShowCommand),
+}
+
+/// Arguments for 'prd import' command.
 #[derive(Args, Debug)]
-pub struct PrdParseCommand {
-    /// Input file to parse.
+pub struct PrdImportCommand {
+    /// Input file to import.
     pub input_file: String,
 
     /// Output JSON path.
-    #[arg(short = 'o', long, default_value = ".afk/prd.json")]
+    #[arg(short = 'o', long, default_value = ".afk/tasks.json")]
     pub output: String,
 
     /// Copy to clipboard.
@@ -285,33 +288,25 @@ pub struct PrdParseCommand {
     pub stdout: bool,
 }
 
-/// Arguments for 'prd sync' command.
+/// Arguments for 'tasks sync' command.
 #[derive(Args, Debug)]
-pub struct PrdSyncCommand {
-    /// Branch name for PRD.
+pub struct TasksSyncCommand {
+    /// Branch name for tasks.
     #[arg(short = 'b', long)]
     pub branch: Option<String>,
 }
 
-/// Arguments for 'prd show' command.
+/// Arguments for 'tasks show' command.
 #[derive(Args, Debug)]
-pub struct PrdShowCommand {
-    /// Show only pending stories.
+pub struct TasksShowCommand {
+    /// Show only pending tasks.
     #[arg(short = 'p', long)]
     pub pending: bool,
 }
 
-/// Arguments for the 'sync' command.
+/// Arguments for the 'prompt' command.
 #[derive(Args, Debug)]
-pub struct SyncCommand {
-    /// Branch name for PRD.
-    #[arg(short = 'b', long)]
-    pub branch: Option<String>,
-}
-
-/// Arguments for the 'next' command.
-#[derive(Args, Debug)]
-pub struct NextCommand {
+pub struct PromptCommand {
     /// Copy to clipboard.
     #[arg(short = 'c', long)]
     pub copy: bool,
@@ -331,14 +326,6 @@ pub struct NextCommand {
     /// Override max iterations.
     #[arg(short = 'l', long)]
     pub limit: Option<u32>,
-}
-
-/// Arguments for the 'explain' command.
-#[derive(Args, Debug)]
-pub struct ExplainCommand {
-    /// Show detailed information.
-    #[arg(short = 'v', long)]
-    pub verbose: bool,
 }
 
 /// Arguments for the 'verify' command.
@@ -435,56 +422,64 @@ pub struct CompletionsCommand {
     pub shell: String,
 }
 
-/// Arguments for the 'start' command.
-#[derive(Args, Debug)]
-pub struct StartCommand {
-    /// Number of iterations to run.
-    #[arg(default_value = "10")]
-    pub iterations: u32,
-
-    /// Create/checkout feature branch.
-    #[arg(short = 'b', long)]
-    pub branch: Option<String>,
-
-    /// Skip confirmation prompts.
-    #[arg(short = 'y', long)]
-    pub yes: bool,
-}
-
-/// Arguments for the 'resume' command.
-#[derive(Args, Debug)]
-pub struct ResumeCommand {
-    /// Number of iterations to run.
-    #[arg(default_value = "10")]
-    pub iterations: u32,
-
-    /// Run until all tasks complete.
-    #[arg(short = 'u', long)]
-    pub until_complete: bool,
-
-    /// Override timeout in minutes.
-    #[arg(short = 't', long)]
-    pub timeout: Option<u32>,
-}
-
 // ============================================================================
-// Stub implementations - these print "not implemented" for now
+// Command implementations
 // ============================================================================
 
 impl GoCommand {
     /// Execute the go command.
     pub fn execute(&self) {
-        use crate::bootstrap::ensure_ai_cli_configured;
+        use crate::bootstrap::{
+            analyse_project, ensure_ai_cli_configured, generate_config,
+            infer_sources as bootstrap_infer_sources,
+        };
         use crate::config::{AfkConfig, SourceConfig};
         use crate::prd::PrdDocument;
         use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
+        use std::fs;
         use std::path::Path;
+
+        let afk_dir = Path::new(".afk");
+        let config_path = afk_dir.join("config.json");
+
+        // Handle --init flag: delete config and re-run setup
+        if self.init && config_path.exists() {
+            if let Err(e) = fs::remove_file(&config_path) {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to remove config: {e}");
+                std::process::exit(1);
+            }
+            println!("\x1b[2mCleared existing configuration.\x1b[0m");
+        }
 
         // Parse iterations_or_source
         let (iterations, explicit_source) = self.parse_args();
 
-        // Try to load existing config, or create default
-        let mut config = AfkConfig::load(None).unwrap_or_default();
+        // Load or create config
+        let mut config = if config_path.exists() {
+            AfkConfig::load(None).unwrap_or_default()
+        } else {
+            // First run: analyse project and create config
+            println!("\x1b[1mAnalysing project...\x1b[0m");
+            let analysis = analyse_project(None);
+
+            println!("  Project type: {:?}", analysis.project_type);
+            if let Some(ref name) = analysis.name {
+                println!("  Project name: {name}");
+            }
+
+            let mut new_config = generate_config(&analysis);
+            new_config.sources = bootstrap_infer_sources(None);
+
+            // Create .afk directory
+            if !afk_dir.exists() {
+                if let Err(e) = fs::create_dir_all(afk_dir) {
+                    eprintln!("\x1b[31mError:\x1b[0m Failed to create .afk directory: {e}");
+                    std::process::exit(1);
+                }
+            }
+
+            new_config
+        };
 
         // Handle explicit source file path
         if let Some(ref source_path) = explicit_source {
@@ -509,7 +504,7 @@ impl GoCommand {
             let prd = PrdDocument::load(None).unwrap_or_default();
             if !prd.user_stories.is_empty() {
                 println!(
-                    "\x1b[2mUsing existing .afk/prd.json ({} stories)\x1b[0m",
+                    "\x1b[2mUsing existing .afk/tasks.json ({} tasks)\x1b[0m",
                     prd.user_stories.len()
                 );
             } else {
@@ -520,7 +515,7 @@ impl GoCommand {
                     eprintln!();
                     eprintln!("Try one of:");
                     eprintln!("  afk go TODO.md           # Use a markdown file");
-                    eprintln!("  afk prd parse spec.md    # Parse a requirements doc");
+                    eprintln!("  afk prd import spec.md   # Import a requirements doc");
                     eprintln!("  afk source add beads     # Use beads issues");
                     std::process::exit(1);
                 }
@@ -529,12 +524,22 @@ impl GoCommand {
         }
 
         // Ensure AI CLI is configured (first-run experience)
+        // This will prompt the user to select if not already configured
         if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
             config.ai_cli = ai_cli;
         } else {
             // No AI CLI available - exit
             eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured. Install one and try again.");
             std::process::exit(1);
+        }
+
+        // Save config if it was newly created or modified
+        if !config_path.exists() || self.init {
+            if let Err(e) = config.save(Some(&config_path)) {
+                eprintln!("\x1b[31mError:\x1b[0m Failed to save config: {e}");
+                std::process::exit(1);
+            }
+            println!("\x1b[32m✓\x1b[0m Configuration saved to {}", config_path.display());
         }
 
         // Dry run mode
@@ -561,6 +566,9 @@ impl GoCommand {
         let options = RunOptions::new()
             .with_iterations(iterations)
             .with_until_complete(self.until_complete)
+            .with_branch(self.branch.clone())
+            .with_timeout(self.timeout)
+            .with_resume(false)
             .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
             .with_mascot(!self.no_mascot);
 
@@ -626,49 +634,6 @@ fn infer_sources() -> Vec<crate::config::SourceConfig> {
     }
 
     sources
-}
-
-impl RunCommand {
-    /// Execute the run command.
-    pub fn execute(&self) {
-        use crate::config::AfkConfig;
-        use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
-
-        // Load config
-        let config = match AfkConfig::load(None) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to load config: {e}");
-                eprintln!("\x1b[2mRun `afk init` to initialise the project.\x1b[0m");
-                std::process::exit(1);
-            }
-        };
-
-        // Build run options with feedback settings
-        let options = RunOptions::new()
-            .with_iterations(Some(self.iterations))
-            .with_branch(self.branch.clone())
-            .with_until_complete(self.until_complete)
-            .with_timeout(self.timeout)
-            .with_resume(self.resume_session)
-            .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
-            .with_mascot(!self.no_mascot);
-
-        // Run the loop - use TUI if requested
-        let result = if RunOptions::is_tui_mode(self.feedback.as_deref()) {
-            run_loop_with_tui(&config, options)
-        } else {
-            run_loop_with_options(&config, options)
-        };
-
-        // Exit with appropriate code
-        match result.stop_reason {
-            crate::runner::StopReason::Complete => std::process::exit(0),
-            crate::runner::StopReason::MaxIterations => std::process::exit(0),
-            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
-            _ => std::process::exit(1),
-        }
-    }
 }
 
 impl InitCommand {
@@ -759,17 +724,17 @@ impl InitCommand {
             std::process::exit(1);
         }
 
-        // Create empty prd.json
-        let prd_path = afk_dir.join("prd.json");
-        if !prd_path.exists() {
-            let empty_prd = r#"{
+        // Create empty tasks.json
+        let tasks_path = afk_dir.join("tasks.json");
+        if !tasks_path.exists() {
+            let empty_tasks = r#"{
   "project": "",
   "branchName": "",
   "description": "",
   "userStories": []
 }"#;
-            if let Err(e) = fs::write(&prd_path, empty_prd) {
-                eprintln!("\x1b[31mError creating prd.json:\x1b[0m {e}");
+            if let Err(e) = fs::write(&tasks_path, empty_tasks) {
+                eprintln!("\x1b[31mError creating tasks.json:\x1b[0m {e}");
             }
         }
 
@@ -781,7 +746,7 @@ impl InitCommand {
         if config.sources.is_empty() {
             println!("  1. Add a task source:");
             println!("     afk source add beads      # Use beads issues");
-            println!("     afk prd parse spec.md     # Parse a requirements doc");
+            println!("     afk prd import spec.md    # Import a requirements doc");
         } else {
             println!("  1. afk go   # Start working through tasks");
         }
@@ -799,7 +764,7 @@ impl StatusCommand {
         // Check if initialised
         if !Path::new(".afk").exists() {
             println!("\x1b[33mafk not initialised.\x1b[0m");
-            println!("Run \x1b[1mafk init\x1b[0m to get started.");
+            println!("Run \x1b[1mafk init\x1b[0m or \x1b[1mafk go\x1b[0m to get started.");
             return;
         }
 
@@ -872,13 +837,6 @@ impl StatusCommand {
         }
         println!();
 
-        // Limits
-        println!("\x1b[1mLimits\x1b[0m");
-        println!("  Max iterations: {}", config.limits.max_iterations);
-        println!("  Max task failures: {}", config.limits.max_task_failures);
-        println!("  Timeout: {} minutes", config.limits.timeout_minutes);
-        println!();
-
         // AI CLI
         println!("\x1b[1mAI CLI\x1b[0m");
         println!(
@@ -886,39 +844,216 @@ impl StatusCommand {
             config.ai_cli.command,
             config.ai_cli.args.join(" ")
         );
+
+        // Verbose mode: show additional details
+        if self.verbose {
         println!();
 
-        // Git integration
-        println!("\x1b[1mGit Integration\x1b[0m");
-        println!(
-            "  Auto-commit: {}",
-            if config.git.auto_commit { "yes" } else { "no" }
-        );
-        println!(
-            "  Auto-branch: {}",
-            if config.git.auto_branch { "yes" } else { "no" }
-        );
-        if config.git.auto_branch {
-            println!("  Branch prefix: {}", config.git.branch_prefix);
-        }
-        println!();
-
-        // Archiving
-        println!("\x1b[1mArchiving\x1b[0m");
-        println!(
-            "  Enabled: {}",
-            if config.archive.enabled { "yes" } else { "no" }
-        );
-        if config.archive.enabled {
-            println!("  Directory: {}", config.archive.directory);
-            println!(
-                "  On branch change: {}",
-                if config.archive.on_branch_change {
-                    "yes"
-                } else {
-                    "no"
+            // Feedback Loops
+            println!("\x1b[1mFeedback Loops\x1b[0m");
+            let fb = &config.feedback_loops;
+            let has_any = fb.types.is_some()
+                || fb.lint.is_some()
+                || fb.test.is_some()
+                || fb.build.is_some()
+                || !fb.custom.is_empty();
+            if has_any {
+                if let Some(ref cmd) = fb.types {
+                    println!("  types: {cmd}");
                 }
+                if let Some(ref cmd) = fb.lint {
+                    println!("  lint: {cmd}");
+                }
+                if let Some(ref cmd) = fb.test {
+                    println!("  test: {cmd}");
+                }
+                if let Some(ref cmd) = fb.build {
+                    println!("  build: {cmd}");
+                }
+                for (name, cmd) in &fb.custom {
+                    println!("  {name}: {cmd}");
+                }
+            } else {
+                println!("  (none configured)");
+            }
+            println!();
+
+            // Pending Stories
+            println!("\x1b[1mPending Stories\x1b[0m");
+            let pending_stories = prd.get_pending_stories();
+            if pending_stories.is_empty() {
+                println!("  (none)");
+            } else {
+                for story in pending_stories.iter().take(5) {
+                    println!("  - {} (P{}) {}", story.id, story.priority, story.title);
+                }
+                if pending_stories.len() > 5 {
+                    println!("  ... and {} more", pending_stories.len() - 5);
+                }
+            }
+            println!();
+
+            // Recent Learnings
+            println!("\x1b[1mRecent Learnings\x1b[0m");
+            let learnings = progress.get_recent_learnings(5);
+            if learnings.is_empty() {
+                println!("  (none recorded)");
+            } else {
+                for (i, (task_id, learning)) in learnings.iter().enumerate() {
+                    let truncated = if learning.len() > 60 {
+                        format!("{}...", &learning[..57])
+                    } else {
+                        learning.clone()
+                    };
+                    println!("  {}. [{}] {}", i + 1, task_id, truncated);
+                }
+            }
+        }
+    }
+}
+
+impl ListCommand {
+    /// Execute the list command.
+    pub fn execute(&self) {
+        use crate::prd::PrdDocument;
+
+        let prd = PrdDocument::load(None).unwrap_or_default();
+
+        if prd.user_stories.is_empty() {
+            println!("No tasks found.");
+            println!("\x1b[2mRun `afk prd import <file>` to import tasks.\x1b[0m");
+            return;
+        }
+
+        // Filter stories based on flags
+        let stories: Vec<_> = prd
+            .user_stories
+            .iter()
+            .filter(|s| {
+                if self.pending && self.complete {
+                    true // Both flags = show all
+                } else if self.pending {
+                    !s.passes
+                } else if self.complete {
+                    s.passes
+                } else {
+                    true // No flags = show all
+                }
+            })
+            .take(self.limit)
+            .collect();
+
+        if stories.is_empty() {
+            println!("No matching tasks found.");
+            return;
+        }
+
+        // Print header
+        println!("{:<12} {:<12} {:<8} TITLE", "ID", "STATUS", "PRIORITY");
+        println!("{}", "-".repeat(70));
+
+        // Print each story
+        for story in &stories {
+            let status = if story.passes { "complete" } else { "pending" };
+            let title = if story.title.len() > 40 {
+                format!("{}...", &story.title[..37])
+            } else {
+                story.title.clone()
+            };
+        println!(
+                "{:<12} {:<12} {:<8} {}",
+                if story.id.len() > 10 {
+                    format!("{}...", &story.id[..7])
+                } else {
+                    story.id.clone()
+                },
+                status,
+                story.priority,
+                title
             );
+        }
+
+        // Print summary
+        let (pending, completed) = prd.get_story_counts();
+        println!();
+        println!(
+            "{} tasks ({} pending, {} complete)",
+            pending + completed,
+            pending,
+            completed
+        );
+    }
+}
+
+impl TaskCommand {
+    /// Execute the task command.
+    pub fn execute(&self) {
+        use crate::prd::PrdDocument;
+        use crate::progress::SessionProgress;
+
+        let prd = PrdDocument::load(None).unwrap_or_default();
+        let progress = SessionProgress::load(None).unwrap_or_default();
+
+        // Find the story
+        let story = match prd.user_stories.iter().find(|s| s.id == self.task_id) {
+            Some(s) => s,
+            None => {
+                eprintln!("\x1b[31mError:\x1b[0m Task not found: {}", self.task_id);
+                std::process::exit(1);
+            }
+        };
+
+        // Get task progress if available
+        let task_progress = progress.get_task(&self.task_id);
+
+        println!("\x1b[1m=== {} ===\x1b[0m", story.id);
+        println!();
+
+        println!("\x1b[1mTitle:\x1b[0m {}", story.title);
+            println!(
+            "\x1b[1mStatus:\x1b[0m {}",
+            if story.passes { "complete" } else { "pending" }
+        );
+        println!("\x1b[1mPriority:\x1b[0m {}", story.priority);
+        println!();
+
+        if !story.description.is_empty() {
+            println!("\x1b[1mDescription:\x1b[0m");
+            for line in story.description.lines() {
+                println!("  {line}");
+            }
+            println!();
+        }
+
+        if !story.acceptance_criteria.is_empty() {
+            println!("\x1b[1mAcceptance Criteria:\x1b[0m");
+            for criterion in &story.acceptance_criteria {
+                let check = if story.passes { "✓" } else { "○" };
+                println!("  {check} {criterion}");
+            }
+            println!();
+        }
+
+        // Show learnings from progress
+        if let Some(task) = task_progress {
+            if !task.learnings.is_empty() {
+                println!("\x1b[1mLearnings:\x1b[0m");
+                for learning in &task.learnings {
+                    println!("  - {learning}");
+                }
+                println!();
+            }
+
+            println!("\x1b[1mAttempts:\x1b[0m {}", task.failure_count + 1);
+            if let Some(ref started) = task.started_at {
+                println!("\x1b[1mStarted:\x1b[0m {}", &started[..19].replace('T', " "));
+            }
+            if let Some(ref completed) = task.completed_at {
+                println!(
+                    "\x1b[1mCompleted:\x1b[0m {}",
+                    &completed[..19].replace('T', " ")
+                );
+            }
         }
     }
 }
@@ -962,10 +1097,10 @@ impl SourceRemoveCommand {
     }
 }
 
-impl PrdParseCommand {
-    /// Execute the prd parse command.
+impl PrdImportCommand {
+    /// Execute the prd import command.
     pub fn execute(&self) {
-        match commands::prd::prd_parse(
+        match commands::prd::prd_import(
             &self.input_file,
             &self.output,
             self.copy,
@@ -981,10 +1116,10 @@ impl PrdParseCommand {
     }
 }
 
-impl PrdSyncCommand {
-    /// Execute the prd sync command.
+impl TasksSyncCommand {
+    /// Execute the tasks sync command.
     pub fn execute(&self) {
-        match commands::prd::prd_sync(self.branch.as_deref()) {
+        match commands::prd::tasks_sync(self.branch.as_deref()) {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("\x1b[31mError:\x1b[0m {e}");
@@ -994,10 +1129,10 @@ impl PrdSyncCommand {
     }
 }
 
-impl PrdShowCommand {
-    /// Execute the prd show command.
+impl TasksShowCommand {
+    /// Execute the tasks show command.
     pub fn execute(&self) {
-        match commands::prd::prd_show(self.pending) {
+        match commands::prd::tasks_show(self.pending) {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("\x1b[31mError:\x1b[0m {e}");
@@ -1007,21 +1142,8 @@ impl PrdShowCommand {
     }
 }
 
-impl SyncCommand {
-    /// Execute the sync command (alias for prd sync).
-    pub fn execute(&self) {
-        match commands::prd::prd_sync(self.branch.as_deref()) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
-        }
-    }
-}
-
-impl NextCommand {
-    /// Execute the next command.
+impl PromptCommand {
+    /// Execute the prompt command.
     pub fn execute(&self) {
         use crate::cli::output::output_prompt;
         use crate::config::{AfkConfig, OutputMode};
@@ -1030,7 +1152,7 @@ impl NextCommand {
         // Load config
         let config = AfkConfig::load(None).unwrap_or_default();
 
-        // Generate the prompt (but don't increment iteration in future - for now it does)
+        // Generate the prompt
         let result = match generate_prompt(&config, self.bootstrap, self.limit) {
             Ok(r) => r,
             Err(e) => {
@@ -1059,96 +1181,6 @@ impl NextCommand {
             println!("\x1b[2mIteration {}\x1b[0m", result.iteration);
             if result.all_complete {
                 println!("\x1b[32m✓ All tasks complete!\x1b[0m");
-            }
-        }
-    }
-}
-
-impl ExplainCommand {
-    /// Execute the explain command.
-    pub fn execute(&self) {
-        use crate::config::AfkConfig;
-        use crate::prd::PrdDocument;
-        use crate::progress::SessionProgress;
-
-        // Load everything
-        let config = AfkConfig::load(None).unwrap_or_default();
-        let prd = PrdDocument::load(None).unwrap_or_default();
-        let progress = SessionProgress::load(None).unwrap_or_default();
-
-        println!("\x1b[1m=== afk explain ===\x1b[0m\n");
-
-        // Config summary
-        println!("\x1b[1mConfiguration:\x1b[0m");
-        println!(
-            "  AI CLI: {} {}",
-            config.ai_cli.command,
-            config.ai_cli.args.join(" ")
-        );
-        println!(
-            "  Sources: {:?}",
-            config
-                .sources
-                .iter()
-                .map(|s| &s.source_type)
-                .collect::<Vec<_>>()
-        );
-        println!("  Output: {:?}", config.output.default);
-
-        // PRD summary
-        println!("\n\x1b[1mPRD:\x1b[0m");
-        let (pending, completed) = prd.get_story_counts();
-        let total = pending + completed;
-        println!("  Stories: {completed}/{total} complete ({pending} pending)");
-
-        if let Some(next) = prd.get_next_story() {
-            println!("  Next: \x1b[1m{}\x1b[0m - {}", next.id, next.title);
-        }
-
-        // Progress summary
-        println!("\n\x1b[1mProgress:\x1b[0m");
-        println!("  Session started: {}", progress.started_at);
-        println!("  Iterations: {}", progress.iterations);
-        let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
-        println!(
-            "  Tasks: {comp} complete, {in_prog} in-progress, {pend} pending, {fail} failed, {skip} skipped"
-        );
-
-        // Verbose: show more details
-        if self.verbose {
-            println!("\n\x1b[1mFeedback Loops:\x1b[0m");
-            let fb = &config.feedback_loops;
-            let has_any = fb.types.is_some()
-                || fb.lint.is_some()
-                || fb.test.is_some()
-                || fb.build.is_some()
-                || !fb.custom.is_empty();
-            if has_any {
-                if let Some(ref cmd) = fb.types {
-                    println!("  types: {cmd}");
-                }
-                if let Some(ref cmd) = fb.lint {
-                    println!("  lint: {cmd}");
-                }
-                if let Some(ref cmd) = fb.test {
-                    println!("  test: {cmd}");
-                }
-                if let Some(ref cmd) = fb.build {
-                    println!("  build: {cmd}");
-                }
-                for (name, cmd) in &fb.custom {
-                    println!("  {name}: {cmd}");
-                }
-            } else {
-                println!("  (none configured)");
-            }
-
-            println!("\n\x1b[1mPending Stories:\x1b[0m");
-            for story in prd.get_pending_stories().iter().take(5) {
-                println!("  - {} (P{})", story.id, story.priority);
-            }
-            if prd.get_pending_stories().len() > 5 {
-                println!("  ... and {} more", prd.get_pending_stories().len() - 5);
             }
         }
     }
@@ -1473,154 +1505,6 @@ impl CompletionsCommand {
     }
 }
 
-impl StartCommand {
-    /// Execute the start command (init if needed + run).
-    pub fn execute(&self) {
-        use crate::bootstrap::{
-            analyse_project, ensure_ai_cli_configured, generate_config, infer_sources,
-        };
-        use crate::config::AfkConfig;
-        use crate::runner::run_loop;
-        use std::fs;
-        use std::io::{self, Write};
-        use std::path::Path;
-
-        let afk_dir = Path::new(".afk");
-        let config_path = afk_dir.join("config.json");
-
-        // Init if needed
-        let config = if config_path.exists() {
-            AfkConfig::load(Some(&config_path)).unwrap_or_default()
-        } else {
-            println!("\x1b[1mInitialising afk...\x1b[0m");
-
-            let analysis = analyse_project(None);
-            let mut config = generate_config(&analysis);
-            config.sources = infer_sources(None);
-
-            // Ensure AI CLI is configured (first-run experience)
-            if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
-                config.ai_cli = ai_cli;
-            } else {
-                eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured.");
-                std::process::exit(1);
-            }
-
-            // Create .afk directory
-            if let Err(e) = fs::create_dir_all(afk_dir) {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to create .afk directory: {e}");
-                std::process::exit(1);
-            }
-
-            // Save config
-            if let Err(e) = config.save(Some(&config_path)) {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to save config: {e}");
-                std::process::exit(1);
-            }
-
-            println!("\x1b[32m✓\x1b[0m Initialised");
-            config
-        };
-
-        // Check for sources
-        if config.sources.is_empty() {
-            // Check for existing PRD
-            let prd = crate::prd::PrdDocument::load(None).unwrap_or_default();
-            if prd.user_stories.is_empty() {
-                eprintln!("\x1b[33mNo task sources configured.\x1b[0m");
-                eprintln!();
-                eprintln!("Add a source first:");
-                eprintln!("  afk source add beads      # Use beads issues");
-                eprintln!("  afk prd parse spec.md     # Parse a requirements doc");
-                std::process::exit(1);
-            }
-        }
-
-        // Confirm unless --yes
-        if !self.yes {
-            println!();
-            println!("Ready to start afk with {} iterations.", self.iterations);
-            if let Some(ref branch) = self.branch {
-                println!("Branch: {branch}");
-            }
-            print!("Continue? [Y/n]: ");
-            let _ = io::stdout().flush();
-
-            let mut input = String::new();
-            if io::stdin().read_line(&mut input).is_ok() {
-                let input = input.trim().to_lowercase();
-                if input == "n" || input == "no" {
-                    println!("Aborted.");
-                    return;
-                }
-            }
-        }
-
-        // Run the loop
-        let result = run_loop(
-            &config,
-            Some(self.iterations),
-            self.branch.as_deref(),
-            false, // until_complete
-            None,  // timeout
-            false, // resume
-        );
-
-        match result.stop_reason {
-            crate::runner::StopReason::Complete => std::process::exit(0),
-            crate::runner::StopReason::MaxIterations => std::process::exit(0),
-            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
-            _ => std::process::exit(1),
-        }
-    }
-}
-
-impl ResumeCommand {
-    /// Execute the resume command (continue from last session).
-    pub fn execute(&self) {
-        use crate::config::AfkConfig;
-        use crate::progress::SessionProgress;
-        use crate::runner::run_loop;
-        use std::path::Path;
-
-        // Check for existing progress
-        let progress_path = Path::new(".afk/progress.json");
-        if !progress_path.exists() {
-            eprintln!("\x1b[33mNo session to resume.\x1b[0m");
-            eprintln!("Run \x1b[1mafk start\x1b[0m or \x1b[1mafk go\x1b[0m to begin.");
-            std::process::exit(1);
-        }
-
-        let progress = SessionProgress::load(None).unwrap_or_default();
-        let config = AfkConfig::load(None).unwrap_or_default();
-
-        println!("\x1b[1mResuming session...\x1b[0m");
-        println!(
-            "  Started: {}",
-            &progress.started_at[..19].replace('T', " ")
-        );
-        println!("  Iterations so far: {}", progress.iterations);
-        println!();
-
-        // Run the loop with resume flag
-        let result = run_loop(
-            &config,
-            Some(self.iterations),
-            None, // branch - don't switch when resuming
-            self.until_complete,
-            self.timeout,
-            true, // resume = true
-        );
-
-        match result.stop_reason {
-            crate::runner::StopReason::Complete => std::process::exit(0),
-            crate::runner::StopReason::MaxIterations => std::process::exit(0),
-            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
-            _ => std::process::exit(1),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1658,7 +1542,9 @@ mod tests {
                 assert!(cmd.iterations_or_source.is_none());
                 assert!(!cmd.dry_run);
                 assert!(!cmd.until_complete);
-                // Default is now "tui" for rich terminal experience
+                assert!(!cmd.init);
+                assert!(cmd.branch.is_none());
+                assert!(cmd.timeout.is_none());
                 assert_eq!(cmd.feedback, Some("tui".to_string()));
                 assert!(!cmd.no_mascot);
             }
@@ -1696,6 +1582,11 @@ mod tests {
             "go",
             "-n",
             "-u",
+            "--init",
+            "-b",
+            "feature/test",
+            "-t",
+            "60",
             "--feedback",
             "minimal",
             "--no-mascot",
@@ -1705,56 +1596,13 @@ mod tests {
             Some(Commands::Go(cmd)) => {
                 assert!(cmd.dry_run);
                 assert!(cmd.until_complete);
+                assert!(cmd.init);
+                assert_eq!(cmd.branch, Some("feature/test".to_string()));
+                assert_eq!(cmd.timeout, Some(60));
                 assert_eq!(cmd.feedback, Some("minimal".to_string()));
                 assert!(cmd.no_mascot);
             }
             _ => panic!("Expected Go command"),
-        }
-    }
-
-    #[test]
-    fn test_run_command_default() {
-        let cli = Cli::try_parse_from(["afk", "run"]).unwrap();
-        match cli.command {
-            Some(Commands::Run(cmd)) => {
-                assert_eq!(cmd.iterations, 5);
-                assert!(!cmd.until_complete);
-                assert!(cmd.timeout.is_none());
-                assert!(cmd.branch.is_none());
-                assert!(!cmd.resume_session);
-            }
-            _ => panic!("Expected Run command"),
-        }
-    }
-
-    #[test]
-    fn test_run_command_with_options() {
-        let cli = Cli::try_parse_from([
-            "afk",
-            "run",
-            "10",
-            "-u",
-            "-t",
-            "60",
-            "-b",
-            "feature/test",
-            "-c",
-            "--feedback",
-            "full",
-            "--no-mascot",
-        ])
-        .unwrap();
-        match cli.command {
-            Some(Commands::Run(cmd)) => {
-                assert_eq!(cmd.iterations, 10);
-                assert!(cmd.until_complete);
-                assert_eq!(cmd.timeout, Some(60));
-                assert_eq!(cmd.branch, Some("feature/test".to_string()));
-                assert!(cmd.resume_session);
-                assert_eq!(cmd.feedback, Some("full".to_string()));
-                assert!(cmd.no_mascot);
-            }
-            _ => panic!("Expected Run command"),
         }
     }
 
@@ -1774,7 +1622,107 @@ mod tests {
     #[test]
     fn test_status_command() {
         let cli = Cli::try_parse_from(["afk", "status"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::Status(_))));
+        match cli.command {
+            Some(Commands::Status(cmd)) => {
+                assert!(!cmd.verbose);
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    #[test]
+    fn test_status_command_verbose() {
+        let cli = Cli::try_parse_from(["afk", "status", "-v"]).unwrap();
+        match cli.command {
+            Some(Commands::Status(cmd)) => {
+                assert!(cmd.verbose);
+            }
+            _ => panic!("Expected Status command"),
+        }
+    }
+
+    #[test]
+    fn test_list_command() {
+        let cli = Cli::try_parse_from(["afk", "list"]).unwrap();
+        match cli.command {
+            Some(Commands::List(cmd)) => {
+                assert_eq!(cmd.limit, 20);
+                assert!(!cmd.pending);
+                assert!(!cmd.complete);
+            }
+            _ => panic!("Expected List command"),
+        }
+    }
+
+    #[test]
+    fn test_list_command_with_flags() {
+        let cli = Cli::try_parse_from(["afk", "list", "-l", "10", "-p"]).unwrap();
+        match cli.command {
+            Some(Commands::List(cmd)) => {
+                assert_eq!(cmd.limit, 10);
+                assert!(cmd.pending);
+            }
+            _ => panic!("Expected List command"),
+        }
+    }
+
+    #[test]
+    fn test_task_command() {
+        let cli = Cli::try_parse_from(["afk", "task", "auth-001"]).unwrap();
+        match cli.command {
+            Some(Commands::Task(cmd)) => {
+                assert_eq!(cmd.task_id, "auth-001");
+            }
+            _ => panic!("Expected Task command"),
+        }
+    }
+
+    #[test]
+    fn test_prompt_command() {
+        let cli = Cli::try_parse_from(["afk", "prompt", "-c", "-b", "-l", "20"]).unwrap();
+        match cli.command {
+            Some(Commands::Prompt(cmd)) => {
+                assert!(cmd.copy);
+                assert!(cmd.bootstrap);
+                assert_eq!(cmd.limit, Some(20));
+            }
+            _ => panic!("Expected Prompt command"),
+        }
+    }
+
+    #[test]
+    fn test_verify_command() {
+        let cli = Cli::try_parse_from(["afk", "verify", "--verbose"]).unwrap();
+        match cli.command {
+            Some(Commands::Verify(cmd)) => {
+                assert!(cmd.verbose);
+            }
+            _ => panic!("Expected Verify command"),
+        }
+    }
+
+    #[test]
+    fn test_done_command() {
+        let cli = Cli::try_parse_from(["afk", "done", "task-123", "-m", "All tests pass"]).unwrap();
+        match cli.command {
+            Some(Commands::Done(cmd)) => {
+                assert_eq!(cmd.task_id, "task-123");
+                assert_eq!(cmd.message, Some("All tests pass".to_string()));
+            }
+            _ => panic!("Expected Done command"),
+        }
+    }
+
+    #[test]
+    fn test_fail_command() {
+        let cli = Cli::try_parse_from(["afk", "fail", "task-456", "-m", "Tests failing"]).unwrap();
+        match cli.command {
+            Some(Commands::Fail(cmd)) => {
+                assert_eq!(cmd.task_id, "task-456");
+                assert_eq!(cmd.message, Some("Tests failing".to_string()));
+            }
+            _ => panic!("Expected Fail command"),
+        }
     }
 
     #[test]
@@ -1822,106 +1770,36 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_parse_command() {
-        let cli = Cli::try_parse_from(["afk", "prd", "parse", "requirements.md", "-c"]).unwrap();
+    fn test_prd_import_command() {
+        let cli = Cli::try_parse_from(["afk", "prd", "import", "requirements.md", "-c"]).unwrap();
         match cli.command {
-            Some(Commands::Prd(PrdCommands::Parse(cmd))) => {
+            Some(Commands::Prd(PrdCommands::Import(cmd))) => {
                 assert_eq!(cmd.input_file, "requirements.md");
                 assert!(cmd.copy);
             }
-            _ => panic!("Expected Prd Parse command"),
+            _ => panic!("Expected Prd Import command"),
         }
     }
 
     #[test]
-    fn test_prd_sync_command() {
-        let cli = Cli::try_parse_from(["afk", "prd", "sync", "-b", "feature/test"]).unwrap();
+    fn test_tasks_sync_command() {
+        let cli = Cli::try_parse_from(["afk", "tasks", "sync", "-b", "feature/test"]).unwrap();
         match cli.command {
-            Some(Commands::Prd(PrdCommands::Sync(cmd))) => {
+            Some(Commands::Tasks(TasksCommands::Sync(cmd))) => {
                 assert_eq!(cmd.branch, Some("feature/test".to_string()));
             }
-            _ => panic!("Expected Prd Sync command"),
+            _ => panic!("Expected Tasks Sync command"),
         }
     }
 
     #[test]
-    fn test_prd_show_command() {
-        let cli = Cli::try_parse_from(["afk", "prd", "show", "-p"]).unwrap();
+    fn test_tasks_show_command() {
+        let cli = Cli::try_parse_from(["afk", "tasks", "show", "-p"]).unwrap();
         match cli.command {
-            Some(Commands::Prd(PrdCommands::Show(cmd))) => {
+            Some(Commands::Tasks(TasksCommands::Show(cmd))) => {
                 assert!(cmd.pending);
             }
-            _ => panic!("Expected Prd Show command"),
-        }
-    }
-
-    #[test]
-    fn test_sync_command() {
-        let cli = Cli::try_parse_from(["afk", "sync", "-b", "main"]).unwrap();
-        match cli.command {
-            Some(Commands::Sync(cmd)) => {
-                assert_eq!(cmd.branch, Some("main".to_string()));
-            }
-            _ => panic!("Expected Sync command"),
-        }
-    }
-
-    #[test]
-    fn test_next_command() {
-        let cli = Cli::try_parse_from(["afk", "next", "-c", "-b", "-l", "20"]).unwrap();
-        match cli.command {
-            Some(Commands::Next(cmd)) => {
-                assert!(cmd.copy);
-                assert!(cmd.bootstrap);
-                assert_eq!(cmd.limit, Some(20));
-            }
-            _ => panic!("Expected Next command"),
-        }
-    }
-
-    #[test]
-    fn test_explain_command() {
-        let cli = Cli::try_parse_from(["afk", "explain", "-v"]).unwrap();
-        match cli.command {
-            Some(Commands::Explain(cmd)) => {
-                assert!(cmd.verbose);
-            }
-            _ => panic!("Expected Explain command"),
-        }
-    }
-
-    #[test]
-    fn test_verify_command() {
-        let cli = Cli::try_parse_from(["afk", "verify", "--verbose"]).unwrap();
-        match cli.command {
-            Some(Commands::Verify(cmd)) => {
-                assert!(cmd.verbose);
-            }
-            _ => panic!("Expected Verify command"),
-        }
-    }
-
-    #[test]
-    fn test_done_command() {
-        let cli = Cli::try_parse_from(["afk", "done", "task-123", "-m", "All tests pass"]).unwrap();
-        match cli.command {
-            Some(Commands::Done(cmd)) => {
-                assert_eq!(cmd.task_id, "task-123");
-                assert_eq!(cmd.message, Some("All tests pass".to_string()));
-            }
-            _ => panic!("Expected Done command"),
-        }
-    }
-
-    #[test]
-    fn test_fail_command() {
-        let cli = Cli::try_parse_from(["afk", "fail", "task-456", "-m", "Tests failing"]).unwrap();
-        match cli.command {
-            Some(Commands::Fail(cmd)) => {
-                assert_eq!(cmd.task_id, "task-456");
-                assert_eq!(cmd.message, Some("Tests failing".to_string()));
-            }
-            _ => panic!("Expected Fail command"),
+            _ => panic!("Expected Tasks Show command"),
         }
     }
 
@@ -1988,32 +1866,6 @@ mod tests {
                 assert_eq!(cmd.shell, "zsh");
             }
             _ => panic!("Expected Completions command"),
-        }
-    }
-
-    #[test]
-    fn test_start_command() {
-        let cli = Cli::try_parse_from(["afk", "start", "20", "-b", "my-feature", "-y"]).unwrap();
-        match cli.command {
-            Some(Commands::Start(cmd)) => {
-                assert_eq!(cmd.iterations, 20);
-                assert_eq!(cmd.branch, Some("my-feature".to_string()));
-                assert!(cmd.yes);
-            }
-            _ => panic!("Expected Start command"),
-        }
-    }
-
-    #[test]
-    fn test_resume_command() {
-        let cli = Cli::try_parse_from(["afk", "resume", "15", "-u", "-t", "30"]).unwrap();
-        match cli.command {
-            Some(Commands::Resume(cmd)) => {
-                assert_eq!(cmd.iterations, 15);
-                assert!(cmd.until_complete);
-                assert_eq!(cmd.timeout, Some(30));
-            }
-            _ => panic!("Expected Resume command"),
         }
     }
 

@@ -106,7 +106,7 @@ fn test_prompt_contains_header() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -126,7 +126,7 @@ fn test_prompt_contains_task_list() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -139,8 +139,8 @@ fn test_prompt_contains_task_list() {
         "Missing progress instruction"
     );
     assert!(
-        stdout.contains("Read `.afk/prd.json`"),
-        "Missing PRD instruction"
+        stdout.contains("Read `.afk/tasks.json`"),
+        "Missing tasks instruction"
     );
     assert!(
         stdout.contains("Pick the **highest priority** user story"),
@@ -154,7 +154,7 @@ fn test_prompt_contains_progress() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -172,7 +172,7 @@ fn test_prompt_contains_quality_gates() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -192,7 +192,7 @@ fn test_prompt_contains_learnings_section() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -219,7 +219,7 @@ fn test_prompt_contains_stop_condition() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -246,7 +246,7 @@ fn test_prompt_shows_next_story_details() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -263,7 +263,7 @@ fn test_prompt_mentions_acceptance_criteria() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -282,7 +282,7 @@ fn test_prompt_shows_story_count() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -323,7 +323,7 @@ fn test_prompt_all_complete_shows_signal() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -371,7 +371,7 @@ fn test_prompt_with_configured_gates() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -425,7 +425,7 @@ fn test_prompt_with_custom_instructions() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -470,7 +470,7 @@ fn test_prompt_with_context_files() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -497,7 +497,7 @@ fn test_prompt_bootstrap_includes_afk_commands() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s", "-b"])
+        .args(["prompt", "-s", "-b"])
         .output()
         .expect("Failed to run afk");
 
@@ -544,7 +544,7 @@ fn test_prompt_respects_iteration_limit() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -563,7 +563,7 @@ fn test_prompt_limit_override() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s", "-l", "25"])
+        .args(["prompt", "-s", "-l", "25"])
         .output()
         .expect("Failed to run afk");
 
@@ -594,7 +594,7 @@ fn test_prompt_empty_prd() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 
@@ -630,7 +630,7 @@ fn test_prompt_selects_highest_priority() {
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .output()
         .expect("Failed to run afk");
 

@@ -38,7 +38,7 @@ fn setup_project_with_prd() -> TempDir {
     let temp = setup_project();
     let afk_dir = temp.path().join(".afk");
 
-    let prd = r#"{
+    let tasks = r#"{
         "projectName": "test-project",
         "branch": "main",
         "userStories": [
@@ -60,7 +60,7 @@ fn setup_project_with_prd() -> TempDir {
             }
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), tasks).unwrap();
 
     temp
 }
@@ -234,16 +234,16 @@ fn test_status_with_config() {
 }
 
 // ============================================================================
-// PRD commands tests
+// Tasks commands tests
 // ============================================================================
 
 #[test]
-fn test_prd_show_displays_tasks() {
+fn test_tasks_show_displays_tasks() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "show"])
+        .args(["tasks", "show"])
         .assert()
         .success()
         .stdout(predicate::str::contains("task-001"))
@@ -251,12 +251,12 @@ fn test_prd_show_displays_tasks() {
 }
 
 #[test]
-fn test_prd_show_pending_only() {
+fn test_tasks_show_pending_only() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "show", "-p"])
+        .args(["tasks", "show", "-p"])
         .assert()
         .success()
         .stdout(predicate::str::contains("task-001"))
@@ -265,52 +265,52 @@ fn test_prd_show_pending_only() {
 }
 
 #[test]
-fn test_prd_show_no_prd_file() {
+fn test_tasks_show_no_tasks_file() {
     let temp = setup_project();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "show"])
+        .args(["tasks", "show"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("No stories").or(predicate::str::contains("empty")));
+        .stdout(predicate::str::contains("No tasks").or(predicate::str::contains("empty")));
 }
 
 #[test]
-fn test_prd_sync_creates_prd_file() {
+fn test_tasks_sync_creates_tasks_file() {
     let temp = setup_project();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "sync"])
+        .args(["tasks", "sync"])
         .assert()
         .success();
 
-    // Should create/update prd.json even with no sources
-    assert!(temp.path().join(".afk/prd.json").exists());
+    // Should create/update tasks.json even with no sources
+    assert!(temp.path().join(".afk/tasks.json").exists());
 }
 
 #[test]
-fn test_prd_parse_file_not_found() {
+fn test_prd_import_file_not_found() {
     let temp = setup_project();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "parse", "nonexistent.md"])
+        .args(["prd", "import", "nonexistent.md"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found").or(predicate::str::contains("No such file")));
 }
 
 #[test]
-fn test_prd_parse_generates_prompt() {
+fn test_prd_import_generates_prompt() {
     let temp = setup_project();
     let requirements = temp.path().join("requirements.md");
     fs::write(&requirements, "# My App\n\n- Feature 1\n- Feature 2").unwrap();
 
     afk()
         .current_dir(temp.path())
-        .args(["prd", "parse", "requirements.md", "-s"])
+        .args(["prd", "import", "requirements.md", "-s"])
         .assert()
         .success()
         .stdout(predicate::str::contains("My App").or(predicate::str::contains("Feature")));
@@ -492,50 +492,50 @@ fn test_reset_resets_task() {
 }
 
 // ============================================================================
-// Next command tests
+// Prompt command tests (renamed from 'next')
 // ============================================================================
 
 #[test]
-fn test_next_generates_prompt() {
+fn test_prompt_generates_prompt() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .assert()
         .success()
         .stdout(predicate::str::contains("task-001").or(predicate::str::contains("First task")));
 }
 
 #[test]
-fn test_next_no_tasks() {
+fn test_prompt_no_tasks() {
     let temp = setup_project();
 
-    // Empty PRD
-    let prd = r#"{
+    // Empty tasks
+    let tasks = r#"{
         "projectName": "test-project",
         "branch": "main",
         "userStories": []
     }"#;
-    fs::write(temp.path().join(".afk/prd.json"), prd).unwrap();
+    fs::write(temp.path().join(".afk/tasks.json"), tasks).unwrap();
 
     // When all stories are complete, the prompt includes AFK_COMPLETE
     afk()
         .current_dir(temp.path())
-        .args(["next", "-s"])
+        .args(["prompt", "-s"])
         .assert()
         .success()
         .stdout(predicate::str::contains("COMPLETE").or(predicate::str::contains("AFK_COMPLETE")));
 }
 
 #[test]
-fn test_next_with_file_output() {
+fn test_prompt_with_file_output() {
     let temp = setup_project_with_prd();
 
     // -f flag writes to default file (prompt.md in .afk/)
     afk()
         .current_dir(temp.path())
-        .args(["next", "-f"])
+        .args(["prompt", "-f"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Written to").or(predicate::str::contains("prompt")));
@@ -552,30 +552,23 @@ fn test_next_with_file_output() {
 }
 
 // ============================================================================
-// Explain command tests
+// Status command tests (verbose now absorbs explain behaviour)
 // ============================================================================
 
 #[test]
-fn test_explain_shows_state() {
+fn test_status_verbose_shows_details() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .arg("explain")
+        .args(["status", "-v"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Next task").or(predicate::str::contains("Session")));
-}
-
-#[test]
-fn test_explain_verbose() {
-    let temp = setup_project_with_prd();
-
-    afk()
-        .current_dir(temp.path())
-        .args(["explain", "-v"])
-        .assert()
-        .success();
+        .stdout(
+            predicate::str::contains("Feedback Loops")
+                .or(predicate::str::contains("Pending Stories"))
+                .or(predicate::str::contains("Learnings")),
+        );
 }
 
 // ============================================================================
@@ -802,34 +795,72 @@ fn test_go_no_sources_no_prd() {
 }
 
 // ============================================================================
-// Sync command tests
+// List and Task command tests
 // ============================================================================
 
 #[test]
-fn test_sync_creates_prd() {
-    let temp = setup_project();
+fn test_list_shows_tasks() {
+    let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .arg("sync")
+        .arg("list")
         .assert()
-        .success();
-
-    assert!(temp.path().join(".afk/prd.json").exists());
+        .success()
+        .stdout(predicate::str::contains("task-001"))
+        .stdout(predicate::str::contains("task-002"));
 }
 
 #[test]
-fn test_sync_with_branch_override() {
-    let temp = setup_project();
+fn test_list_pending_only() {
+    let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .args(["sync", "-b", "feature/test"])
+        .args(["list", "-p"])
         .assert()
-        .success();
+        .success()
+        .stdout(predicate::str::contains("task-001"))
+        // task-002 has passes=true so should not appear
+        .stdout(predicate::str::contains("task-002").not());
+}
 
-    let prd = fs::read_to_string(temp.path().join(".afk/prd.json")).unwrap();
-    assert!(prd.contains("feature/test"));
+#[test]
+fn test_list_with_limit() {
+    let temp = setup_project_with_prd();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["list", "-l", "1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-001"));
+}
+
+#[test]
+fn test_task_shows_details() {
+    let temp = setup_project_with_prd();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["task", "task-001"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-001"))
+        .stdout(predicate::str::contains("First task"))
+        .stdout(predicate::str::contains("Priority"));
+}
+
+#[test]
+fn test_task_not_found() {
+    let temp = setup_project_with_prd();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["task", "nonexistent-task"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
 }
 
 // ============================================================================

@@ -2,7 +2,7 @@
 //!
 //! This is the main entry point for the afk CLI tool.
 
-use afk::cli::{ArchiveCommands, Cli, Commands, PrdCommands, SourceCommands};
+use afk::cli::{ArchiveCommands, Cli, Commands, PrdCommands, SourceCommands, TasksCommands};
 use clap::Parser;
 
 fn main() {
@@ -22,26 +22,27 @@ fn main() {
         }
         Some(cmd) => match cmd {
             Commands::Go(c) => c.execute(),
-            Commands::Run(c) => c.execute(),
             Commands::Init(c) => c.execute(),
             Commands::Status(c) => c.execute(),
+            Commands::List(c) => c.execute(),
+            Commands::Task(c) => c.execute(),
+            Commands::Prompt(c) => c.execute(),
+            Commands::Verify(c) => c.execute(),
+            Commands::Done(c) => c.execute(),
+            Commands::Fail(c) => c.execute(),
+            Commands::Reset(c) => c.execute(),
             Commands::Source(subcmd) => match subcmd {
                 SourceCommands::Add(c) => c.execute(),
                 SourceCommands::List(c) => c.execute(),
                 SourceCommands::Remove(c) => c.execute(),
             },
             Commands::Prd(subcmd) => match subcmd {
-                PrdCommands::Parse(c) => c.execute(),
-                PrdCommands::Sync(c) => c.execute(),
-                PrdCommands::Show(c) => c.execute(),
+                PrdCommands::Import(c) => c.execute(),
             },
-            Commands::Sync(c) => c.execute(),
-            Commands::Next(c) => c.execute(),
-            Commands::Explain(c) => c.execute(),
-            Commands::Verify(c) => c.execute(),
-            Commands::Done(c) => c.execute(),
-            Commands::Fail(c) => c.execute(),
-            Commands::Reset(c) => c.execute(),
+            Commands::Tasks(subcmd) => match subcmd {
+                TasksCommands::Sync(c) => c.execute(),
+                TasksCommands::Show(c) => c.execute(),
+            },
             Commands::Archive(subcmd) => match subcmd {
                 ArchiveCommands::Create(c) => c.execute(),
                 ArchiveCommands::List(c) => c.execute(),
@@ -49,8 +50,6 @@ fn main() {
             },
             Commands::Update(c) => c.execute(),
             Commands::Completions(c) => c.execute(),
-            Commands::Start(c) => c.execute(),
-            Commands::Resume(c) => c.execute(),
         },
     }
 }

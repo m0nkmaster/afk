@@ -52,8 +52,8 @@ pub fn load_json_tasks(path: Option<&str>) -> Vec<UserStory> {
             }
         }
         None => {
-            // Try default locations
-            let defaults = ["prd.json", "tasks.json", ".afk/prd.json"];
+            // Try default locations (prefer tasks.json)
+            let defaults = ["tasks.json", ".afk/tasks.json", "prd.json", ".afk/prd.json"];
             match defaults.iter().find(|p| Path::new(p).exists()) {
                 Some(p) => Path::new(p).to_path_buf(),
                 None => return Vec::new(),

@@ -1,7 +1,9 @@
-//! PRD command implementations.
+//! PRD and tasks command implementations.
 //!
-//! This module implements `afk prd parse`, `afk prd sync`, and `afk prd show` commands
-//! for managing the product requirements document.
+//! This module implements:
+//! - `afk prd import` - Import a requirements document into tasks.json
+//! - `afk tasks sync` - Sync tasks from configured sources
+//! - `afk tasks show` - Display current task list
 
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -22,8 +24,8 @@ pub enum PrdCommandError {
     PrdError(#[from] PrdError),
     #[error("Config error: {0}")]
     ConfigError(#[from] crate::config::ConfigError),
-    #[error("No PRD found. Run `afk prd sync` or `afk prd parse` first.")]
-    NoPrd,
+    #[error("No tasks found. Run `afk tasks sync` or `afk prd import` first.")]
+    NoTasks,
     #[error("PRD parse error: {0}")]
     ParseError(#[from] crate::prd::PrdParseError),
     #[error("Output error: {0}")]
@@ -32,14 +34,14 @@ pub enum PrdCommandError {
     FileNotFound(String),
 }
 
-/// Parse a PRD file into structured JSON.
+/// Import a PRD file into structured JSON.
 ///
 /// Takes a product requirements document (markdown, text, etc.) and generates
 /// an AI prompt to convert it into the structured JSON format.
 ///
 /// # Arguments
 ///
-/// * `input_file` - Path to the input file to parse
+/// * `input_file` - Path to the input file to import
 /// * `output` - Path for the generated JSON output
 /// * `copy` - Copy to clipboard
 /// * `file` - Write prompt to file
@@ -47,19 +49,19 @@ pub enum PrdCommandError {
 ///
 /// # Returns
 ///
-/// Ok(()) on success, or an error if parsing fails.
-pub fn prd_parse(
+/// Ok(()) on success, or an error if import fails.
+pub fn prd_import(
     input_file: &str,
     output: &str,
     copy: bool,
     file: bool,
     stdout: bool,
 ) -> PrdCommandResult {
-    prd_parse_impl(input_file, output, copy, file, stdout, None)
+    prd_import_impl(input_file, output, copy, file, stdout, None)
 }
 
-/// Internal implementation of prd_parse with optional config path for testing.
-pub fn prd_parse_impl(
+/// Internal implementation of prd_import with optional config path for testing.
+pub fn prd_import_impl(
     input_file: &str,
     output: &str,
     copy: bool,
@@ -98,7 +100,7 @@ pub fn prd_parse_impl(
     if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
         config.ai_cli = ai_cli;
     } else {
-        return Err(PrdCommandError::NoPrd); // Reusing error - no AI CLI available
+        return Err(PrdCommandError::NoTasks); // No AI CLI available
     }
 
     // Run the AI CLI with the prompt
@@ -111,7 +113,7 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
     let args: Vec<&str> = config.ai_cli.args.iter().map(|s| s.as_str()).collect();
 
     println!(
-        "\x1b[1mParsing PRD with {}...\x1b[0m",
+        "\x1b[1mImporting PRD with {}...\x1b[0m",
         config.ai_cli.command
     );
     println!();
@@ -173,7 +175,7 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
     let output_path = Path::new(output);
     if output_path.exists() {
         println!();
-        println!("\x1b[32m✓\x1b[0m PRD parsed successfully");
+        println!("\x1b[32m✓\x1b[0m PRD imported successfully");
         println!("  Output: \x1b[36m{output}\x1b[0m");
         println!();
         println!("\x1b[2mStart working on tasks with:\x1b[0m");
@@ -187,10 +189,10 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
     Ok(())
 }
 
-/// Sync PRD from all configured sources.
+/// Sync tasks from all configured sources.
 ///
 /// Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
-/// .afk/prd.json file.
+/// .afk/tasks.json file.
 ///
 /// # Arguments
 ///
@@ -199,12 +201,12 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
 /// # Returns
 ///
 /// Ok(()) on success, or an error if sync fails.
-pub fn prd_sync(branch: Option<&str>) -> PrdCommandResult {
-    prd_sync_impl(branch, None, None)
+pub fn tasks_sync(branch: Option<&str>) -> PrdCommandResult {
+    tasks_sync_impl(branch, None, None)
 }
 
-/// Internal implementation of prd_sync with optional paths for testing.
-pub fn prd_sync_impl(
+/// Internal implementation of tasks_sync with optional paths for testing.
+pub fn tasks_sync_impl(
     branch: Option<&str>,
     config_path: Option<&Path>,
     root: Option<&Path>,
@@ -218,7 +220,7 @@ pub fn prd_sync_impl(
     let pending = total - completed;
 
     // Display results
-    println!("\x1b[32m✓\x1b[0m PRD synced successfully");
+    println!("\x1b[32m✓\x1b[0m Tasks synced successfully");
     println!();
     println!("  \x1b[36mTotal:\x1b[0m    {total}");
     println!("  \x1b[33mPending:\x1b[0m  {pending}");
@@ -232,42 +234,42 @@ pub fn prd_sync_impl(
     Ok(())
 }
 
-/// Show the current PRD state.
+/// Show the current task list.
 ///
-/// Displays user stories from .afk/prd.json with their completion status.
+/// Displays tasks from .afk/tasks.json with their completion status.
 ///
 /// # Arguments
 ///
-/// * `pending_only` - If true, only show stories that haven't passed yet.
+/// * `pending_only` - If true, only show tasks that haven't passed yet.
 ///
 /// # Returns
 ///
-/// Ok(()) on success, or an error if PRD cannot be loaded.
-pub fn prd_show(pending_only: bool) -> PrdCommandResult {
-    prd_show_impl(pending_only, None)
+/// Ok(()) on success, or an error if tasks cannot be loaded.
+pub fn tasks_show(pending_only: bool) -> PrdCommandResult {
+    tasks_show_impl(pending_only, None)
 }
 
-/// Internal implementation of prd_show with optional path for testing.
-pub fn prd_show_impl(pending_only: bool, prd_path: Option<&Path>) -> PrdCommandResult {
-    let prd = PrdDocument::load(prd_path)?;
+/// Internal implementation of tasks_show with optional path for testing.
+pub fn tasks_show_impl(pending_only: bool, tasks_path: Option<&Path>) -> PrdCommandResult {
+    let prd = PrdDocument::load(tasks_path)?;
 
     if prd.user_stories.is_empty() {
-        println!("\x1b[2mNo stories in PRD.\x1b[0m");
+        println!("\x1b[2mNo tasks found.\x1b[0m");
         println!();
-        println!("Run \x1b[36mafk prd sync\x1b[0m to aggregate from sources,");
-        println!("or \x1b[36mafk prd parse <file>\x1b[0m to parse a requirements doc.");
+        println!("Run \x1b[36mafk tasks sync\x1b[0m to aggregate from sources,");
+        println!("or \x1b[36mafk prd import <file>\x1b[0m to import a requirements doc.");
         return Ok(());
     }
 
-    // Filter stories if pending_only
-    let stories: Vec<_> = if pending_only {
+    // Filter tasks if pending_only
+    let tasks: Vec<_> = if pending_only {
         prd.user_stories.iter().filter(|s| !s.passes).collect()
     } else {
         prd.user_stories.iter().collect()
     };
 
-    if stories.is_empty() && pending_only {
-        println!("\x1b[32m✓ All stories complete!\x1b[0m");
+    if tasks.is_empty() && pending_only {
+        println!("\x1b[32m✓ All tasks complete!\x1b[0m");
         return Ok(());
     }
 
@@ -278,33 +280,33 @@ pub fn prd_show_impl(pending_only: bool, prd_path: Option<&Path>) -> PrdCommandR
     );
     println!("{}", "─".repeat(80));
 
-    // Print each story
-    for story in &stories {
-        let status = if story.passes {
+    // Print each task
+    for task in &tasks {
+        let status = if task.passes {
             "\x1b[32m✓ pass\x1b[0m"
         } else {
             "\x1b[33m○ pending\x1b[0m"
         };
 
         // Truncate title if too long
-        let title = if story.title.len() > 38 {
-            format!("{}…", &story.title[..37])
+        let title = if task.title.len() > 38 {
+            format!("{}…", &task.title[..37])
         } else {
-            story.title.clone()
+            task.title.clone()
         };
 
         // Truncate ID if too long
-        let id = if story.id.len() > 18 {
-            format!("{}…", &story.id[..17])
+        let id = if task.id.len() > 18 {
+            format!("{}…", &task.id[..17])
         } else {
-            story.id.clone()
+            task.id.clone()
         };
 
-        let ac_count = story.acceptance_criteria.len();
+        let ac_count = task.acceptance_criteria.len();
 
         println!(
             "{:<20} {:>3} {:<40} {:>3} {}",
-            id, story.priority, title, ac_count, status
+            id, task.priority, title, ac_count, status
         );
     }
 
@@ -315,7 +317,7 @@ pub fn prd_show_impl(pending_only: bool, prd_path: Option<&Path>) -> PrdCommandR
     let pending = total - completed;
 
     if pending_only {
-        println!("\x1b[2mShowing {pending} pending of {total} total stories\x1b[0m");
+        println!("\x1b[2mShowing {pending} pending of {total} total tasks\x1b[0m");
     } else {
         println!("\x1b[2m{completed}/{total} complete ({pending} pending)\x1b[0m");
     }
@@ -365,7 +367,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_sync_no_sources_empty_prd() {
+    fn test_tasks_sync_no_sources_empty_tasks() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -373,48 +375,48 @@ mod tests {
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
-        // Check PRD was created
-        let prd_path = afk_dir.join("prd.json");
-        assert!(prd_path.exists());
+        // Check tasks.json was created
+        let tasks_path = afk_dir.join("tasks.json");
+        assert!(tasks_path.exists());
     }
 
     #[test]
-    fn test_prd_sync_preserves_existing_prd() {
+    fn test_tasks_sync_preserves_existing_tasks() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
-        // Create existing PRD with stories
-        let existing_prd = r#"{
+        // Create existing tasks with stories
+        let existing_tasks = r#"{
             "project": "test-project",
             "branchName": "main",
             "userStories": [
                 {"id": "story-1", "title": "Existing Story", "priority": 1, "passes": false}
             ]
         }"#;
-        fs::write(&prd_path, existing_prd).unwrap();
+        fs::write(&tasks_path, existing_tasks).unwrap();
 
         // Empty config (no sources)
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
-        // PRD should still have the story
-        let prd = PrdDocument::load(Some(&prd_path)).unwrap();
+        // Tasks should still have the story
+        let prd = PrdDocument::load(Some(&tasks_path)).unwrap();
         assert_eq!(prd.user_stories.len(), 1);
         assert_eq!(prd.user_stories[0].id, "story-1");
     }
 
     #[test]
-    fn test_prd_sync_with_branch_override() {
+    fn test_tasks_sync_with_branch_override() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         // Create source file
         let source_json = r#"[{"id": "task-1", "title": "Task 1"}]"#;
@@ -427,34 +429,34 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_sync_impl(
+        let result = tasks_sync_impl(
             Some("feature/custom"),
             Some(&config_path),
             Some(temp.path()),
         );
         assert!(result.is_ok());
 
-        let prd = PrdDocument::load(Some(&prd_path)).unwrap();
+        let prd = PrdDocument::load(Some(&tasks_path)).unwrap();
         assert_eq!(prd.branch_name, "feature/custom");
     }
 
     #[test]
-    fn test_prd_show_empty_prd() {
+    fn test_tasks_show_empty() {
         let (_temp, afk_dir) = setup_temp_dir();
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
-        // Empty PRD
+        // Empty tasks
         let prd = PrdDocument::default();
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
-        let result = prd_show_impl(false, Some(&prd_path));
+        let result = tasks_show_impl(false, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_prd_show_with_stories() {
+    fn test_tasks_show_with_tasks() {
         let (_temp, afk_dir) = setup_temp_dir();
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         let prd = PrdDocument {
             project: "test-project".to_string(),
@@ -480,16 +482,16 @@ mod tests {
             last_synced: "2024-01-12T10:30:00.000000".to_string(),
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
-        let result = prd_show_impl(false, Some(&prd_path));
+        let result = tasks_show_impl(false, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_prd_show_pending_only() {
+    fn test_tasks_show_pending_only() {
         let (_temp, afk_dir) = setup_temp_dir();
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         let prd = PrdDocument {
             project: "test-project".to_string(),
@@ -511,16 +513,16 @@ mod tests {
             ],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
-        let result = prd_show_impl(true, Some(&prd_path));
+        let result = tasks_show_impl(true, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_prd_show_all_complete() {
+    fn test_tasks_show_all_complete() {
         let (_temp, afk_dir) = setup_temp_dir();
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         let prd = PrdDocument {
             project: "test-project".to_string(),
@@ -540,17 +542,17 @@ mod tests {
             ],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
         // With pending_only=true, should show "All complete" message
-        let result = prd_show_impl(true, Some(&prd_path));
+        let result = tasks_show_impl(true, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_prd_show_truncates_long_titles() {
+    fn test_tasks_show_truncates_long_titles() {
         let (_temp, afk_dir) = setup_temp_dir();
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         let prd = PrdDocument {
             project: "test-project".to_string(),
@@ -563,19 +565,19 @@ mod tests {
             }],
             ..Default::default()
         };
-        prd.save(Some(&prd_path)).unwrap();
+        prd.save(Some(&tasks_path)).unwrap();
 
-        let result = prd_show_impl(false, Some(&prd_path));
+        let result = tasks_show_impl(false, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_prd_show_missing_prd() {
+    fn test_tasks_show_missing_file() {
         let (temp, _afk_dir) = setup_temp_dir();
-        let prd_path = temp.path().join("nonexistent/.afk/prd.json");
+        let tasks_path = temp.path().join("nonexistent/.afk/tasks.json");
 
-        // Should not error, just show "No stories" message
-        let result = prd_show_impl(false, Some(&prd_path));
+        // Should not error, just show "No tasks" message
+        let result = tasks_show_impl(false, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
@@ -594,18 +596,18 @@ mod tests {
 
     #[test]
     fn test_prd_command_error_display() {
-        let err = PrdCommandError::NoPrd;
+        let err = PrdCommandError::NoTasks;
         assert_eq!(
             err.to_string(),
-            "No PRD found. Run `afk prd sync` or `afk prd parse` first."
+            "No tasks found. Run `afk tasks sync` or `afk prd import` first."
         );
     }
 
     #[test]
-    fn test_prd_sync_with_source() {
+    fn test_tasks_sync_with_source() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
         // Create source file with multiple tasks
         let source_json = r#"[
@@ -622,11 +624,11 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
-        // Verify PRD was created with sorted stories
-        let prd = PrdDocument::load(Some(&prd_path)).unwrap();
+        // Verify tasks.json was created with sorted tasks
+        let prd = PrdDocument::load(Some(&tasks_path)).unwrap();
         assert_eq!(prd.user_stories.len(), 3);
         // Should be sorted by priority
         assert_eq!(prd.user_stories[0].id, "high");
@@ -635,19 +637,19 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_sync_preserves_passes_status() {
+    fn test_tasks_sync_preserves_passes_status() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
-        let prd_path = afk_dir.join("prd.json");
+        let tasks_path = afk_dir.join("tasks.json");
 
-        // Create existing PRD with completed story
-        let existing_prd = r#"{
+        // Create existing tasks with completed story
+        let existing_tasks = r#"{
             "project": "test",
             "userStories": [
                 {"id": "story-1", "title": "Story 1", "priority": 1, "passes": true}
             ]
         }"#;
-        fs::write(&prd_path, existing_prd).unwrap();
+        fs::write(&tasks_path, existing_tasks).unwrap();
 
         // Create source with same story (without passes)
         let source_json = r#"[{"id": "story-1", "title": "Story 1 Updated", "priority": 1}]"#;
@@ -660,24 +662,24 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
         // story-1 should still have passes: true
-        let prd = PrdDocument::load(Some(&prd_path)).unwrap();
+        let prd = PrdDocument::load(Some(&tasks_path)).unwrap();
         assert!(prd.user_stories[0].passes);
     }
 
-    // Tests for prd_parse command
+    // Tests for prd_import command
 
     #[test]
-    fn test_prd_parse_file_not_found() {
+    fn test_prd_import_file_not_found() {
         let (_temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_parse_impl(
+        let result = prd_import_impl(
             "/nonexistent/file.md",
             ".afk/prd.json",
             false,
@@ -696,7 +698,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_parse_generates_prompt_to_stdout() {
+    fn test_prd_import_generates_prompt_to_stdout() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -708,7 +710,7 @@ mod tests {
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = prd_parse_impl(
+        let result = prd_import_impl(
             input_file.to_str().unwrap(),
             ".afk/prd.json",
             false,
@@ -722,7 +724,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_parse_custom_output_path() {
+    fn test_prd_import_custom_output_path() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -734,7 +736,7 @@ mod tests {
         config.save(Some(&config_path)).unwrap();
 
         // Use custom output path
-        let result = prd_parse_impl(
+        let result = prd_import_impl(
             input_file.to_str().unwrap(),
             "custom/output/tasks.json",
             false,
@@ -753,8 +755,8 @@ mod tests {
         assert!(file_err.to_string().contains("File not found"));
         assert!(file_err.to_string().contains("test.md"));
 
-        let no_prd = PrdCommandError::NoPrd;
-        assert!(no_prd.to_string().contains("No PRD found"));
+        let no_tasks = PrdCommandError::NoTasks;
+        assert!(no_tasks.to_string().contains("No tasks found"));
     }
 
     #[test]
@@ -777,8 +779,8 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_parse_without_output_flags_tries_ai_cli() {
-        // When no output flags are provided, prd_parse should try to run the AI CLI.
+    fn test_prd_import_without_output_flags_tries_ai_cli() {
+        // When no output flags are provided, prd_import should try to run the AI CLI.
         // Since the AI CLI won't exist in the test environment, it will fail,
         // but we can verify it doesn't use the prompt output path.
         let (temp, afk_dir) = setup_temp_dir();
@@ -799,7 +801,7 @@ mod tests {
         config.save(Some(&config_path)).unwrap();
 
         // No output flags - should try to run AI CLI and fail
-        let result = prd_parse_impl(
+        let result = prd_import_impl(
             input_file.to_str().unwrap(),
             ".afk/prd.json",
             false, // copy
@@ -813,7 +815,7 @@ mod tests {
     }
 
     #[test]
-    fn test_prd_parse_with_copy_flag_outputs_prompt() {
+    fn test_prd_import_with_copy_flag_outputs_prompt() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
 
@@ -826,7 +828,7 @@ mod tests {
 
         // With copy flag, should output prompt (not run AI CLI)
         // This will fail due to clipboard access in CI, but that's expected
-        let result = prd_parse_impl(
+        let result = prd_import_impl(
             input_file.to_str().unwrap(),
             ".afk/prd.json",
             true, // copy - output flag set

@@ -1,7 +1,7 @@
-//! PRD models for .afk/prd.json.
+//! Task models for .afk/tasks.json.
 //!
-//! This module contains Serde models for user stories and PRD documents,
-//! mirroring the Python Pydantic models in src/afk/prd_store.py.
+//! This module contains Serde models for user stories and task documents.
+//! The "PRD" terminology is retained internally for backwards compatibility.
 
 pub mod parse;
 pub mod store;
@@ -13,7 +13,7 @@ pub use store::{
     sync_prd, sync_prd_with_root,
 };
 
-use crate::config::PRD_FILE;
+use crate::config::{PRD_FILE, TASKS_FILE};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -135,7 +135,7 @@ impl UserStory {
         let source = data
             .get("source")
             .and_then(|v| v.as_str())
-            .unwrap_or("json:.afk/prd.json")
+            .unwrap_or("json:.afk/tasks.json")
             .to_string();
 
         let notes = data
@@ -241,15 +241,27 @@ impl PrdDocument {
         }
     }
 
-    /// Load PRD document from a file, or return defaults if file doesn't exist.
+    /// Load task document from a file, or return defaults if file doesn't exist.
     ///
     /// # Arguments
     ///
-    /// * `path` - Path to PRD file. Defaults to `.afk/prd.json` if None.
+    /// * `path` - Path to tasks file. Defaults to `.afk/tasks.json` if None.
+    ///           Falls back to `.afk/prd.json` for backwards compatibility.
     pub fn load(path: Option<&Path>) -> Result<Self, PrdError> {
-        let path = path
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(PRD_FILE));
+        let path = path.map(PathBuf::from).unwrap_or_else(|| {
+            // Prefer tasks.json, fall back to prd.json for backwards compatibility
+            let tasks_path = PathBuf::from(TASKS_FILE);
+            if tasks_path.exists() {
+                tasks_path
+            } else {
+                let prd_path = PathBuf::from(PRD_FILE);
+                if prd_path.exists() {
+                    prd_path
+                } else {
+                    tasks_path // Default to tasks.json for new files
+                }
+            }
+        });
 
         if !path.exists() {
             return Ok(Self::default());
@@ -261,17 +273,17 @@ impl PrdDocument {
         Ok(Self::from_json_value(&data))
     }
 
-    /// Save PRD document to a file.
+    /// Save task document to a file.
     ///
     /// # Arguments
     ///
-    /// * `path` - Path to save to. Defaults to `.afk/prd.json` if None.
+    /// * `path` - Path to save to. Defaults to `.afk/tasks.json` if None.
     ///
     /// Creates parent directories if they don't exist.
     pub fn save(&self, path: Option<&Path>) -> Result<(), PrdError> {
         let path = path
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(PRD_FILE));
+            .unwrap_or_else(|| PathBuf::from(TASKS_FILE));
 
         // Create parent directory if needed
         if let Some(parent) = path.parent() {
@@ -978,7 +990,7 @@ mod tests {
         let data: serde_json::Value = serde_json::from_str(json).unwrap();
         let story = UserStory::from_json_value(&data);
 
-        // Default source should be json:.afk/prd.json for from_json_value
-        assert_eq!(story.source, "json:.afk/prd.json");
+        // Default source should be json:.afk/tasks.json for from_json_value
+        assert_eq!(story.source, "json:.afk/tasks.json");
     }
 }

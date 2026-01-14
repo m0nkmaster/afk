@@ -1,34 +1,58 @@
-# afk
+# afk 🛋️
 
-Autonomous AI coding loops — Ralph Wiggum style.
+> Let the AI work while you're away from the keyboard!
 
-A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, letting it work autonomously while you step away from the keyboard.
+A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, spawning a **fresh agent instance** for each iteration — so context never overflows and the AI stays sharp.
 
-## The Ralph Wiggum Pattern
+## ✨ Why afk?
 
-Each iteration spawns a **fresh AI instance** with clean context. This prevents context overflow and ensures consistent behaviour. Memory persists only through:
+AI coding agents are powerful, but they have a fatal flaw: **context window exhaustion**. The longer an AI works on a problem, the more context it accumulates — past attempts, dead ends, outdated information. Eventually, it becomes bloated and confused, making worse decisions the longer it runs.
 
-- **Git history** — Commits from previous iterations
-- **progress.json** — Task status and per-task learnings (short-term memory)
-- **AGENTS.md** — Project-wide conventions and patterns (long-term memory)
+**afk solves this with the Ralph Wiggum pattern** — a kanban-style approach where each task gets a fresh AI instance with clean context. Think of it like a well-organised team: each developer picks up one ticket, completes it, and moves on. No cognitive overload. No stale context.
 
-## Quick Start
+The result? AI that can work autonomously for hours without degrading.
+
+## 🧠 The Ralph Wiggum Pattern
+
+The technique is named after [Ralph Wiggum](https://en.wikipedia.org/wiki/Ralph_Wiggum) from *The Simpsons* — a character who approaches each moment with fresh-eyed obliviousness, unburdened by what came before.
+
+In AI terms, it works like this:
+
+1. **Fresh start every iteration** — Each loop spawns a brand new AI instance
+2. **One task at a time** — Kanban-style: pick up a task, complete it, move on
+3. **Memory through files, not context** — Progress persists via git commits, not the AI's memory
+
+This means the AI never runs out of context, never gets confused by old attempts, and can work indefinitely without degradation.
+
+### How Memory Persists
+
+- 📝 **Git history** — Commits from previous iterations
+- 📋 **progress.json** — Task status and per-task learnings (short-term memory)
+- 📖 **AGENTS.md** — Project-wide conventions and patterns (long-term memory)
+
+### Learn More
+
+- 📰 [The Ralph Wiggum Technique](https://ghuntley.com/ralph/) by Geoffrey Huntley (the originator)
+- 🔧 [snarktank/ralph](https://github.com/snarktank/ralph) by Ryan Carson (early implementation)
+- 📚 [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) by Anthropic
+
+## 🚀 Quick Start
 
 ```bash
-# Zero-config: parse a PRD and go
-afk prd parse requirements.md    # Creates .afk/prd.json
-afk go                           # Runs the loop (auto-detects everything)
+# Zero-config: import a requirements doc and go
+afk prd import requirements.md    # Creates .afk/tasks.json
+afk go                            # Runs the loop (auto-detects everything)
 ```
 
-Or with explicit configuration:
+Or point at an existing task file:
 
 ```bash
-afk init                         # Auto-detect project settings
-afk source add beads             # Add task source
-afk run 10                       # Run 10 iterations
+afk go TODO.md           # Use a markdown checklist as task source
+afk go 20                # Run 20 iterations
+afk go -u                # Run until all tasks complete
 ```
 
-## Installation
+## 📦 Installation
 
 ### One-liner (recommended)
 
@@ -40,7 +64,7 @@ curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install
 irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
 ```
 
-This installs a standalone binary — no dependencies required. Updates with `afk update`.
+Installs a standalone binary — no dependencies required. Updates with `afk update`.
 
 ### From source
 
@@ -56,19 +80,59 @@ cargo build --release
 cargo install afk
 ```
 
-## Key Commands
+## 🎮 Commands
+
+### Core Loop
 
 | Command | Description |
 |---------|-------------|
-| `afk go` | Zero-config: auto-detect and run |
+| `afk go` | Zero-config: auto-detect and run (10 iterations) |
 | `afk go 20` | Run 20 iterations |
-| `afk run -u` | Run until all tasks complete |
-| `afk explain` | Show current loop state |
-| `afk verify` | Run quality gates |
-| `afk done <id>` | Mark task complete |
-| `afk next` | Preview next prompt |
+| `afk go -u` | Run until all tasks complete |
+| `afk go TODO.md 5` | Use TODO.md as source, run 5 iterations |
 
-## Supported AI CLIs
+### Task Management
+
+| Command | Description |
+|---------|-------------|
+| `afk status` | Show current status and tasks |
+| `afk status -v` | Verbose output with learnings |
+| `afk list` | List tasks from current product requirements doc (PRD) |
+| `afk task <id>` | Show details of a specific task |
+| `afk done <id>` | Mark task complete |
+| `afk fail <id>` | Mark task failed |
+| `afk reset <id>` | Reset stuck task to pending |
+
+### PRD & Task Sources
+
+| Command | Description |
+|---------|-------------|
+| `afk prd import <file>` | Import requirements doc into .afk/tasks.json |
+| `afk tasks show` | Show current task list |
+| `afk tasks sync` | Sync from configured sources |
+| `afk source add beads` | Add beads as task source |
+| `afk source add markdown TODO.md` | Add markdown file source |
+| `afk source list` | List configured sources |
+
+### Quality & Debug
+
+| Command | Description |
+|---------|-------------|
+| `afk verify` | Run quality gates (lint, test, types) |
+| `afk prompt` | Preview next iteration's prompt |
+| `afk prompt -c` | Copy prompt to clipboard |
+
+### Session Management
+
+| Command | Description |
+|---------|-------------|
+| `afk init` | Initialise afk (auto-detects project) |
+| `afk archive create` | Archive current session |
+| `afk archive list` | List archived sessions |
+| `afk archive clear` | Clear current session |
+| `afk update` | Update afk to latest version |
+
+## 🤖 Supported AI CLIs
 
 afk works with any CLI that accepts prompts as the final argument:
 
@@ -83,84 +147,102 @@ afk works with any CLI that accepts prompts as the final argument:
 
 On first run, `afk go` auto-detects installed CLIs and prompts you to select one.
 
-## Documentation
+## ⚠️ Task Size (Critical!)
+
+Each task **must complete in a single AI context window**. Tasks that are too large cause context overflow and poor code quality.
+
+**Right-sized** ✓
+- Add a database column
+- Create a UI component  
+- Write tests for a module
+- Fix a specific bug
+
+**Too large** ✗
+- "Build the dashboard"
+- "Add authentication"
+- "Refactor the API"
+
+**When in doubt, split.** Five small tasks are better than one large task.
+
+## 🔄 How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   📋 Load tasks from sources                                │
+│      (beads, json, markdown, github)                        │
+│                                                             │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   ✅ All tasks complete? ──────────────────────▶ EXIT ✓     │
+│                                                             │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ No
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   📝 Generate prompt with:                                  │
+│      • Next task                                            │
+│      • Context files                                        │
+│      • Session learnings                                    │
+│                                                             │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│   🧠 Spawn FRESH AI instance                  ◀─────────┐   │
+│      (clean context each time!)                         │   │
+│                                                         │   │
+└───────────────────────────┬─────────────────────────────│───┘
+                            │                             │
+                            ▼                             │
+┌─────────────────────────────────────────────────────────│───┐
+│                                                         │   │
+│   💻 AI implements task                                 │   │
+│      • Makes code changes                               │   │
+│      • Records learnings                                │   │
+│      • Updates AGENTS.md                                │   │
+│                                                         │   │
+└───────────────────────────┬─────────────────────────────│───┘
+                            │                             │
+                            ▼                             │
+┌─────────────────────────────────────────────────────────│───┐
+│                                                         │   │
+│   🧪 Run quality gates                                  │   │
+│      (lint, test, typecheck)                            │   │
+│                                                         │   │
+└───────────────────────────┬─────────────────────────────│───┘
+                            │                             │
+                    Pass?   │                             │
+                   ┌────────┴────────┐                    │
+                   │                 │                    │
+              Yes  ▼            No   ▼                    │
+         ┌─────────────┐    ┌─────────────┐              │
+         │ Auto-commit │    │ Skip commit │              │
+         └─────────────┘    └─────────────┘              │
+                   │                 │                    │
+                   └────────┬────────┘                    │
+                            │                             │
+                            └─────────────────────────────┘
+```
+
+## 📚 Documentation
 
 - **[docs/user-guide.md](docs/user-guide.md)** — Complete command reference and workflow examples
 - **[docs/architecture.md](docs/architecture.md)** — Technical overview for contributors
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute
 
-## Task Size (Critical!)
-
-Each task **must complete in a single AI context window**. Tasks that are too large cause context overflow and poor code quality.
-
-**Right-sized** ✓ — Add a database column, add a UI component, write tests for a module
-
-**Too large** ✗ — "Build the dashboard", "Add authentication", "Refactor the API"
-
-**When in doubt, split.** Five small tasks are better than one large task.
-
-## How It Works
-
-```
-                    ┌─────────────────────────────┐
-                    │     Load tasks from         │
-                    │   sources (beads, json,     │
-                    │      markdown, github)      │
-                    └─────────────────────────────┘
-                                  │
-                                  ▼
-                    ┌─────────────────────────────┐
-                    │   All tasks complete?       │─── Yes ──▶ EXIT ✓
-                    └─────────────────────────────┘
-                                  │ No
-                                  ▼
-                    ┌─────────────────────────────┐
-                    │   Generate prompt with:     │
-                    │   • Next task               │
-                    │   • Context files           │
-                    │   • Session learnings       │
-                    └─────────────────────────────┘
-                                  │
-                                  ▼
-                    ┌─────────────────────────────┐
-                    │   Spawn FRESH AI instance   │◀────────┐
-                    │   (clean context each time) │         │
-                    └─────────────────────────────┘         │
-                                  │                         │
-                                  ▼                         │
-                    ┌─────────────────────────────┐         │
-                    │   AI implements task        │         │
-                    │   • Code changes            │         │
-                    │   • Records learnings       │         │
-                    │   • Updates AGENTS.md       │         │
-                    └─────────────────────────────┘         │
-                                  │                         │
-                                  ▼                         │
-                    ┌─────────────────────────────┐         │
-                    │   Run quality gates         │         │
-                    │   (lint, test, typecheck)   │         │
-                    └─────────────────────────────┘         │
-                                  │                         │
-                          Pass?   │                         │
-                         ┌────────┴────────┐                │
-                         │                 │                │
-                    Yes  ▼            No   ▼                │
-               ┌─────────────┐    ┌─────────────┐           │
-               │ Auto-commit │    │ Skip commit │           │
-               └─────────────┘    └─────────────┘           │
-                         │                 │                │
-                         └────────┬────────┘                │
-                                  │                         │
-                                  └─────────────────────────┘
-```
-
-## Inspired By
+## 🙏 Inspired By
 
 - [Ralph Wiggum pattern](https://ghuntley.com/ralph/) by Geoffrey Huntley
 - [snarktank/ralph](https://github.com/snarktank/ralph) by Ryan Carson
 - [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) by Anthropic
 - [Beads](https://github.com/steveyegge/beads) by Steve Yegge
 
-## License
+## 📄 License
 
 MIT

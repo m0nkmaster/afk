@@ -140,10 +140,10 @@ src/
 ## Key Patterns
 
 - **Config**: All settings in `.afk/config.json`, loaded via Serde models
-- **PRD File**: `.afk/prd.json` is the working task list; used directly if no sources configured
+- **Tasks File**: `.afk/tasks.json` is the working task list; used directly if no sources configured
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations, task status, and per-task learnings (short-term memory)
 - **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
-- **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into prd.json
+- **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into tasks.json
 - **Prompts**: Tera templates, customisable via config
 - **Runner**: Implements Ralph Wiggum pattern — spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
@@ -155,14 +155,16 @@ src/
 ```bash
 afk go                 # Zero-config: auto-detect PRD/sources and run
 afk go 20              # Run 20 iterations
-afk start              # Init if needed + run loop
-afk run N              # Run N iterations
-afk explain            # Debug current loop state
+afk go --init          # Re-run setup, then run
+afk status             # Show current status
+afk status -v          # Verbose status with learnings
+afk list               # List tasks from PRD
+afk task <id>          # Show task details
 afk verify             # Run quality gates (lint, test, types)
 afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task
-afk next               # Preview next prompt
+afk prompt             # Preview next prompt
 ```
 
 ## PRD Workflow
@@ -170,11 +172,11 @@ afk next               # Preview next prompt
 The recommended workflow for new projects:
 
 ```bash
-afk prd parse requirements.md   # Creates .afk/prd.json
+afk prd import requirements.md  # Creates .afk/tasks.json
 afk go                          # Starts working through tasks
 ```
 
-When `.afk/prd.json` exists with tasks and no sources are configured, `afk go` uses it directly as the source of truth — no configuration required.
+When `.afk/tasks.json` exists with tasks and no sources are configured, `afk go` uses it directly as the source of truth — no configuration required.
 
 ## Adding a New Task Source
 
