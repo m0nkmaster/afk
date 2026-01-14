@@ -16,7 +16,23 @@
      */
     function createTaskElement(text, completed) {
         const li = document.createElement('li');
-        li.textContent = text;
+        
+        // Task text span
+        const textSpan = document.createElement('span');
+        textSpan.className = 'task-text';
+        textSpan.textContent = text;
+        li.appendChild(textSpan);
+        
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.setAttribute('aria-label', 'Delete task');
+        deleteBtn.textContent = '×';
+        deleteBtn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent triggering completion toggle
+            li.remove();
+        });
+        li.appendChild(deleteBtn);
         
         if (completed) {
             li.classList.add('completed');
