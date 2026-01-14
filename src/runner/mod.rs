@@ -17,8 +17,6 @@ pub use output_handler::{FeedbackMode, OutputHandler, COMPLETION_SIGNALS};
 pub struct RunOptions {
     /// Maximum iterations (None uses config default).
     pub max_iterations: Option<u32>,
-    /// Branch to create/checkout.
-    pub branch: Option<String>,
     /// Run until all tasks complete.
     pub until_complete: bool,
     /// Timeout override in minutes.
@@ -44,12 +42,6 @@ impl RunOptions {
     /// Set max iterations.
     pub fn with_iterations(mut self, n: Option<u32>) -> Self {
         self.max_iterations = n;
-        self
-    }
-
-    /// Set branch name.
-    pub fn with_branch(mut self, branch: Option<String>) -> Self {
-        self.branch = branch;
         self
     }
 

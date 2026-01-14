@@ -26,13 +26,13 @@ use crate::sources::aggregate_tasks;
 /// # Arguments
 ///
 /// * `config` - The afk configuration with sources
-/// * `branch_name` - Optional branch name override; if None, gets from git
+/// * `branch_name` - Optional branch name for informational purposes (deprecated, prefer None)
 ///
 /// # Returns
 ///
 /// The synced PrdDocument
-pub fn sync_prd(config: &AfkConfig, branch_name: Option<&str>) -> Result<PrdDocument, PrdError> {
-    sync_prd_with_root(config, branch_name, None)
+pub fn sync_prd(config: &AfkConfig) -> Result<PrdDocument, PrdError> {
+    sync_prd_with_root(config, None, None)
 }
 
 /// Sync tasks from all configured sources with a custom root directory.
@@ -83,10 +83,8 @@ pub fn sync_prd_with_root(
     // Sort by priority (1 = highest)
     stories.sort_by_key(|s| s.priority);
 
-    // Get branch name
-    let branch = branch_name
-        .map(String::from)
-        .unwrap_or_else(get_current_branch);
+    // Get branch name (informational only, afk does not manage branches)
+    let branch = branch_name.map(String::from).unwrap_or_default();
 
     // Get project name
     let project = get_project_name_from_root(root);
@@ -447,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_tasks_with_branch_name_override() {
+    fn test_sync_tasks_branch_name_defaults_to_empty() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
@@ -463,10 +461,10 @@ mod tests {
             ..Default::default()
         };
 
-        let result =
-            sync_prd_with_root(&config, Some("feature/custom-branch"), Some(temp.path())).unwrap();
+        // afk no longer manages branches - branch_name should be empty by default
+        let result = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
 
-        assert_eq!(result.branch_name, "feature/custom-branch");
+        assert!(result.branch_name.is_empty());
     }
 
     #[test]
@@ -695,7 +693,7 @@ version = "1.0.0"
             ..Default::default()
         };
 
-        let _ = sync_prd_with_root(&config, Some("test-branch"), Some(temp.path())).unwrap();
+        let _ = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
 
         // Verify file was written
         let tasks_path = afk_dir.join("tasks.json");
@@ -704,7 +702,6 @@ version = "1.0.0"
         // Verify contents
         let contents = fs::read_to_string(&tasks_path).unwrap();
         assert!(contents.contains("task-1"));
-        assert!(contents.contains("test-branch"));
     }
 
     #[test]

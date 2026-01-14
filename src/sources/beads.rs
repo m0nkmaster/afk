@@ -6,19 +6,38 @@ use crate::prd::UserStory;
 use regex::Regex;
 use std::process::Command;
 
-/// Load tasks from beads via `bd ready --json`.
+/// Load tasks from beads.
 ///
-/// Falls back to text parsing if JSON output fails.
+/// Includes both `ready` and `in_progress` issues so that work in progress
+/// is not lost during sync. Falls back to text parsing if JSON output fails.
 /// Returns an empty vector if `bd` is not installed or times out.
 pub fn load_beads_tasks() -> Vec<UserStory> {
-    // Try JSON output first
-    match run_bd_ready_json() {
-        Ok(tasks) => tasks,
-        Err(_) => {
-            // Fall back to text parsing
-            parse_beads_text_output().unwrap_or_default()
+    // Try to get both ready and in_progress issues
+    let mut tasks = Vec::new();
+
+    // Get ready issues
+    if let Ok(ready_tasks) = run_bd_list_json(&["ready"]) {
+        tasks.extend(ready_tasks);
+    }
+
+    // Get in_progress issues (so we don't lose work in progress)
+    if let Ok(in_progress_tasks) = run_bd_list_json(&["in_progress"]) {
+        // Deduplicate by ID (in case an issue appears in both somehow)
+        for task in in_progress_tasks {
+            if !tasks.iter().any(|t| t.id == task.id) {
+                tasks.push(task);
+            }
         }
     }
+
+    // If no JSON results, fall back to text parsing of `bd ready`
+    if tasks.is_empty() {
+        if let Ok(text_tasks) = parse_beads_text_output() {
+            return text_tasks;
+        }
+    }
+
+    tasks
 }
 
 /// Start work on a beads issue (mark as in_progress).
@@ -56,10 +75,11 @@ pub fn close_beads_issue(issue_id: &str) -> bool {
     }
 }
 
-/// Run `bd ready --json` and parse the output.
-fn run_bd_ready_json() -> Result<Vec<UserStory>, BeadsError> {
+/// Run `bd list --status <statuses> --json` and parse the output.
+fn run_bd_list_json(statuses: &[&str]) -> Result<Vec<UserStory>, BeadsError> {
+    let status_arg = statuses.join(",");
     let output = Command::new("bd")
-        .args(["ready", "--json"])
+        .args(["list", "--status", &status_arg, "--json"])
         .output()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {

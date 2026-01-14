@@ -359,12 +359,6 @@ pub struct GitConfig {
     /// Whether to auto-commit after task completion.
     #[serde(default = "default_true")]
     pub auto_commit: bool,
-    /// Whether to auto-create branches.
-    #[serde(default)]
-    pub auto_branch: bool,
-    /// Prefix for auto-created branches.
-    #[serde(default = "default_branch_prefix")]
-    pub branch_prefix: String,
     /// Template for commit messages.
     #[serde(default = "default_commit_template")]
     pub commit_message_template: String,
@@ -372,10 +366,6 @@ pub struct GitConfig {
 
 fn default_true() -> bool {
     true
-}
-
-fn default_branch_prefix() -> String {
-    "afk/".to_string()
 }
 
 fn default_commit_template() -> String {
@@ -386,8 +376,6 @@ impl Default for GitConfig {
     fn default() -> Self {
         Self {
             auto_commit: default_true(),
-            auto_branch: false,
-            branch_prefix: default_branch_prefix(),
             commit_message_template: default_commit_template(),
         }
     }
@@ -402,9 +390,6 @@ pub struct ArchiveConfig {
     /// Directory to store archives.
     #[serde(default = "default_archive_directory")]
     pub directory: String,
-    /// Whether to archive on branch change.
-    #[serde(default = "default_true")]
-    pub on_branch_change: bool,
 }
 
 fn default_archive_directory() -> String {
@@ -416,7 +401,6 @@ impl Default for ArchiveConfig {
         Self {
             enabled: default_true(),
             directory: default_archive_directory(),
-            on_branch_change: default_true(),
         }
     }
 }
@@ -840,22 +824,16 @@ mod tests {
     fn test_git_config_defaults() {
         let config = GitConfig::default();
         assert!(config.auto_commit);
-        assert!(!config.auto_branch);
-        assert_eq!(config.branch_prefix, "afk/");
         assert_eq!(config.commit_message_template, "afk: {task_id} - {message}");
     }
 
     #[test]
-    fn test_git_config_enabled() {
+    fn test_git_config_custom() {
         let config = GitConfig {
             auto_commit: true,
-            auto_branch: true,
-            branch_prefix: "feature/".to_string(),
             commit_message_template: "[{task_id}] {message}".to_string(),
         };
         assert!(config.auto_commit);
-        assert!(config.auto_branch);
-        assert_eq!(config.branch_prefix, "feature/");
         assert_eq!(config.commit_message_template, "[{task_id}] {message}");
     }
 
@@ -864,7 +842,6 @@ mod tests {
         let config = ArchiveConfig::default();
         assert!(config.enabled);
         assert_eq!(config.directory, ".afk/archive");
-        assert!(config.on_branch_change);
     }
 
     #[test]
@@ -872,11 +849,9 @@ mod tests {
         let config = ArchiveConfig {
             enabled: false,
             directory: ".archive".to_string(),
-            on_branch_change: false,
         };
         assert!(!config.enabled);
         assert_eq!(config.directory, ".archive");
-        assert!(!config.on_branch_change);
     }
 
     #[test]
@@ -1028,7 +1003,7 @@ mod tests {
 
     #[test]
     fn test_afk_config_with_real_config_format() {
-        // Test with the actual config.json format from the Python version
+        // Test with a typical config.json format
         let json = r#"{
             "sources": [],
             "feedback_loops": {
@@ -1057,14 +1032,11 @@ mod tests {
             },
             "git": {
                 "auto_commit": true,
-                "auto_branch": false,
-                "branch_prefix": "afk/",
                 "commit_message_template": "afk: {task_id} - {message}"
             },
             "archive": {
                 "enabled": true,
-                "directory": ".afk/archive",
-                "on_branch_change": true
+                "directory": ".afk/archive"
             }
         }"#;
 
@@ -1081,9 +1053,7 @@ mod tests {
         assert_eq!(config.ai_cli.args, vec!["-p", "--force"]);
         assert_eq!(config.prompt.context_files, vec!["AGENTS.md", "README.md"]);
         assert!(config.git.auto_commit);
-        assert!(!config.git.auto_branch);
         assert!(config.archive.enabled);
-        assert!(config.archive.on_branch_change);
     }
 
     #[test]

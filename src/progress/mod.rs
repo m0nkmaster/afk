@@ -9,7 +9,7 @@ pub use limits::{
     check_limits, get_failure_count, should_skip_task, LimitCheckResult, LimitSignal,
 };
 
-use crate::config::{ARCHIVE_DIR, PROGRESS_FILE};
+use crate::config::{ARCHIVE_DIR, PROGRESS_FILE, TASKS_FILE};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -394,45 +394,54 @@ pub struct ArchiveMetadata {
 ///
 /// The path to the archive directory, or None if there's nothing to archive.
 pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
-    use crate::git::get_current_branch;
-
     let progress_path = Path::new(PROGRESS_FILE);
-    if !progress_path.exists() {
+    let tasks_path = Path::new(TASKS_FILE);
+
+    // Need at least one file to archive
+    if !progress_path.exists() && !tasks_path.exists() {
         return Ok(None);
     }
 
-    // Load progress to get stats
-    let progress = SessionProgress::load(None)?;
+    // Load progress to get stats (if it exists)
+    let progress = if progress_path.exists() {
+        Some(SessionProgress::load(None)?)
+    } else {
+        None
+    };
 
-    // Create archive directory name with timestamp and sanitised branch name
-    let branch = get_current_branch();
+    // Create archive directory name with timestamp
     let timestamp = Utc::now().format("%Y%m%d_%H%M%S").to_string();
-    let branch_part = branch
-        .as_deref()
-        .unwrap_or("unknown")
-        .replace(['/', '\\'], "-")
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-        .take(30)
-        .collect::<String>();
-
-    let archive_name = format!("{}_{}", timestamp, branch_part);
+    let archive_name = timestamp;
     let archive_dir = Path::new(ARCHIVE_DIR).join(&archive_name);
 
     // Create archive directory
     fs::create_dir_all(&archive_dir)?;
 
-    // Copy progress.json to archive
-    let archive_progress = archive_dir.join("progress.json");
-    fs::copy(progress_path, &archive_progress)?;
+    // Copy progress.json to archive (if it exists)
+    if progress_path.exists() {
+        let archive_progress = archive_dir.join("progress.json");
+        fs::copy(progress_path, &archive_progress)?;
+    }
+
+    // Copy tasks.json to archive (if it exists)
+    if tasks_path.exists() {
+        let archive_tasks = archive_dir.join("tasks.json");
+        fs::copy(tasks_path, &archive_tasks)?;
+    }
 
     // Write metadata
-    let (pending, _, completed, _, _) = progress.get_task_counts();
+    let (pending, completed, iterations) = if let Some(ref p) = progress {
+        let (pend, _, comp, _, _) = p.get_task_counts();
+        (pend, comp, p.iterations)
+    } else {
+        (0, 0, 0)
+    };
+
     let metadata = ArchiveMetadata {
         archived_at: Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
-        branch,
+        branch: None, // afk no longer manages branches
         reason: reason.to_string(),
-        iterations: progress.iterations,
+        iterations,
         tasks_completed: completed,
         tasks_pending: pending,
     };
@@ -450,35 +459,6 @@ pub fn clear_session() -> Result<(), ProgressError> {
         fs::remove_file(progress_path)?;
     }
     Ok(())
-}
-
-/// Check if the session should be archived due to branch change.
-///
-/// Compares the current git branch with the branch stored in any existing session.
-pub fn should_archive_on_branch_change() -> bool {
-    use crate::git::get_current_branch;
-
-    // Load existing progress to check stored branch
-    let progress_path = Path::new(PROGRESS_FILE);
-    if !progress_path.exists() {
-        return false;
-    }
-
-    // Read progress to check if we have session data
-    if let Ok(contents) = fs::read_to_string(progress_path) {
-        // Try to parse and check if there's meaningful session data
-        if let Ok(progress) = serde_json::from_str::<SessionProgress>(&contents) {
-            // If there are no tasks, no need to archive
-            if progress.tasks.is_empty() && progress.iterations == 0 {
-                return false;
-            }
-        }
-    }
-
-    // For now, return false since we don't store branch in SessionProgress
-    // A future enhancement could add branch tracking to SessionProgress
-    let _ = get_current_branch();
-    false
 }
 
 /// List archived sessions.
@@ -1360,8 +1340,8 @@ mod tests {
     fn test_archive_metadata_serialisation() {
         let metadata = ArchiveMetadata {
             archived_at: "2024-01-15T10:30:00.000000".to_string(),
-            branch: Some("feature/test".to_string()),
-            reason: "manual".to_string(),
+            branch: None, // afk no longer manages branches
+            reason: "completed".to_string(),
             iterations: 10,
             tasks_completed: 5,
             tasks_pending: 3,
@@ -1369,7 +1349,6 @@ mod tests {
 
         let json = serde_json::to_string_pretty(&metadata).unwrap();
         assert!(json.contains("\"archived_at\""));
-        assert!(json.contains("\"branch\""));
         assert!(json.contains("\"reason\""));
         assert!(json.contains("\"iterations\""));
         assert!(json.contains("\"tasks_completed\""));
@@ -1378,7 +1357,7 @@ mod tests {
         // Round-trip
         let parsed: ArchiveMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.archived_at, metadata.archived_at);
-        assert_eq!(parsed.branch, metadata.branch);
+        assert!(parsed.branch.is_none());
         assert_eq!(parsed.reason, metadata.reason);
         assert_eq!(parsed.iterations, metadata.iterations);
         assert_eq!(parsed.tasks_completed, metadata.tasks_completed);
@@ -1386,11 +1365,11 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_metadata_no_branch() {
+    fn test_archive_metadata_with_all_complete() {
         let metadata = ArchiveMetadata {
             archived_at: "2024-01-15T10:30:00.000000".to_string(),
             branch: None,
-            reason: "session_complete".to_string(),
+            reason: "completed".to_string(),
             iterations: 5,
             tasks_completed: 5,
             tasks_pending: 0,
@@ -1399,6 +1378,8 @@ mod tests {
         let json = serde_json::to_string_pretty(&metadata).unwrap();
         let parsed: ArchiveMetadata = serde_json::from_str(&json).unwrap();
         assert!(parsed.branch.is_none());
+        assert_eq!(parsed.reason, "completed");
+        assert_eq!(parsed.tasks_pending, 0);
     }
 
     #[test]
@@ -1419,14 +1400,5 @@ mod tests {
 
         let archives = list_archives().unwrap();
         assert!(archives.is_empty());
-    }
-
-    #[test]
-    fn test_should_archive_on_branch_change_no_progress() {
-        let temp = TempDir::new().unwrap();
-        std::env::set_current_dir(temp.path()).unwrap();
-
-        // No progress file means nothing to archive
-        assert!(!should_archive_on_branch_change());
     }
 }

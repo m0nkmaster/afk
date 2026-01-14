@@ -93,7 +93,16 @@ pub enum Commands {
     #[command(subcommand)]
     Tasks(TasksCommands),
 
-    /// Manage session archives.
+    /// Sync tasks from configured sources.
+    ///
+    /// Alias for `afk tasks sync`. Aggregates tasks from all sources
+    /// into .afk/tasks.json.
+    Sync,
+
+    /// Archive current session.
+    ///
+    /// Saves tasks.json and progress.json to a timestamped archive directory.
+    /// Use to complete a project and prepare for a new one.
     #[command(subcommand)]
     Archive(ArchiveCommands),
 
@@ -136,9 +145,11 @@ pub struct GoCommand {
     #[arg(long)]
     pub init: bool,
 
-    /// Create/checkout feature branch before running.
-    #[arg(short = 'b', long)]
-    pub branch: Option<String>,
+    /// Start fresh by clearing any existing session progress.
+    ///
+    /// Deletes .afk/progress.json before running, giving a clean slate.
+    #[arg(long)]
+    pub fresh: bool,
 
     /// Override timeout in minutes.
     #[arg(short = 't', long)]
@@ -290,11 +301,7 @@ pub struct PrdImportCommand {
 
 /// Arguments for 'tasks sync' command.
 #[derive(Args, Debug)]
-pub struct TasksSyncCommand {
-    /// Branch name for tasks.
-    #[arg(short = 'b', long)]
-    pub branch: Option<String>,
-}
+pub struct TasksSyncCommand {}
 
 /// Arguments for 'tasks show' command.
 #[derive(Args, Debug)]
@@ -451,6 +458,18 @@ impl GoCommand {
             println!("\x1b[2mCleared existing configuration.\x1b[0m");
         }
 
+        // Handle --fresh flag: clear session progress to start fresh
+        if self.fresh {
+            let progress_path = afk_dir.join("progress.json");
+            if progress_path.exists() {
+                if let Err(e) = fs::remove_file(&progress_path) {
+                    eprintln!("\x1b[31mError:\x1b[0m Failed to clear progress: {e}");
+                    std::process::exit(1);
+                }
+                println!("\x1b[2mCleared session progress.\x1b[0m");
+            }
+        }
+
         // Parse iterations_or_source
         let (iterations, explicit_source) = self.parse_args();
 
@@ -569,7 +588,6 @@ impl GoCommand {
         let options = RunOptions::new()
             .with_iterations(iterations)
             .with_until_complete(self.until_complete)
-            .with_branch(self.branch.clone())
             .with_timeout(self.timeout)
             .with_resume(false)
             .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
@@ -1125,7 +1143,7 @@ impl PrdImportCommand {
 impl TasksSyncCommand {
     /// Execute the tasks sync command.
     pub fn execute(&self) {
-        match commands::prd::tasks_sync(self.branch.as_deref()) {
+        match commands::prd::tasks_sync() {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("\x1b[31mError:\x1b[0m {e}");
@@ -1549,7 +1567,6 @@ mod tests {
                 assert!(!cmd.dry_run);
                 assert!(!cmd.until_complete);
                 assert!(!cmd.init);
-                assert!(cmd.branch.is_none());
                 assert!(cmd.timeout.is_none());
                 assert_eq!(cmd.feedback, Some("tui".to_string()));
                 assert!(!cmd.no_mascot);
@@ -1589,8 +1606,6 @@ mod tests {
             "-n",
             "-u",
             "--init",
-            "-b",
-            "feature/test",
             "-t",
             "60",
             "--feedback",
@@ -1603,7 +1618,6 @@ mod tests {
                 assert!(cmd.dry_run);
                 assert!(cmd.until_complete);
                 assert!(cmd.init);
-                assert_eq!(cmd.branch, Some("feature/test".to_string()));
                 assert_eq!(cmd.timeout, Some(60));
                 assert_eq!(cmd.feedback, Some("minimal".to_string()));
                 assert!(cmd.no_mascot);
@@ -1789,13 +1803,11 @@ mod tests {
 
     #[test]
     fn test_tasks_sync_command() {
-        let cli = Cli::try_parse_from(["afk", "tasks", "sync", "-b", "feature/test"]).unwrap();
-        match cli.command {
-            Some(Commands::Tasks(TasksCommands::Sync(cmd))) => {
-                assert_eq!(cmd.branch, Some("feature/test".to_string()));
-            }
-            _ => panic!("Expected Tasks Sync command"),
-        }
+        let cli = Cli::try_parse_from(["afk", "tasks", "sync"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Tasks(TasksCommands::Sync(_)))
+        ));
     }
 
     #[test]

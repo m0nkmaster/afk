@@ -194,26 +194,18 @@ fn run_ai_cli_for_prd(config: &AfkConfig, prompt: &str, output: &str) -> PrdComm
 /// Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
 /// .afk/tasks.json file.
 ///
-/// # Arguments
-///
-/// * `branch` - Optional branch name override.
-///
 /// # Returns
 ///
 /// Ok(()) on success, or an error if sync fails.
-pub fn tasks_sync(branch: Option<&str>) -> PrdCommandResult {
-    tasks_sync_impl(branch, None, None)
+pub fn tasks_sync() -> PrdCommandResult {
+    tasks_sync_impl(None, None)
 }
 
 /// Internal implementation of tasks_sync with optional paths for testing.
-pub fn tasks_sync_impl(
-    branch: Option<&str>,
-    config_path: Option<&Path>,
-    root: Option<&Path>,
-) -> PrdCommandResult {
+pub fn tasks_sync_impl(config_path: Option<&Path>, root: Option<&Path>) -> PrdCommandResult {
     let config = AfkConfig::load(config_path)?;
 
-    let prd = sync_prd_with_root(&config, branch, root)?;
+    let prd = sync_prd_with_root(&config, None, root)?;
 
     // Calculate counts
     let (completed, total) = prd.get_story_counts();
@@ -375,7 +367,7 @@ mod tests {
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
         // Check tasks.json was created
@@ -403,7 +395,7 @@ mod tests {
         let config = AfkConfig::default();
         config.save(Some(&config_path)).unwrap();
 
-        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
         // Tasks should still have the story
@@ -413,7 +405,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tasks_sync_with_branch_override() {
+    fn test_tasks_sync_with_source() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
         let tasks_path = afk_dir.join("tasks.json");
@@ -429,15 +421,12 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = tasks_sync_impl(
-            Some("feature/custom"),
-            Some(&config_path),
-            Some(temp.path()),
-        );
+        let result = tasks_sync_impl(Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
         let prd = PrdDocument::load(Some(&tasks_path)).unwrap();
-        assert_eq!(prd.branch_name, "feature/custom");
+        assert_eq!(prd.user_stories.len(), 1);
+        assert_eq!(prd.user_stories[0].id, "task-1");
     }
 
     #[test]
@@ -604,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tasks_sync_with_source() {
+    fn test_tasks_sync_sorts_by_priority() {
         let (temp, afk_dir) = setup_temp_dir();
         let config_path = afk_dir.join("config.json");
         let tasks_path = afk_dir.join("tasks.json");
@@ -624,7 +613,7 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
         // Verify tasks.json was created with sorted tasks
@@ -662,7 +651,7 @@ mod tests {
         };
         config.save(Some(&config_path)).unwrap();
 
-        let result = tasks_sync_impl(None, Some(&config_path), Some(temp.path()));
+        let result = tasks_sync_impl(Some(&config_path), Some(temp.path()));
         assert!(result.is_ok());
 
         // story-1 should still have passes: true

@@ -2,7 +2,9 @@
 //!
 //! This is the main entry point for the afk CLI tool.
 
-use afk::cli::{ArchiveCommands, Cli, Commands, PrdCommands, SourceCommands, TasksCommands};
+use afk::cli::{
+    ArchiveCommands, Cli, Commands, PrdCommands, SourceCommands, TasksCommands, TasksSyncCommand,
+};
 use clap::Parser;
 
 fn main() {
@@ -43,6 +45,10 @@ fn main() {
                 TasksCommands::Sync(c) => c.execute(),
                 TasksCommands::Show(c) => c.execute(),
             },
+            Commands::Sync => {
+                // Alias for `afk tasks sync`
+                TasksSyncCommand {}.execute();
+            }
             Commands::Archive(subcmd) => match subcmd {
                 ArchiveCommands::Create(c) => c.execute(),
                 ArchiveCommands::List(c) => c.execute(),

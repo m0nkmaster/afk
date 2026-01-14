@@ -83,7 +83,6 @@ impl LoopController {
     /// # Arguments
     ///
     /// * `max_iterations` - Override for max iterations (uses config default if None)
-    /// * `branch` - Branch name to create/checkout
     /// * `until_complete` - If true, run until all tasks done
     /// * `timeout_override` - Override timeout in minutes
     /// * `resume` - If true, continue from last session
@@ -94,7 +93,6 @@ impl LoopController {
     pub fn run(
         &mut self,
         max_iterations: Option<u32>,
-        branch: Option<&str>,
         until_complete: bool,
         timeout_override: Option<u32>,
         _resume: bool,
@@ -109,7 +107,7 @@ impl LoopController {
         };
 
         // Sync PRD before loop
-        let prd = match sync_prd_with_root(&self.config, branch, None) {
+        let prd = match sync_prd_with_root(&self.config, None, None) {
             Ok(prd) => prd,
             Err(e) => {
                 self.output.error(&format!("Failed to sync PRD: {e}"));
@@ -148,7 +146,7 @@ impl LoopController {
         }
 
         // Display loop start panel
-        self.output.loop_start_panel(max_iter, branch.unwrap_or(""));
+        self.output.loop_start_panel(max_iter, "");
 
         // Get first task info
         let first_task = pending_stories.first();
@@ -297,10 +295,11 @@ impl LoopController {
             }
         }
 
-        // Archive session if interrupted or complete
-        let archived_to = if stop_reason == StopReason::UserInterrupt {
+        // Archive session when all tasks complete (project done)
+        // Do NOT archive on interrupt - use `afk archive` manually if needed
+        let archived_to = if stop_reason == StopReason::Complete {
             if self.config.archive.enabled {
-                match crate::progress::archive_session("interrupted") {
+                match crate::progress::archive_session("completed") {
                     Ok(Some(path)) => {
                         self.output
                             .info(&format!("Session archived to: {}", path.display()));
@@ -357,7 +356,6 @@ pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResu
 
     controller.run(
         options.max_iterations,
-        options.branch.as_deref(),
         options.until_complete,
         options.timeout_minutes,
         options.resume,
@@ -371,14 +369,12 @@ pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResu
 pub fn run_loop(
     config: &AfkConfig,
     max_iterations: Option<u32>,
-    branch: Option<&str>,
     until_complete: bool,
     timeout_override: Option<u32>,
     resume: bool,
 ) -> RunResult {
     let options = RunOptions {
         max_iterations,
-        branch: branch.map(|s| s.to_string()),
         until_complete,
         timeout_minutes: timeout_override,
         resume,
@@ -490,7 +486,7 @@ fn run_loop_with_tui_sender(
     };
 
     // Sync PRD before loop
-    let prd = match sync_prd_with_root(config, options.branch.as_deref(), None) {
+    let prd = match sync_prd_with_root(config, None, None) {
         Ok(prd) => prd,
         Err(e) => {
             let _ = tx.send(TuiEvent::Error(format!("Failed to sync PRD: {e}")));
