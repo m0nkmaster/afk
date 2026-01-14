@@ -5,11 +5,47 @@
 
     // Constants
     const STORAGE_KEY = 'taskList';
+    const THEME_KEY = 'theme';
 
     // DOM elements
     const taskInput = document.getElementById('new-task');
     const addButton = document.getElementById('add-task-btn');
     const taskList = document.getElementById('task-list');
+    const themeToggle = document.getElementById('theme-toggle');
+
+    /**
+     * Applies the given theme and updates the toggle button icon.
+     * @param {string} theme - 'dark' or 'light'
+     */
+    function applyTheme(theme) {
+        if (theme === 'light') {
+            document.documentElement.setAttribute('data-theme', 'light');
+            themeToggle.textContent = '🌙';
+            themeToggle.setAttribute('aria-label', 'Switch to dark theme');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            themeToggle.textContent = '☀️';
+            themeToggle.setAttribute('aria-label', 'Switch to light theme');
+        }
+    }
+
+    /**
+     * Toggles between dark and light themes.
+     */
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        applyTheme(newTheme);
+        localStorage.setItem(THEME_KEY, newTheme);
+    }
+
+    /**
+     * Loads the saved theme from localStorage, defaulting to dark.
+     */
+    function loadTheme() {
+        const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
+        applyTheme(savedTheme);
+    }
 
     /**
      * Saves the current task list to localStorage.
@@ -113,6 +149,7 @@
 
     // Event listeners
     addButton.addEventListener('click', addTask);
+    themeToggle.addEventListener('click', toggleTheme);
     
     // Allow adding tasks with Enter key
     taskInput.addEventListener('keydown', function(e) {
@@ -121,6 +158,7 @@
         }
     });
 
-    // Load saved tasks on page load
+    // Initialise on page load
+    loadTheme();
     loadTasks();
 })();
