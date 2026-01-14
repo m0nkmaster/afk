@@ -35,6 +35,29 @@ body {
 .swatch-colour {
   flex: 1;
   background-color: #cccccc;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Lock icon - hidden by default */
+.lock-icon {
+  font-size: 2rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Show lock icon when swatch is locked */
+.swatch.locked .lock-icon {
+  opacity: 1;
+}
+
+/* Subtle border to indicate locked state */
+.swatch.locked .swatch-colour {
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.4);
 }
 
 /* Info section at bottom of swatch */

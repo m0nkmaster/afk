@@ -44,9 +44,35 @@ function generatePalette() {
   });
 }
 
+/**
+ * Toggles the locked state of a swatch.
+ * @param {HTMLElement} swatch - The swatch element to toggle
+ */
+function toggleLock(swatch) {
+  swatch.classList.toggle('locked');
+}
+
+/**
+ * Checks if a swatch is locked.
+ * @param {HTMLElement} swatch - The swatch element to check
+ * @returns {boolean} True if the swatch is locked
+ */
+function isLocked(swatch) {
+  return swatch.classList.contains('locked');
+}
+
+// Add click handlers to toggle lock state
+swatches.forEach((swatch) => {
+  swatch.addEventListener('click', () => {
+    toggleLock(swatch);
+  });
+});
+
 // Generate initial palette on page load
 generatePalette();
 
 // Expose to window for browser console access
 window.generateRandomColour = generateRandomColour;
 window.generatePalette = generatePalette;
+window.toggleLock = toggleLock;
+window.isLocked = isLocked;
