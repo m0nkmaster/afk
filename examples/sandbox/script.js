@@ -47,7 +47,8 @@ const gameState = {
   moves: 0,                           // Number of moves (turns) taken
   isLocked: false,                    // Whether interaction is locked
   timerInterval: null,                // Timer interval reference
-  elapsedSeconds: 0                   // Elapsed time in seconds
+  elapsedSeconds: 0,                  // Elapsed time in seconds
+  isGameWon: false                    // Whether the game has been won
 };
 
 // Render all cards to the DOM
@@ -186,6 +187,18 @@ function handleMatch(firstCard, secondCard) {
   gameState.flippedCards = [];
   
   console.log(`Match found! Total pairs: ${gameState.matchedPairs}/8`);
+  
+  // Check for win condition - all 8 pairs matched
+  if (gameState.matchedPairs === 8) {
+    handleWin();
+  }
+}
+
+// Handle game win state
+function handleWin() {
+  gameState.isGameWon = true;
+  console.log('🎉 Congratulations! You won the game!');
+  console.log(`Game completed in ${gameState.moves} moves and ${gameState.elapsedSeconds} seconds`);
 }
 
 // Reset game to initial state with shuffled cards
@@ -203,6 +216,7 @@ function resetGame() {
   gameState.moves = 0;
   gameState.isLocked = false;
   gameState.elapsedSeconds = 0;
+  gameState.isGameWon = false;
   
   // Re-render the board with new shuffled cards
   renderCards();
