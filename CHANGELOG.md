@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-01-14
+
+### Added
+
+- **Real-time AI output** — Parse NDJSON stream-json from Cursor and Claude CLIs
+- **Unified stream parser** — Auto-detects CLI format and normalises events
+- **Live progress display** — Shows assistant messages, tool calls, and file changes as they happen
+- **Simplified TUI layout** — Compact header bar with stats, full-width scrollable output
+
+### Changed
+
+- Default output format is now `stream-json` (configurable via `output_format: "text"` for legacy behaviour)
+- AI CLI args auto-include streaming flags based on detected CLI type
+
+### Technical
+
+- New `StreamJsonParser` in `src/parser/stream_json.rs`
+- Added `AiOutputFormat` enum and `full_args()` helper to `AiCliConfig`
+- TUI sidebar removed in favour of header-integrated stats
+
 ## [1.0.0-rc1] - 2026-01-12
 
 ### Added
