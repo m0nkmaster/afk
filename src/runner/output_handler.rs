@@ -150,7 +150,7 @@ impl OutputHandler {
 
     /// Stop feedback display and file watcher.
     pub fn stop_feedback(&mut self) {
-        // Poll final changes from watcher
+        // Poll final changes from watcher (with deduplication)
         if let Some(ref watcher) = self.file_watcher {
             let changes = watcher.get_changes();
             for change in changes {
@@ -159,9 +159,13 @@ impl OutputHandler {
                     ChangeType::Modified => "modified",
                     ChangeType::Deleted => "deleted",
                 };
-                let path_str = change.path.to_string_lossy();
-                self.metrics_collector
-                    .record_file_change(&path_str, change_type);
+                let path_str = change.path.to_string_lossy().to_string();
+                let metrics = self.metrics_collector.get_metrics();
+
+                if !self.path_already_recorded(&path_str, metrics) {
+                    self.metrics_collector
+                        .record_file_change(&path_str, change_type);
+                }
             }
         }
 
@@ -304,16 +308,14 @@ impl OutputHandler {
                     ChangeType::Modified => "modified",
                     ChangeType::Deleted => "deleted",
                 };
-                let path_str = change.path.to_string_lossy();
+                let path_str = change.path.to_string_lossy().to_string();
 
-                // Only record if not already recorded from parser
-                // (deduplicate by checking if path is already in metrics)
+                // Only record if not already recorded from parser.
+                // The parser records relative paths (e.g., "src/main.rs"), but the
+                // watcher records absolute paths (e.g., "/full/path/src/main.rs").
+                // We check if the absolute path ends with any already-recorded relative path.
                 let metrics = self.metrics_collector.get_metrics();
-                let already_recorded = match change.change_type {
-                    ChangeType::Created => metrics.files_created.contains(path_str.as_ref()),
-                    ChangeType::Modified => metrics.files_modified.contains(path_str.as_ref()),
-                    ChangeType::Deleted => metrics.files_deleted.contains(path_str.as_ref()),
-                };
+                let already_recorded = self.path_already_recorded(&path_str, metrics);
 
                 if !already_recorded {
                     self.metrics_collector
@@ -321,6 +323,35 @@ impl OutputHandler {
                 }
             }
         }
+    }
+
+    /// Check if a path has already been recorded (handles absolute vs relative paths).
+    fn path_already_recorded(&self, abs_path: &str, metrics: &IterationMetrics) -> bool {
+        // Check all categories - a file created then modified should only count once
+        let all_paths = metrics
+            .files_created
+            .iter()
+            .chain(metrics.files_modified.iter())
+            .chain(metrics.files_deleted.iter());
+
+        for recorded_path in all_paths {
+            // Direct match
+            if abs_path == recorded_path {
+                return true;
+            }
+            // Absolute path ends with relative path (e.g., "/full/path/src/main.rs" ends with "src/main.rs")
+            if abs_path.ends_with(&format!("/{}", recorded_path)) {
+                return true;
+            }
+            // Or the recorded path was already absolute and matches
+            if recorded_path.ends_with(&format!("/{}", abs_path.rsplit('/').next().unwrap_or(""))) {
+                // This catches cases where paths are stored differently
+                if abs_path.ends_with(recorded_path.as_str()) || recorded_path.ends_with(abs_path) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Update the feedback display.
@@ -786,5 +817,66 @@ mod tests {
     fn test_feedback_mode_default() {
         let mode = FeedbackMode::default();
         assert_eq!(mode, FeedbackMode::None);
+    }
+
+    #[test]
+    fn test_path_already_recorded_exact_match() {
+        let mut handler = OutputHandler::new();
+        handler
+            .metrics_collector
+            .record_file_change("src/main.rs", "created");
+
+        let metrics = handler.get_metrics();
+        assert!(handler.path_already_recorded("src/main.rs", metrics));
+    }
+
+    #[test]
+    fn test_path_already_recorded_absolute_vs_relative() {
+        let mut handler = OutputHandler::new();
+        // Parser records a relative path
+        handler
+            .metrics_collector
+            .record_file_change("src/main.rs", "created");
+
+        let metrics = handler.get_metrics();
+        // Watcher would see an absolute path - should still match
+        assert!(handler.path_already_recorded("/Users/test/project/src/main.rs", metrics));
+    }
+
+    #[test]
+    fn test_path_already_recorded_different_files() {
+        let mut handler = OutputHandler::new();
+        handler
+            .metrics_collector
+            .record_file_change("src/main.rs", "created");
+
+        let metrics = handler.get_metrics();
+        // Different file should not match
+        assert!(!handler.path_already_recorded("/Users/test/project/src/lib.rs", metrics));
+    }
+
+    #[test]
+    fn test_path_already_recorded_same_filename_different_dir() {
+        let mut handler = OutputHandler::new();
+        handler
+            .metrics_collector
+            .record_file_change("src/main.rs", "created");
+
+        let metrics = handler.get_metrics();
+        // Same filename but different directory should not match
+        assert!(!handler.path_already_recorded("/Users/test/project/tests/main.rs", metrics));
+    }
+
+    #[test]
+    fn test_path_already_recorded_across_categories() {
+        let mut handler = OutputHandler::new();
+        // File was created by parser
+        handler
+            .metrics_collector
+            .record_file_change("script.js", "created");
+
+        let metrics = handler.get_metrics();
+        // Watcher sees it as modified - should still be detected as already recorded
+        assert!(handler.path_already_recorded("/full/path/to/script.js", metrics));
     }
 }
