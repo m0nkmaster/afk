@@ -2,6 +2,15 @@
 //!
 //! This module parses output from Claude, Cursor, and Aider CLI tools
 //! to detect tool calls, file changes, errors, and warnings.
+//!
+//! ## Parsing Modes
+//!
+//! - **Regex-based**: For plain text output (legacy/fallback)
+//! - **NDJSON stream-json**: For structured streaming output from Cursor/Claude CLIs
+
+mod stream_json;
+
+pub use stream_json::{CliFormat, StreamEvent, StreamJsonParser, ToolType};
 
 use regex::Regex;
 use std::sync::LazyLock;

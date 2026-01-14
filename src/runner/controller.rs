@@ -696,6 +696,7 @@ fn run_iteration_with_tui(
     _iteration: u32,
     tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
 ) -> super::iteration::IterationResult {
+    use crate::parser::{StreamEvent, StreamJsonParser, ToolType};
     use crate::prompt::generate_prompt_with_root;
     use crate::tui::TuiEvent;
     use std::io::{BufRead, BufReader};
@@ -729,9 +730,9 @@ fn run_iteration_with_tui(
         };
     }
 
-    // Build command
+    // Build command with output format args
     let mut cmd_parts = vec![config.ai_cli.command.clone()];
-    cmd_parts.extend(config.ai_cli.args.clone());
+    cmd_parts.extend(config.ai_cli.full_args());
 
     if cmd_parts.is_empty() {
         return super::iteration::IterationResult::failure("No command specified");
@@ -769,6 +770,13 @@ fn run_iteration_with_tui(
         }
     };
 
+    // Create NDJSON parser if using stream-json format
+    let mut stream_parser = if config.ai_cli.uses_stream_json() {
+        Some(StreamJsonParser::new(config.ai_cli.detect_cli_format()))
+    } else {
+        None
+    };
+
     // Stream stdout to TUI
     let mut output_buffer = Vec::new();
     let mut completion_detected = false;
@@ -778,13 +786,110 @@ fn run_iteration_with_tui(
         for line in reader.lines() {
             match line {
                 Ok(line) => {
-                    // Send to TUI
-                    let _ = tx.send(TuiEvent::OutputLine(line.clone()));
+                    // Parse and process based on output format
+                    if let Some(ref mut parser) = stream_parser {
+                        // NDJSON mode: parse and emit events
+                        if let Some(event) = parser.parse_line(&line) {
+                            match &event {
+                                StreamEvent::AssistantMessage { text } => {
+                                    // Truncate long messages for display
+                                    let display_text = if text.len() > 200 {
+                                        format!("{}...", &text[..197])
+                                    } else {
+                                        text.clone()
+                                    };
+                                    let _ = tx.send(TuiEvent::OutputLine(display_text));
+                                }
+                                StreamEvent::ToolStarted {
+                                    tool_name,
+                                    tool_type,
+                                    path,
+                                } => {
+                                    let path_str = path
+                                        .as_ref()
+                                        .map(|p| format!(" {}", p))
+                                        .unwrap_or_default();
+                                    let _ = tx.send(TuiEvent::OutputLine(format!(
+                                        "→ {}{}",
+                                        tool_type, path_str
+                                    )));
+                                    let _ = tx.send(TuiEvent::ToolCall(tool_name.clone()));
+                                }
+                                StreamEvent::ToolCompleted {
+                                    tool_type,
+                                    path,
+                                    success,
+                                    lines,
+                                    ..
+                                } => {
+                                    let status = if *success { "✓" } else { "✗" };
+                                    let lines_str = lines
+                                        .map(|l| format!(" ({} lines)", l))
+                                        .unwrap_or_default();
+                                    let path_str = path
+                                        .as_ref()
+                                        .map(|p| format!(" {}", p))
+                                        .unwrap_or_default();
+                                    let _ = tx.send(TuiEvent::OutputLine(format!(
+                                        "{} {}{}{}",
+                                        status, tool_type, path_str, lines_str
+                                    )));
 
-                    // Track tool calls from output patterns
-                    // (File changes are detected by the file watcher thread)
-                    if line.contains("antml:invoke") || line.contains("<tool_call>") {
-                        let _ = tx.send(TuiEvent::ToolCall("tool".to_string()));
+                                    // Emit file change event for file operations
+                                    if let Some(p) = path {
+                                        let change_type = match tool_type {
+                                            ToolType::Read => "read",
+                                            ToolType::Write => "created",
+                                            ToolType::Edit => "modified",
+                                            ToolType::Delete => "deleted",
+                                            _ => "modified",
+                                        };
+                                        let _ = tx.send(TuiEvent::FileChange {
+                                            path: p.clone(),
+                                            change_type: change_type.to_string(),
+                                        });
+                                    }
+                                }
+                                StreamEvent::Result {
+                                    success,
+                                    duration_ms,
+                                    ..
+                                } => {
+                                    let status = if *success {
+                                        "✓ Complete"
+                                    } else {
+                                        "✗ Failed"
+                                    };
+                                    let duration_str = duration_ms
+                                        .map(|ms| format!(" ({:.1}s)", ms as f64 / 1000.0))
+                                        .unwrap_or_default();
+                                    let _ = tx.send(TuiEvent::OutputLine(format!(
+                                        "{}{}",
+                                        status, duration_str
+                                    )));
+                                }
+                                StreamEvent::Error { message } => {
+                                    let _ = tx.send(TuiEvent::Error(message.clone()));
+                                }
+                                StreamEvent::SystemInit { model, .. } => {
+                                    if let Some(m) = model {
+                                        let _ = tx
+                                            .send(TuiEvent::OutputLine(format!("◉ Model: {}", m)));
+                                    }
+                                }
+                                StreamEvent::UserMessage { .. } | StreamEvent::Unknown { .. } => {
+                                    // Skip these
+                                }
+                            }
+                        }
+                    } else {
+                        // Plain text mode: send line as-is
+                        let _ = tx.send(TuiEvent::OutputLine(line.clone()));
+
+                        // Track tool calls from output patterns
+                        if line.contains("antml:invoke") || line.contains("<tool_call>") {
+                            let _ = tx.send(TuiEvent::ToolCall("tool".to_string()));
+                        }
                     }
 
                     output_buffer.push(format!("{line}\n"));

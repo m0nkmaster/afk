@@ -515,6 +515,7 @@ pub fn prompt_ai_cli_selection(available: &[&AiCliInfo]) -> AiCliSelectionResult
     let config = AiCliConfig {
         command: selected.command.to_string(),
         args: selected.args.iter().map(|s| s.to_string()).collect(),
+        ..Default::default()
     };
 
     AiCliSelectionResult::Selected(config)
@@ -594,6 +595,7 @@ pub fn detect_ai_cli() -> Option<AiCliConfig> {
     available.first().map(|cli| AiCliConfig {
         command: cli.command.to_string(),
         args: cli.args.iter().map(|s| s.to_string()).collect(),
+        ..Default::default()
     })
 }
 

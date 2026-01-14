@@ -178,15 +178,34 @@ impl Default for OutputConfig {
     }
 }
 
+/// Output format for AI CLI streaming.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AiOutputFormat {
+    /// Plain text output (default for backwards compatibility).
+    Text,
+    /// JSON output at completion.
+    Json,
+    /// NDJSON streaming output (recommended for real-time feedback).
+    #[default]
+    StreamJson,
+}
+
 /// Configuration for AI CLI integration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AiCliConfig {
-    /// CLI command to run (e.g., "claude", "aider").
+    /// CLI command to run (e.g., "claude", "cursor", "aider").
     #[serde(default = "default_ai_command")]
     pub command: String,
     /// Arguments to pass to the CLI.
     #[serde(default = "default_ai_args")]
     pub args: Vec<String>,
+    /// Output format for streaming (stream-json recommended).
+    #[serde(default)]
+    pub output_format: AiOutputFormat,
+    /// Whether to include partial/character-level streaming.
+    #[serde(default)]
+    pub stream_partial: bool,
 }
 
 fn default_ai_command() -> String {
@@ -205,6 +224,99 @@ impl Default for AiCliConfig {
         Self {
             command: default_ai_command(),
             args: default_ai_args(),
+            output_format: AiOutputFormat::default(),
+            stream_partial: false,
+        }
+    }
+}
+
+impl AiCliConfig {
+    /// Get the full command arguments including output format flags.
+    ///
+    /// This applies the appropriate streaming flags based on the detected CLI type.
+    pub fn full_args(&self) -> Vec<String> {
+        let mut args = self.args.clone();
+
+        // Only add output format args if using streaming
+        if self.output_format != AiOutputFormat::Text {
+            let format_args = self.get_output_format_args();
+            args.extend(format_args);
+        }
+
+        args
+    }
+
+    /// Get the output format arguments for the detected CLI.
+    fn get_output_format_args(&self) -> Vec<String> {
+        let cmd_lower = self.command.to_lowercase();
+        let mut args = Vec::new();
+
+        // Cursor CLI format
+        if cmd_lower.contains("cursor") {
+            match self.output_format {
+                AiOutputFormat::Text => {}
+                AiOutputFormat::Json => {
+                    args.push("--output-format".to_string());
+                    args.push("json".to_string());
+                }
+                AiOutputFormat::StreamJson => {
+                    args.push("--output-format".to_string());
+                    args.push("stream-json".to_string());
+                    if self.stream_partial {
+                        args.push("--stream-partial-output".to_string());
+                    }
+                }
+            }
+        }
+        // Claude CLI format
+        else if cmd_lower.contains("claude") {
+            match self.output_format {
+                AiOutputFormat::Text => {}
+                AiOutputFormat::Json => {
+                    args.push("--output-format".to_string());
+                    args.push("json".to_string());
+                }
+                AiOutputFormat::StreamJson => {
+                    args.push("--output-format".to_string());
+                    args.push("stream-json".to_string());
+                    if self.stream_partial {
+                        args.push("--include-partial-messages".to_string());
+                    }
+                }
+            }
+        }
+        // Unknown CLI - try generic format (may not work)
+        else {
+            match self.output_format {
+                AiOutputFormat::Text => {}
+                AiOutputFormat::Json => {
+                    args.push("--output-format".to_string());
+                    args.push("json".to_string());
+                }
+                AiOutputFormat::StreamJson => {
+                    args.push("--output-format".to_string());
+                    args.push("stream-json".to_string());
+                }
+            }
+        }
+
+        args
+    }
+
+    /// Check if this CLI is configured for NDJSON streaming.
+    pub fn uses_stream_json(&self) -> bool {
+        self.output_format == AiOutputFormat::StreamJson
+    }
+
+    /// Detect which CLI format parser to use based on the command.
+    pub fn detect_cli_format(&self) -> crate::parser::CliFormat {
+        let cmd_lower = self.command.to_lowercase();
+        if cmd_lower.contains("cursor") {
+            crate::parser::CliFormat::Cursor
+        } else if cmd_lower.contains("claude") {
+            crate::parser::CliFormat::Claude
+        } else {
+            crate::parser::CliFormat::Auto
         }
     }
 }
@@ -592,6 +704,8 @@ mod tests {
         let config = AiCliConfig::default();
         assert_eq!(config.command, "claude");
         assert_eq!(config.args, vec!["--dangerously-skip-permissions", "-p"]);
+        assert_eq!(config.output_format, AiOutputFormat::StreamJson);
+        assert!(!config.stream_partial);
     }
 
     #[test]
@@ -599,9 +713,98 @@ mod tests {
         let config = AiCliConfig {
             command: "aider".to_string(),
             args: vec!["--message".to_string()],
+            output_format: AiOutputFormat::Text,
+            stream_partial: false,
         };
         assert_eq!(config.command, "aider");
         assert_eq!(config.args, vec!["--message"]);
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_cursor() {
+        let config = AiCliConfig {
+            command: "cursor".to_string(),
+            args: vec!["--print".to_string()],
+            output_format: AiOutputFormat::StreamJson,
+            stream_partial: false,
+        };
+        let full_args = config.full_args();
+        assert!(full_args.contains(&"--print".to_string()));
+        assert!(full_args.contains(&"--output-format".to_string()));
+        assert!(full_args.contains(&"stream-json".to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_cursor_with_partial() {
+        let config = AiCliConfig {
+            command: "cursor".to_string(),
+            args: vec!["--print".to_string()],
+            output_format: AiOutputFormat::StreamJson,
+            stream_partial: true,
+        };
+        let full_args = config.full_args();
+        assert!(full_args.contains(&"--stream-partial-output".to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_claude() {
+        let config = AiCliConfig {
+            command: "claude".to_string(),
+            args: vec!["-p".to_string()],
+            output_format: AiOutputFormat::StreamJson,
+            stream_partial: true,
+        };
+        let full_args = config.full_args();
+        assert!(full_args.contains(&"--output-format".to_string()));
+        assert!(full_args.contains(&"stream-json".to_string()));
+        assert!(full_args.contains(&"--include-partial-messages".to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_text_format() {
+        let config = AiCliConfig {
+            command: "claude".to_string(),
+            args: vec!["-p".to_string()],
+            output_format: AiOutputFormat::Text,
+            stream_partial: false,
+        };
+        let full_args = config.full_args();
+        assert_eq!(full_args, vec!["-p"]);
+    }
+
+    #[test]
+    fn test_ai_cli_uses_stream_json() {
+        let config = AiCliConfig::default();
+        assert!(config.uses_stream_json());
+
+        let text_config = AiCliConfig {
+            output_format: AiOutputFormat::Text,
+            ..Default::default()
+        };
+        assert!(!text_config.uses_stream_json());
+    }
+
+    #[test]
+    fn test_ai_cli_detect_cli_format() {
+        use crate::parser::CliFormat;
+
+        let cursor_config = AiCliConfig {
+            command: "cursor".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cursor_config.detect_cli_format(), CliFormat::Cursor);
+
+        let claude_config = AiCliConfig {
+            command: "claude".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(claude_config.detect_cli_format(), CliFormat::Claude);
+
+        let unknown_config = AiCliConfig {
+            command: "aider".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(unknown_config.detect_cli_format(), CliFormat::Auto);
     }
 
     #[test]

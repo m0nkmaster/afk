@@ -1,12 +1,16 @@
 //! Single iteration execution.
 //!
 //! This module handles spawning AI CLI, streaming output, and detecting completion signals.
+//! Supports both plain text and NDJSON stream-json output formats.
 
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
+use std::sync::mpsc::Sender;
 
 use crate::config::AfkConfig;
+use crate::parser::{StreamEvent, StreamJsonParser};
 use crate::prompt::{generate_prompt_with_root, PromptError};
+use crate::tui::TuiEvent;
 
 use super::output_handler::OutputHandler;
 
@@ -77,11 +81,21 @@ pub struct IterationRunner {
     max_iterations: u32,
     current_task_id: Option<String>,
     current_task_description: Option<String>,
+    /// Optional sender for TUI events.
+    tui_sender: Option<Sender<TuiEvent>>,
+    /// NDJSON parser for stream-json format.
+    stream_parser: Option<StreamJsonParser>,
 }
 
 impl IterationRunner {
     /// Create a new IterationRunner.
     pub fn new(config: AfkConfig) -> Self {
+        let stream_parser = if config.ai_cli.uses_stream_json() {
+            Some(StreamJsonParser::new(config.ai_cli.detect_cli_format()))
+        } else {
+            None
+        };
+
         Self {
             config,
             output: OutputHandler::new(),
@@ -89,11 +103,19 @@ impl IterationRunner {
             max_iterations: 0,
             current_task_id: None,
             current_task_description: None,
+            tui_sender: None,
+            stream_parser,
         }
     }
 
     /// Create with custom OutputHandler.
     pub fn with_output_handler(config: AfkConfig, output: OutputHandler) -> Self {
+        let stream_parser = if config.ai_cli.uses_stream_json() {
+            Some(StreamJsonParser::new(config.ai_cli.detect_cli_format()))
+        } else {
+            None
+        };
+
         Self {
             config,
             output,
@@ -101,7 +123,14 @@ impl IterationRunner {
             max_iterations: 0,
             current_task_id: None,
             current_task_description: None,
+            tui_sender: None,
+            stream_parser,
         }
+    }
+
+    /// Set a TUI event sender for real-time updates.
+    pub fn set_tui_sender(&mut self, sender: Sender<TuiEvent>) {
+        self.tui_sender = Some(sender);
     }
 
     /// Set context for the current iteration.
@@ -163,12 +192,29 @@ impl IterationRunner {
             };
         }
 
-        // Build command
+        // Build command with output format args
         let mut cmd_parts = vec![self.config.ai_cli.command.clone()];
-        cmd_parts.extend(self.config.ai_cli.args.clone());
+        cmd_parts.extend(self.config.ai_cli.full_args());
 
         self.output.iteration_header(iteration, self.max_iterations);
         self.output.command_info(&cmd_parts);
+
+        // Send TUI iteration start event
+        if let Some(ref sender) = self.tui_sender {
+            let _ = sender.send(TuiEvent::IterationStart {
+                current: iteration,
+                max: self.max_iterations,
+            });
+            if let (Some(id), Some(title)) = (
+                self.current_task_id.as_ref(),
+                self.current_task_description.as_ref(),
+            ) {
+                let _ = sender.send(TuiEvent::TaskInfo {
+                    id: id.clone(),
+                    title: title.clone(),
+                });
+            }
+        }
 
         self.execute_command(&cmd_parts, &prompt)
     }
@@ -223,9 +269,17 @@ impl IterationRunner {
             for line in reader.lines() {
                 match line {
                     Ok(line) => {
-                        let line_with_newline = format!("{line}\n");
-                        self.output.stream_line(&line_with_newline);
-                        output_buffer.push(line_with_newline.clone());
+                        // Parse and display based on output format
+                        if self.stream_parser.is_some() {
+                            // NDJSON mode: parse and convert to display text
+                            if let Some(display) = self.process_output_line(&line) {
+                                self.output.stream_line(&format!("{display}\n"));
+                            }
+                        } else {
+                            // Plain text mode: display as-is
+                            self.output.stream_line(&format!("{line}\n"));
+                        }
+                        output_buffer.push(format!("{line}\n"));
 
                         // Check for completion signal
                         if self.output.contains_completion_signal(&line) {
@@ -283,6 +337,128 @@ impl IterationRunner {
     /// Get a mutable reference to the output handler.
     pub fn output_handler_mut(&mut self) -> &mut OutputHandler {
         &mut self.output
+    }
+
+    /// Process an output line, parsing NDJSON if configured.
+    ///
+    /// Returns a human-readable display string, or None to skip display.
+    fn process_output_line(&mut self, line: &str) -> Option<String> {
+        // If not using stream-json, return line as-is
+        let parser = self.stream_parser.as_mut()?;
+
+        // Try to parse as NDJSON
+        let event = parser.parse_line(line)?;
+
+        // Convert event to display text and emit TUI event
+        let (display, tui_event) = self.stream_event_to_display(&event);
+
+        // Send TUI event if we have a sender
+        if let (Some(ref sender), Some(tui_event)) = (&self.tui_sender, tui_event) {
+            let _ = sender.send(tui_event);
+        }
+
+        display
+    }
+
+    /// Convert a StreamEvent to display text and optional TuiEvent.
+    fn stream_event_to_display(&self, event: &StreamEvent) -> (Option<String>, Option<TuiEvent>) {
+        match event {
+            StreamEvent::SystemInit { model, .. } => {
+                let display = model
+                    .as_ref()
+                    .map(|m| format!("\x1b[2m◉ Model: {}\x1b[0m", m));
+                (display, None)
+            }
+            StreamEvent::UserMessage { .. } => {
+                // Don't display user message (it's the prompt we sent)
+                (None, None)
+            }
+            StreamEvent::AssistantMessage { text } => {
+                // Truncate very long messages for display
+                let display_text = if text.len() > 200 {
+                    format!("{}...", &text[..197])
+                } else {
+                    text.clone()
+                };
+                let display = format!("\x1b[37m{}\x1b[0m", display_text);
+                let tui_event = TuiEvent::OutputLine(text.clone());
+                (Some(display), Some(tui_event))
+            }
+            StreamEvent::ToolStarted {
+                tool_name,
+                tool_type,
+                path,
+            } => {
+                let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
+                let display = format!("\x1b[33m→ {}{}\x1b[0m", tool_type, path_str);
+                let tui_event = TuiEvent::ToolCall(tool_name.clone());
+                (Some(display), Some(tui_event))
+            }
+            StreamEvent::ToolCompleted {
+                tool_type,
+                path,
+                success,
+                lines,
+                ..
+            } => {
+                let status = if *success { "✓" } else { "✗" };
+                let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
+                let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
+                let colour = if *success { "\x1b[32m" } else { "\x1b[31m" };
+                let display = format!(
+                    "{}{} {}{}{}\x1b[0m",
+                    colour, status, tool_type, path_str, lines_str
+                );
+
+                // Emit file change event for file operations
+                let tui_event = path.as_ref().map(|p| {
+                    let change_type = match tool_type {
+                        crate::parser::ToolType::Read => "read",
+                        crate::parser::ToolType::Write => "created",
+                        crate::parser::ToolType::Edit => "modified",
+                        crate::parser::ToolType::Delete => "deleted",
+                        _ => "modified",
+                    };
+                    TuiEvent::FileChange {
+                        path: p.clone(),
+                        change_type: change_type.to_string(),
+                    }
+                });
+
+                (Some(display), tui_event)
+            }
+            StreamEvent::Result {
+                success,
+                duration_ms,
+                ..
+            } => {
+                let status = if *success {
+                    "✓ Complete"
+                } else {
+                    "✗ Failed"
+                };
+                let duration_str = duration_ms
+                    .map(|ms| format!(" ({:.1}s)", ms as f64 / 1000.0))
+                    .unwrap_or_default();
+                let colour = if *success { "\x1b[32m" } else { "\x1b[31m" };
+                let display = format!("{}{}{}\x1b[0m", colour, status, duration_str);
+
+                let tui_event = duration_ms.map(|ms| TuiEvent::IterationComplete {
+                    duration_secs: ms as f64 / 1000.0,
+                });
+
+                (Some(display), tui_event)
+            }
+            StreamEvent::Error { message } => {
+                let display = format!("\x1b[31m✗ Error: {}\x1b[0m", message);
+                let tui_event = TuiEvent::Error(message.clone());
+                (Some(display), Some(tui_event))
+            }
+            StreamEvent::Unknown { .. } => {
+                // Don't display unknown events
+                (None, None)
+            }
+        }
     }
 }
 
@@ -360,6 +536,7 @@ mod tests {
             ai_cli: AiCliConfig {
                 command: "nonexistent_command_that_does_not_exist_12345".to_string(),
                 args: vec![],
+                ..Default::default()
             },
             ..Default::default()
         };

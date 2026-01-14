@@ -34,12 +34,13 @@ pub fn draw(f: &mut Frame, state: &TuiState) {
     let area = f.area();
 
     // Main layout: header, body, footer
+    // Simplified layout with full-width output
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header
-            Constraint::Min(10),   // Body
-            Constraint::Length(3), // Footer
+            Constraint::Length(2), // Header (compact)
+            Constraint::Min(10),   // Body (output)
+            Constraint::Length(2), // Footer (compact)
         ])
         .split(area);
 
@@ -147,6 +148,30 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
         ));
     }
 
+    // Add task info if available
+    if let Some(ref task_id) = state.task_id {
+        spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            task_id.clone(),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
+        if let Some(ref title) = state.task_title {
+            // Truncate title if too long
+            let max_title_len = 30;
+            let display_title = if title.len() > max_title_len {
+                format!("{}...", &title[..max_title_len - 3])
+            } else {
+                title.clone()
+            };
+            spans.push(Span::styled(
+                format!(": {}", display_title),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+    }
+
     let header = Paragraph::new(Line::from(spans)).block(
         Block::default()
             .borders(Borders::BOTTOM)
@@ -159,17 +184,8 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
 
 /// Draw the main body area.
 fn draw_body(f: &mut Frame, area: Rect, state: &TuiState) {
-    // Split into output (left) and sidebar (right)
-    let body_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Min(40),    // Output (main)
-            Constraint::Length(32), // Sidebar
-        ])
-        .split(area);
-
-    draw_output_panel(f, body_chunks[0], state);
-    draw_sidebar(f, body_chunks[1], state);
+    // Full-width output panel (simplified layout)
+    draw_output_panel(f, area, state);
 }
 
 /// Draw the AI output panel.
@@ -258,7 +274,10 @@ fn draw_output_panel(f: &mut Frame, area: Rect, state: &TuiState) {
     }
 }
 
+// Sidebar functions - unused in simplified layout but kept for potential full layout option
+
 /// Draw the sidebar with stats and activity.
+#[allow(dead_code)]
 fn draw_sidebar(f: &mut Frame, area: Rect, state: &TuiState) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -275,6 +294,7 @@ fn draw_sidebar(f: &mut Frame, area: Rect, state: &TuiState) {
 }
 
 /// Draw task info panel.
+#[allow(dead_code)]
 fn draw_task_panel(f: &mut Frame, area: Rect, state: &TuiState) {
     let mut lines = vec![];
 
@@ -349,6 +369,7 @@ fn draw_task_panel(f: &mut Frame, area: Rect, state: &TuiState) {
 }
 
 /// Draw stats panel with animated numbers.
+#[allow(dead_code)]
 fn draw_stats_panel(f: &mut Frame, area: Rect, state: &TuiState) {
     let stats = &state.stats;
     let frame = state.spinner_frame;
@@ -429,6 +450,7 @@ fn draw_stats_panel(f: &mut Frame, area: Rect, state: &TuiState) {
 }
 
 /// Draw recent files panel.
+#[allow(dead_code)]
 fn draw_files_panel(f: &mut Frame, area: Rect, state: &TuiState) {
     let recent_files = &state.recent_files;
 

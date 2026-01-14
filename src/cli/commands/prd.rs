@@ -795,6 +795,7 @@ mod tests {
             ai_cli: crate::config::AiCliConfig {
                 command: "nonexistent_ai_cli_for_test_12345".to_string(),
                 args: vec!["-p".to_string()],
+                ..Default::default()
             },
             ..Default::default()
         };
