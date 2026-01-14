@@ -145,8 +145,16 @@ impl LoopController {
             }
         }
 
+        // Calculate display limit - show task count if lower than max iterations
+        let task_count = pending_stories.len() as u32;
+        let display_limit = if task_count < max_iter && max_iter != u32::MAX {
+            task_count
+        } else {
+            max_iter
+        };
+
         // Display loop start panel
-        self.output.loop_start_panel(max_iter, "");
+        self.output.loop_start_panel(display_limit, "");
 
         // Get first task info
         let first_task = pending_stories.first();
@@ -155,7 +163,7 @@ impl LoopController {
 
         // Set iteration context
         self.iteration_runner
-            .set_iteration_context(1, max_iter, task_id, task_description);
+            .set_iteration_context(1, display_limit, task_id, task_description);
 
         // Main loop
         let result =

@@ -131,7 +131,7 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
         Style::default().fg(Color::DarkGray),
     ));
     spans.push(Span::styled(
-        format!("{}", stats.files_changed + stats.files_created),
+        format!("{}", stats.total_files()),
         Style::default()
             .fg(Color::Magenta)
             .add_modifier(ratatui::style::Modifier::BOLD),
@@ -396,14 +396,14 @@ fn draw_stats_panel(f: &mut Frame, area: Rect, state: &TuiState) {
         Line::from(vec![
             Span::styled("Files:       ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("{:>5}", stats.files_changed + stats.files_created),
-                pulse_style(stats.files_changed + stats.files_created, Color::Magenta),
+                format!("{:>5}", stats.total_files()),
+                pulse_style(stats.total_files(), Color::Magenta),
             ),
         ]),
         Line::from(vec![
             Span::styled("  Created:   ", Style::default().fg(Color::DarkGray)),
             Span::styled(
-                format!("{:>5}", stats.files_created),
+                format!("{:>5}", stats.files_created()),
                 Style::default().fg(Color::Green),
             ),
         ]),

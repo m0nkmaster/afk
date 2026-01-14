@@ -1,6 +1,6 @@
 //! TUI application state and event handling.
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::io::{self, Stdout};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -48,14 +48,36 @@ pub enum TuiEvent {
 #[derive(Debug, Clone, Default)]
 pub struct TuiStats {
     pub tool_calls: u32,
-    pub files_changed: u32,
-    pub files_created: u32,
+    /// Unique files that were modified (deduplicated).
+    pub files_modified_set: HashSet<String>,
+    /// Unique files that were created (deduplicated).
+    pub files_created_set: HashSet<String>,
     #[allow(dead_code)]
     pub lines_added: u32,
     #[allow(dead_code)]
     pub lines_removed: u32,
     pub errors: u32,
     pub warnings: u32,
+}
+
+impl TuiStats {
+    /// Get count of files changed (modified, excluding reads).
+    #[allow(dead_code)]
+    pub fn files_changed(&self) -> u32 {
+        self.files_modified_set.len() as u32
+    }
+
+    /// Get count of files created.
+    pub fn files_created(&self) -> u32 {
+        self.files_created_set.len() as u32
+    }
+
+    /// Get total unique files (created + modified, deduplicated).
+    pub fn total_files(&self) -> u32 {
+        let mut all_files = self.files_created_set.clone();
+        all_files.extend(self.files_modified_set.iter().cloned());
+        all_files.len() as u32
+    }
 }
 
 /// TUI application state (separate from terminal for borrowing).
@@ -278,9 +300,18 @@ impl TuiApp {
                 }
             }
             TuiEvent::FileChange { path, change_type } => {
+                // Use HashSets for deduplication - same file only counts once
                 match change_type.as_str() {
-                    "created" => self.state.stats.files_created += 1,
-                    _ => self.state.stats.files_changed += 1,
+                    "created" => {
+                        self.state.stats.files_created_set.insert(path.clone());
+                    }
+                    "read" => {
+                        // Reads don't count towards file changes
+                    }
+                    _ => {
+                        // modified, deleted, etc.
+                        self.state.stats.files_modified_set.insert(path.clone());
+                    }
                 }
                 self.state.recent_files.push_front((path, change_type));
                 if self.state.recent_files.len() > 8 {
