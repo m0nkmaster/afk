@@ -61,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `afk go --fresh` — Clear session and start fresh
 - `afk init` — Analyse project and generate config
 - `afk status` — Show current configuration
-- `afk list` — List tasks from current PRD
+- `afk tasks` — List tasks from current PRD
+- `afk tasks sync` — Sync from all sources
 - `afk task <id>` — Show task details
 - `afk prompt` — Preview next prompt
 - `afk verify` — Run quality gates
@@ -69,8 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `afk fail <id>` — Mark task failed
 - `afk reset <id>` — Reset stuck task
 - `afk import <file>` — Import requirements into JSON tasks
-- `afk sync` — Sync from all sources
-- `afk tasks show` — Display current tasks
+- `afk sync` — Alias for `afk tasks sync`
 - `afk source add|list|remove` — Manage task sources
 - `afk archive` — Archive and clear current session
 - `afk archive list` — List archived sessions

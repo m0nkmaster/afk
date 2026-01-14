@@ -541,6 +541,14 @@ fn run_loop_with_tui_sender(
         };
     }
 
+    // Calculate display limit - show task count if lower than max iterations
+    let task_count = pending_stories.len() as u32;
+    let display_limit = if task_count < max_iter && max_iter != u32::MAX {
+        task_count
+    } else {
+        max_iter
+    };
+
     // Send initial task info
     if let Some(task) = pending_stories.first() {
         let _ = tx.send(TuiEvent::TaskInfo {
@@ -626,7 +634,7 @@ fn run_loop_with_tui_sender(
         let iteration = iterations_completed + 1;
         let _ = tx.send(TuiEvent::IterationStart {
             current: iteration,
-            max: max_iter,
+            max: display_limit,
         });
 
         // Update task info

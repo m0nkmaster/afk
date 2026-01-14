@@ -2,8 +2,8 @@
 //!
 //! This module implements:
 //! - `afk import` - Import a requirements document into tasks.json
+//! - `afk tasks` - Display current task list
 //! - `afk tasks sync` - Sync tasks from configured sources
-//! - `afk tasks show` - Display current task list
 
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -254,12 +254,17 @@ pub fn tasks_sync_impl(config_path: Option<&Path>, root: Option<&Path>) -> Impor
 /// # Returns
 ///
 /// Ok(()) on success, or an error if tasks cannot be loaded.
-pub fn tasks_show(pending_only: bool) -> ImportCommandResult {
-    tasks_show_impl(pending_only, None)
+pub fn tasks_show(pending_only: bool, complete_only: bool, limit: usize) -> ImportCommandResult {
+    tasks_show_impl(pending_only, complete_only, limit, None)
 }
 
 /// Internal implementation of tasks_show with optional path for testing.
-pub fn tasks_show_impl(pending_only: bool, tasks_path: Option<&Path>) -> ImportCommandResult {
+pub fn tasks_show_impl(
+    pending_only: bool,
+    complete_only: bool,
+    limit: usize,
+    tasks_path: Option<&Path>,
+) -> ImportCommandResult {
     let prd = PrdDocument::load(tasks_path)?;
 
     if prd.user_stories.is_empty() {
@@ -270,12 +275,23 @@ pub fn tasks_show_impl(pending_only: bool, tasks_path: Option<&Path>) -> ImportC
         return Ok(());
     }
 
-    // Filter tasks if pending_only
-    let tasks: Vec<_> = if pending_only {
-        prd.user_stories.iter().filter(|s| !s.passes).collect()
-    } else {
-        prd.user_stories.iter().collect()
-    };
+    // Filter tasks based on flags
+    let tasks: Vec<_> = prd
+        .user_stories
+        .iter()
+        .filter(|s| {
+            if pending_only && complete_only {
+                true // Both flags = show all
+            } else if pending_only {
+                !s.passes
+            } else if complete_only {
+                s.passes
+            } else {
+                true // No flags = show all
+            }
+        })
+        .take(limit)
+        .collect();
 
     if tasks.is_empty() && pending_only {
         println!("\x1b[32m✓ All tasks complete!\x1b[0m");
@@ -455,7 +471,7 @@ mod tests {
         let prd = PrdDocument::default();
         prd.save(Some(&tasks_path)).unwrap();
 
-        let result = tasks_show_impl(false, Some(&tasks_path));
+        let result = tasks_show_impl(false, false, 50, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
@@ -490,7 +506,7 @@ mod tests {
         };
         prd.save(Some(&tasks_path)).unwrap();
 
-        let result = tasks_show_impl(false, Some(&tasks_path));
+        let result = tasks_show_impl(false, false, 50, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
@@ -521,7 +537,7 @@ mod tests {
         };
         prd.save(Some(&tasks_path)).unwrap();
 
-        let result = tasks_show_impl(true, Some(&tasks_path));
+        let result = tasks_show_impl(true, false, 50, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
@@ -551,7 +567,7 @@ mod tests {
         prd.save(Some(&tasks_path)).unwrap();
 
         // With pending_only=true, should show "All complete" message
-        let result = tasks_show_impl(true, Some(&tasks_path));
+        let result = tasks_show_impl(true, false, 50, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
@@ -573,7 +589,7 @@ mod tests {
         };
         prd.save(Some(&tasks_path)).unwrap();
 
-        let result = tasks_show_impl(false, Some(&tasks_path));
+        let result = tasks_show_impl(false, false, 50, Some(&tasks_path));
         assert!(result.is_ok());
     }
 
@@ -583,7 +599,7 @@ mod tests {
         let tasks_path = temp.path().join("nonexistent/.afk/tasks.json");
 
         // Should not error, just show "No tasks" message
-        let result = tasks_show_impl(false, Some(&tasks_path));
+        let result = tasks_show_impl(false, false, 50, Some(&tasks_path));
         assert!(result.is_ok());
     }
 

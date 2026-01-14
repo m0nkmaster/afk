@@ -49,11 +49,6 @@ pub enum Commands {
     /// Use -v for verbose output including learnings.
     Status(StatusCommand),
 
-    /// List tasks from the current PRD.
-    ///
-    /// Shows task IDs, status, priority, and titles.
-    List(ListCommand),
-
     /// Show details of a specific task.
     ///
     /// Displays full task information including acceptance criteria and learnings.
@@ -94,9 +89,27 @@ pub enum Commands {
     /// to output the prompt for manual use instead.
     Import(ImportCommand),
 
-    /// Manage the task list (.afk/tasks.json).
-    #[command(subcommand)]
-    Tasks(TasksCommands),
+    /// List and manage tasks.
+    ///
+    /// Shows tasks from .afk/tasks.json. Use `afk tasks sync` to aggregate from sources.
+    #[command(subcommand_required = false, args_conflicts_with_subcommands = true)]
+    Tasks {
+        /// Tasks subcommand (sync) or list tasks if omitted.
+        #[command(subcommand)]
+        command: Option<TasksCommands>,
+
+        /// Show only pending tasks.
+        #[arg(short = 'p', long)]
+        pending: bool,
+
+        /// Show only completed tasks.
+        #[arg(long)]
+        complete: bool,
+
+        /// Maximum number of tasks to show.
+        #[arg(short = 'l', long, default_value = "50")]
+        limit: usize,
+    },
 
     /// Sync tasks from configured sources.
     ///
@@ -123,6 +136,13 @@ pub enum Commands {
         #[arg(short = 'y', long)]
         yes: bool,
     },
+
+    /// Manage afk configuration.
+    ///
+    /// View, set, and understand config parameters without editing JSON directly.
+    /// Running `afk config` without a subcommand shows all current settings.
+    #[command(subcommand)]
+    Config(ConfigCommands),
 
     /// Update afk to the latest version.
     ///
@@ -208,22 +228,6 @@ pub struct StatusCommand {
     pub verbose: bool,
 }
 
-/// Arguments for the 'list' command.
-#[derive(Args, Debug)]
-pub struct ListCommand {
-    /// Maximum number of tasks to show.
-    #[arg(short = 'l', long, default_value = "20")]
-    pub limit: usize,
-
-    /// Show only pending tasks.
-    #[arg(short = 'p', long)]
-    pub pending: bool,
-
-    /// Show only completed tasks.
-    #[arg(long)]
-    pub complete: bool,
-}
-
 /// Arguments for the 'task' command.
 #[derive(Args, Debug)]
 pub struct TaskCommand {
@@ -274,12 +278,95 @@ pub enum TasksCommands {
     /// Aggregates tasks from beads, JSON, markdown, and GitHub into a unified
     /// .afk/tasks.json file.
     Sync(TasksSyncCommand),
-
-    /// Show the current task list.
-    ///
-    /// Displays tasks from .afk/tasks.json with their completion status.
-    Show(TasksShowCommand),
 }
+
+/// Subcommands for config management.
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Show all configuration values.
+    ///
+    /// Displays all config sections and their current values.
+    Show(ConfigShowCommand),
+
+    /// Get a specific config value.
+    ///
+    /// Use dot notation for nested keys (e.g., limits.max_iterations).
+    Get(ConfigGetCommand),
+
+    /// Set a config value.
+    ///
+    /// Use dot notation for keys. Values are validated before saving.
+    Set(ConfigSetCommand),
+
+    /// Reset config to defaults.
+    ///
+    /// Can reset a specific key, a section, or all config.
+    Reset(ConfigResetCommand),
+
+    /// Open config file in your editor.
+    ///
+    /// Uses $EDITOR environment variable.
+    Edit(ConfigEditCommand),
+
+    /// Show documentation for config keys.
+    ///
+    /// Displays description, type, default value, and examples.
+    Explain(ConfigExplainCommand),
+
+    /// List all valid config keys.
+    Keys(ConfigKeysCommand),
+}
+
+/// Arguments for 'config show' command.
+#[derive(Args, Debug)]
+pub struct ConfigShowCommand {
+    /// Filter to a specific section (e.g., 'limits', 'ai_cli').
+    #[arg(short = 's', long)]
+    pub section: Option<String>,
+}
+
+/// Arguments for 'config get' command.
+#[derive(Args, Debug)]
+pub struct ConfigGetCommand {
+    /// Config key in dot notation (e.g., limits.max_iterations).
+    pub key: String,
+}
+
+/// Arguments for 'config set' command.
+#[derive(Args, Debug)]
+pub struct ConfigSetCommand {
+    /// Config key in dot notation (e.g., limits.max_iterations).
+    pub key: String,
+
+    /// Value to set.
+    pub value: String,
+}
+
+/// Arguments for 'config reset' command.
+#[derive(Args, Debug)]
+pub struct ConfigResetCommand {
+    /// Key or section to reset. If omitted, resets all config.
+    pub key: Option<String>,
+
+    /// Skip confirmation prompt.
+    #[arg(short = 'y', long)]
+    pub yes: bool,
+}
+
+/// Arguments for 'config edit' command.
+#[derive(Args, Debug)]
+pub struct ConfigEditCommand {}
+
+/// Arguments for 'config explain' command.
+#[derive(Args, Debug)]
+pub struct ConfigExplainCommand {
+    /// Config key to explain. If omitted, lists all keys with brief descriptions.
+    pub key: Option<String>,
+}
+
+/// Arguments for 'config keys' command.
+#[derive(Args, Debug)]
+pub struct ConfigKeysCommand {}
 
 /// Arguments for 'import' command.
 #[derive(Args, Debug)]
@@ -307,14 +394,6 @@ pub struct ImportCommand {
 /// Arguments for 'tasks sync' command.
 #[derive(Args, Debug)]
 pub struct TasksSyncCommand {}
-
-/// Arguments for 'tasks show' command.
-#[derive(Args, Debug)]
-pub struct TasksShowCommand {
-    /// Show only pending tasks.
-    #[arg(short = 'p', long)]
-    pub pending: bool,
-}
 
 /// Arguments for the 'prompt' command.
 #[derive(Args, Debug)]
@@ -913,78 +992,6 @@ impl StatusCommand {
     }
 }
 
-impl ListCommand {
-    /// Execute the list command.
-    pub fn execute(&self) {
-        use crate::prd::PrdDocument;
-
-        let prd = PrdDocument::load(None).unwrap_or_default();
-
-        if prd.user_stories.is_empty() {
-            println!("No tasks found.");
-            println!("\x1b[2mRun `afk import <file>` to import tasks.\x1b[0m");
-            return;
-        }
-
-        // Filter stories based on flags
-        let stories: Vec<_> = prd
-            .user_stories
-            .iter()
-            .filter(|s| {
-                if self.pending && self.complete {
-                    true // Both flags = show all
-                } else if self.pending {
-                    !s.passes
-                } else if self.complete {
-                    s.passes
-                } else {
-                    true // No flags = show all
-                }
-            })
-            .take(self.limit)
-            .collect();
-
-        if stories.is_empty() {
-            println!("No matching tasks found.");
-            return;
-        }
-
-        // Print header
-        println!("{:<12} {:<12} {:<8} TITLE", "ID", "STATUS", "PRIORITY");
-        println!("{}", "-".repeat(70));
-
-        // Print each story
-        for story in &stories {
-            let status = if story.passes { "complete" } else { "pending" };
-            let title = if story.title.len() > 40 {
-                format!("{}...", &story.title[..37])
-            } else {
-                story.title.clone()
-            };
-            println!(
-                "{:<12} {:<12} {:<8} {}",
-                if story.id.len() > 10 {
-                    format!("{}...", &story.id[..7])
-                } else {
-                    story.id.clone()
-                },
-                status,
-                story.priority,
-                title
-            );
-        }
-
-        // Print summary
-        let (completed, total) = prd.get_story_counts();
-        let pending = total - completed;
-        println!();
-        println!(
-            "{} tasks ({} pending, {} complete)",
-            total, pending, completed
-        );
-    }
-}
-
 impl TaskCommand {
     /// Execute the task command.
     pub fn execute(&self) {
@@ -1132,15 +1139,13 @@ impl TasksSyncCommand {
     }
 }
 
-impl TasksShowCommand {
-    /// Execute the tasks show command.
-    pub fn execute(&self) {
-        match commands::import::tasks_show(self.pending) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+/// Execute the tasks command (list tasks).
+pub fn execute_tasks(pending: bool, complete: bool, limit: usize) {
+    match commands::import::tasks_show(pending, complete, limit) {
+        Ok(()) => {}
+        Err(e) => {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1457,6 +1462,114 @@ pub fn execute_archive_list() {
     }
 }
 
+impl ConfigShowCommand {
+    /// Execute the config show command.
+    pub fn execute(&self) {
+        match commands::config::config_show(self.section.as_deref()) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl ConfigGetCommand {
+    /// Execute the config get command.
+    pub fn execute(&self) {
+        match commands::config::config_get(&self.key) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl ConfigSetCommand {
+    /// Execute the config set command.
+    pub fn execute(&self) {
+        match commands::config::config_set(&self.key, &self.value) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl ConfigResetCommand {
+    /// Execute the config reset command.
+    pub fn execute(&self) {
+        use std::io::{self, Write};
+
+        // Confirm unless --yes (for resetting all)
+        if self.key.is_none() && !self.yes {
+            print!("Reset all config to defaults? [Y/n]: ");
+            let _ = io::stdout().flush();
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_ok() {
+                let input = input.trim().to_lowercase();
+                if input == "n" || input == "no" {
+                    println!("Cancelled.");
+                    return;
+                }
+            }
+        }
+
+        match commands::config::config_reset(self.key.as_deref()) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl ConfigEditCommand {
+    /// Execute the config edit command.
+    pub fn execute(&self) {
+        match commands::config::config_edit() {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl ConfigExplainCommand {
+    /// Execute the config explain command.
+    pub fn execute(&self) {
+        match commands::config::config_explain(self.key.as_deref()) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+impl ConfigKeysCommand {
+    /// Execute the config keys command.
+    pub fn execute(&self) {
+        match commands::config::config_keys() {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
 impl UpdateCommand {
     /// Execute the update command - checks for and installs updates.
     pub fn execute(&self) {
@@ -1622,27 +1735,41 @@ mod tests {
     }
 
     #[test]
-    fn test_list_command() {
-        let cli = Cli::try_parse_from(["afk", "list"]).unwrap();
+    fn test_tasks_command_default() {
+        // afk tasks (no subcommand) shows task list with defaults
+        let cli = Cli::try_parse_from(["afk", "tasks"]).unwrap();
         match cli.command {
-            Some(Commands::List(cmd)) => {
-                assert_eq!(cmd.limit, 20);
-                assert!(!cmd.pending);
-                assert!(!cmd.complete);
+            Some(Commands::Tasks {
+                command,
+                pending,
+                complete,
+                limit,
+            }) => {
+                assert!(command.is_none()); // No subcommand = list tasks
+                assert!(!pending);
+                assert!(!complete);
+                assert_eq!(limit, 50); // Default limit
             }
-            _ => panic!("Expected List command"),
+            _ => panic!("Expected Tasks command"),
         }
     }
 
     #[test]
-    fn test_list_command_with_flags() {
-        let cli = Cli::try_parse_from(["afk", "list", "-l", "10", "-p"]).unwrap();
+    fn test_tasks_command_with_flags() {
+        let cli = Cli::try_parse_from(["afk", "tasks", "-p", "-l", "10"]).unwrap();
         match cli.command {
-            Some(Commands::List(cmd)) => {
-                assert_eq!(cmd.limit, 10);
-                assert!(cmd.pending);
+            Some(Commands::Tasks {
+                command,
+                pending,
+                complete,
+                limit,
+            }) => {
+                assert!(command.is_none());
+                assert!(pending);
+                assert!(!complete);
+                assert_eq!(limit, 10);
             }
-            _ => panic!("Expected List command"),
+            _ => panic!("Expected Tasks command"),
         }
     }
 
@@ -1764,20 +1891,11 @@ mod tests {
     #[test]
     fn test_tasks_sync_command() {
         let cli = Cli::try_parse_from(["afk", "tasks", "sync"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Tasks(TasksCommands::Sync(_)))
-        ));
-    }
-
-    #[test]
-    fn test_tasks_show_command() {
-        let cli = Cli::try_parse_from(["afk", "tasks", "show", "-p"]).unwrap();
         match cli.command {
-            Some(Commands::Tasks(TasksCommands::Show(cmd))) => {
-                assert!(cmd.pending);
+            Some(Commands::Tasks { command, .. }) => {
+                assert!(matches!(command, Some(TasksCommands::Sync(_))));
             }
-            _ => panic!("Expected Tasks Show command"),
+            _ => panic!("Expected Tasks command with sync subcommand"),
         }
     }
 

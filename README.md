@@ -62,7 +62,7 @@ This runs your AI CLI to analyse the PRD and break it down into small, AI-sized 
 ### Step 3: Check and go!
 
 ```bash
-afk list      # Review the tasks it generated
+afk tasks     # Review the tasks it generated
 afk go        # Start the autonomous loop
 ```
 
@@ -128,7 +128,8 @@ cargo install --git https://github.com/m0nkmaster/afk
 |---------|-------------|
 | `afk status` | Show current status and tasks |
 | `afk status -v` | Verbose output with learnings |
-| `afk list` | List tasks from current product requirements doc (PRD) |
+| `afk tasks` | List tasks from current PRD |
+| `afk tasks -p` | Show only pending tasks |
 | `afk task <id>` | Show details of a specific task |
 | `afk done <id>` | Mark task complete |
 | `afk fail <id>` | Mark task failed |
@@ -139,7 +140,6 @@ cargo install --git https://github.com/m0nkmaster/afk
 | Command | Description |
 |---------|-------------|
 | `afk import <file>` | Import requirements doc into .afk/tasks.json |
-| `afk tasks show` | Show current task list |
 | `afk sync` | Sync from configured sources (alias: `afk tasks sync`) |
 | `afk source add beads` | Add beads as task source |
 | `afk source add markdown TODO.md` | Add markdown file source |

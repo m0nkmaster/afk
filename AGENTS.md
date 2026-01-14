@@ -168,7 +168,8 @@ afk go --init          # Re-run setup, then run
 afk go --fresh         # Clear session progress and start fresh
 afk status             # Show current status
 afk status -v          # Verbose status with learnings
-afk list               # List tasks from PRD
+afk tasks              # List tasks from PRD
+afk tasks -p           # Show only pending tasks
 afk task <id>          # Show task details
 afk sync               # Sync tasks from configured sources
 afk verify             # Run quality gates (lint, test, types)

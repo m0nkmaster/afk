@@ -34,8 +34,9 @@ AFK currently has **17 top-level commands** (plus subcommands). This review cons
 
 No change to these commands.
 
-**New commands**:
-- `afk list [--limit N]` — list tasks with optional limit
+**Task commands**:
+- `afk tasks [--limit N]` — list tasks with optional limit
+- `afk tasks sync` — sync from sources
 - `afk task <id>` — show details of a specific task
 
 ### 5. `prd` subcommand → `import` ✅
@@ -226,16 +227,17 @@ Recent Learnings:
 
 ---
 
-### `afk list`
+### `afk tasks`
 
 List tasks from the current PRD.
 
 ```bash
-afk list              # List all tasks (default limit)
-afk list --limit 10   # Show only 10 tasks
-afk list -l 5         # Short form
-afk list --pending    # Show only pending tasks
-afk list --complete   # Show only completed tasks
+afk tasks              # List all tasks (default limit)
+afk tasks --limit 10   # Show only 10 tasks
+afk tasks -l 5         # Short form
+afk tasks --pending    # Show only pending tasks
+afk tasks --complete   # Show only completed tasks
+afk tasks sync         # Sync from all sources
 ```
 
 #### Output

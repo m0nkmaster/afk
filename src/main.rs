@@ -2,7 +2,9 @@
 //!
 //! This is the main entry point for the afk CLI tool.
 
-use afk::cli::{ArchiveCommands, Cli, Commands, SourceCommands, TasksCommands, TasksSyncCommand};
+use afk::cli::{
+    ArchiveCommands, Cli, Commands, ConfigCommands, SourceCommands, TasksCommands, TasksSyncCommand,
+};
 use clap::Parser;
 
 fn main() {
@@ -24,7 +26,6 @@ fn main() {
             Commands::Go(c) => c.execute(),
             Commands::Init(c) => c.execute(),
             Commands::Status(c) => c.execute(),
-            Commands::List(c) => c.execute(),
             Commands::Task(c) => c.execute(),
             Commands::Prompt(c) => c.execute(),
             Commands::Verify(c) => c.execute(),
@@ -37,9 +38,16 @@ fn main() {
                 SourceCommands::Remove(c) => c.execute(),
             },
             Commands::Import(c) => c.execute(),
-            Commands::Tasks(subcmd) => match subcmd {
-                TasksCommands::Sync(c) => c.execute(),
-                TasksCommands::Show(c) => c.execute(),
+            Commands::Tasks {
+                command,
+                pending,
+                complete,
+                limit,
+            } => match command {
+                Some(TasksCommands::Sync(c)) => c.execute(),
+                None => {
+                    afk::cli::execute_tasks(pending, complete, limit);
+                }
             },
             Commands::Sync => {
                 // Alias for `afk tasks sync`
@@ -56,6 +64,15 @@ fn main() {
                 None => {
                     afk::cli::execute_archive_now(&reason, yes);
                 }
+            },
+            Commands::Config(subcmd) => match subcmd {
+                ConfigCommands::Show(c) => c.execute(),
+                ConfigCommands::Get(c) => c.execute(),
+                ConfigCommands::Set(c) => c.execute(),
+                ConfigCommands::Reset(c) => c.execute(),
+                ConfigCommands::Edit(c) => c.execute(),
+                ConfigCommands::Explain(c) => c.execute(),
+                ConfigCommands::Keys(c) => c.execute(),
             },
             Commands::Update(c) => c.execute(),
             Commands::Completions(c) => c.execute(),

@@ -238,12 +238,12 @@ fn test_status_with_config() {
 // ============================================================================
 
 #[test]
-fn test_tasks_show_displays_tasks() {
+fn test_tasks_displays_tasks() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .args(["tasks", "show"])
+        .arg("tasks")
         .assert()
         .success()
         .stdout(predicate::str::contains("task-001"))
@@ -251,12 +251,12 @@ fn test_tasks_show_displays_tasks() {
 }
 
 #[test]
-fn test_tasks_show_pending_only() {
+fn test_tasks_pending_only() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .args(["tasks", "show", "-p"])
+        .args(["tasks", "-p"])
         .assert()
         .success()
         .stdout(predicate::str::contains("task-001"))
@@ -265,12 +265,12 @@ fn test_tasks_show_pending_only() {
 }
 
 #[test]
-fn test_tasks_show_no_tasks_file() {
+fn test_tasks_no_tasks_file() {
     let temp = setup_project();
 
     afk()
         .current_dir(temp.path())
-        .args(["tasks", "show"])
+        .arg("tasks")
         .assert()
         .success()
         .stdout(predicate::str::contains("No tasks").or(predicate::str::contains("empty")));
@@ -765,42 +765,30 @@ fn test_go_no_sources_no_prd() {
 // ============================================================================
 
 #[test]
-fn test_list_shows_tasks() {
+fn test_tasks_with_limit() {
     let temp = setup_project_with_prd();
 
     afk()
         .current_dir(temp.path())
-        .arg("list")
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("task-001"))
-        .stdout(predicate::str::contains("task-002"));
-}
-
-#[test]
-fn test_list_pending_only() {
-    let temp = setup_project_with_prd();
-
-    afk()
-        .current_dir(temp.path())
-        .args(["list", "-p"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("task-001"))
-        // task-002 has passes=true so should not appear
-        .stdout(predicate::str::contains("task-002").not());
-}
-
-#[test]
-fn test_list_with_limit() {
-    let temp = setup_project_with_prd();
-
-    afk()
-        .current_dir(temp.path())
-        .args(["list", "-l", "1"])
+        .args(["tasks", "-l", "1"])
         .assert()
         .success()
         .stdout(predicate::str::contains("task-001"));
+}
+
+#[test]
+fn test_tasks_complete_only() {
+    let temp = setup_project_with_prd();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["tasks", "--complete"])
+        .assert()
+        .success()
+        // task-002 has passes=true so should appear
+        .stdout(predicate::str::contains("task-002"))
+        // task-001 has passes=false so should not appear
+        .stdout(predicate::str::contains("task-001").not());
 }
 
 #[test]

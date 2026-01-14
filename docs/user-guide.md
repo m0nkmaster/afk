@@ -133,9 +133,10 @@ The AI reads these files directly and updates them as it works.
 
 | Command | Description |
 |---------|-------------|
-| `afk list` | List tasks from current PRD |
-| `afk list -p` | Show only pending tasks |
-| `afk list -l 10` | Limit to 10 tasks |
+| `afk tasks` | List tasks from current PRD |
+| `afk tasks -p` | Show only pending tasks |
+| `afk tasks -l 10` | Limit to 10 tasks |
+| `afk tasks --complete` | Show only completed tasks |
 | `afk task <id>` | Show details of a specific task |
 | `afk done <task-id>` | Mark task complete |
 | `afk done <id> -m "msg"` | Mark complete with message |
@@ -173,8 +174,6 @@ The AI reads these files directly and updates them as it works.
 | `afk import PRD.md -o custom.json` | Custom output path |
 | `afk sync` | Sync from all sources (alias: `afk tasks sync`) |
 | `afk tasks sync` | Sync from all sources |
-| `afk tasks show` | Show current task list |
-| `afk tasks show --pending` | Show only pending tasks |
 
 ### Session/Archive Commands
 
@@ -368,7 +367,7 @@ afk source add beads
 
 # Sync and show tasks
 afk tasks sync
-afk tasks show
+afk tasks
 
 # Start working
 afk go
@@ -420,7 +419,7 @@ afk status
 afk status -v
 
 # List all tasks
-afk list
+afk tasks
 
 # Show details of a specific task
 afk task <id>
