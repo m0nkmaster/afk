@@ -790,6 +790,22 @@ fn run_iteration_with_tui(
                     if let Some(ref mut parser) = stream_parser {
                         // NDJSON mode: parse and emit events
                         if let Some(event) = parser.parse_line(&line) {
+                            // Check for completion signal only in assistant messages
+                            // (not in user messages which may contain the prompt with examples)
+                            if let StreamEvent::AssistantMessage { ref text } = event {
+                                if text.contains("<promise>COMPLETE</promise>")
+                                    || text.contains("AFK_COMPLETE")
+                                    || text.contains("AFK_STOP")
+                                {
+                                    completion_detected = true;
+                                    let _ = tx.send(TuiEvent::OutputLine(
+                                        "✓ Completion signal detected".to_string(),
+                                    ));
+                                    let _ = child.kill();
+                                    break;
+                                }
+                            }
+                            
                             match &event {
                                 StreamEvent::AssistantMessage { text } => {
                                     // Truncate long messages for display
@@ -884,7 +900,19 @@ fn run_iteration_with_tui(
                         } else {
                             // Parsing failed - fall back to raw line display
                             // (CLI may not support stream-json)
+                            // Check raw line for completion signals in fallback mode
                             let _ = tx.send(TuiEvent::OutputLine(line.clone()));
+                            if line.contains("<promise>COMPLETE</promise>")
+                                || line.contains("AFK_COMPLETE")
+                                || line.contains("AFK_STOP")
+                            {
+                                completion_detected = true;
+                                let _ = tx.send(TuiEvent::OutputLine(
+                                    "✓ Completion signal detected".to_string(),
+                                ));
+                                let _ = child.kill();
+                                break;
+                            }
                         }
                     } else {
                         // Plain text mode: send line as-is
@@ -894,22 +922,22 @@ fn run_iteration_with_tui(
                         if line.contains("antml:invoke") || line.contains("<tool_call>") {
                             let _ = tx.send(TuiEvent::ToolCall("tool".to_string()));
                         }
+                        
+                        // Check for completion signal in plain text mode
+                        if line.contains("<promise>COMPLETE</promise>")
+                            || line.contains("AFK_COMPLETE")
+                            || line.contains("AFK_STOP")
+                        {
+                            completion_detected = true;
+                            let _ = tx.send(TuiEvent::OutputLine(
+                                "✓ Completion signal detected".to_string(),
+                            ));
+                            let _ = child.kill();
+                            break;
+                        }
                     }
 
                     output_buffer.push(format!("{line}\n"));
-
-                    // Check for completion signal
-                    if line.contains("<promise>COMPLETE</promise>")
-                        || line.contains("AFK_COMPLETE")
-                        || line.contains("AFK_STOP")
-                    {
-                        completion_detected = true;
-                        let _ = tx.send(TuiEvent::OutputLine(
-                            "✓ Completion signal detected".to_string(),
-                        ));
-                        let _ = child.kill();
-                        break;
-                    }
                 }
                 Err(e) => {
                     let _ = tx.send(TuiEvent::Warning(format!("Error reading output: {e}")));

@@ -273,29 +273,55 @@ impl IterationRunner {
                         if self.stream_parser.is_some() {
                             // NDJSON mode: parse and convert to display text
                             // Falls back to raw line if parsing fails (CLI doesn't support stream-json)
-                            match self.process_output_line(&line) {
-                                Some(display) => {
-                                    self.output.stream_line(&format!("{display}\n"));
-                                }
-                                None => {
+                            if let Some(ref mut parser) = self.stream_parser {
+                                if let Some(event) = parser.parse_line(&line) {
+                                    // Check for completion signal only in assistant messages
+                                    // (not in user messages which may contain the prompt with examples)
+                                    if let crate::parser::StreamEvent::AssistantMessage { ref text } = event {
+                                        if self.output.contains_completion_signal(text) {
+                                            completion_detected = true;
+                                            self.output.completion_detected();
+                                            // Terminate the process
+                                            let _ = child.kill();
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // Convert event to display text and emit TUI event
+                                    let (display, tui_event) = self.stream_event_to_display(&event);
+                                    
+                                    // Send TUI event if we have a sender
+                                    if let (Some(ref sender), Some(tui_event)) = (&self.tui_sender, tui_event) {
+                                        let _ = sender.send(tui_event);
+                                    }
+                                    
+                                    if let Some(display) = display {
+                                        self.output.stream_line(&format!("{display}\n"));
+                                    }
+                                } else {
                                     // Parsing failed - display raw line as fallback
+                                    // In this case, check raw line for completion signals (plain text mode fallback)
                                     self.output.stream_line(&format!("{line}\n"));
+                                    if self.output.contains_completion_signal(&line) {
+                                        completion_detected = true;
+                                        self.output.completion_detected();
+                                        let _ = child.kill();
+                                        break;
+                                    }
                                 }
                             }
                         } else {
-                            // Plain text mode: display as-is
+                            // Plain text mode: display as-is and check raw line
                             self.output.stream_line(&format!("{line}\n"));
+                            if self.output.contains_completion_signal(&line) {
+                                completion_detected = true;
+                                self.output.completion_detected();
+                                // Terminate the process
+                                let _ = child.kill();
+                                break;
+                            }
                         }
                         output_buffer.push(format!("{line}\n"));
-
-                        // Check for completion signal
-                        if self.output.contains_completion_signal(&line) {
-                            completion_detected = true;
-                            self.output.completion_detected();
-                            // Terminate the process
-                            let _ = child.kill();
-                            break;
-                        }
                     }
                     Err(e) => {
                         self.output.warning(&format!("Error reading output: {e}"));
@@ -344,27 +370,6 @@ impl IterationRunner {
     /// Get a mutable reference to the output handler.
     pub fn output_handler_mut(&mut self) -> &mut OutputHandler {
         &mut self.output
-    }
-
-    /// Process an output line, parsing NDJSON if configured.
-    ///
-    /// Returns a human-readable display string, or None to skip display.
-    fn process_output_line(&mut self, line: &str) -> Option<String> {
-        // If not using stream-json, return line as-is
-        let parser = self.stream_parser.as_mut()?;
-
-        // Try to parse as NDJSON
-        let event = parser.parse_line(line)?;
-
-        // Convert event to display text and emit TUI event
-        let (display, tui_event) = self.stream_event_to_display(&event);
-
-        // Send TUI event if we have a sender
-        if let (Some(ref sender), Some(tui_event)) = (&self.tui_sender, tui_event) {
-            let _ = sender.send(tui_event);
-        }
-
-        display
     }
 
     /// Convert a StreamEvent to display text and optional TuiEvent.
