@@ -241,12 +241,53 @@ function handleMatch(firstCard, secondCard) {
 // Handle game win state
 function handleWin() {
   gameState.isGameWon = true;
+  
+  // Stop the timer
+  if (gameState.timerInterval) {
+    clearInterval(gameState.timerInterval);
+    gameState.timerInterval = null;
+  }
+  
   console.log('🎉 Congratulations! You won the game!');
   console.log(`Game completed in ${gameState.moves} moves and ${gameState.elapsedSeconds} seconds`);
+  
+  // Show the win overlay
+  showWinScreen();
+}
+
+// Show the win screen overlay with final stats
+function showWinScreen() {
+  const overlay = document.getElementById('win-overlay');
+  const winTime = document.getElementById('win-time');
+  const winMoves = document.getElementById('win-moves');
+  
+  // Populate the final stats
+  if (winTime) {
+    winTime.textContent = formatTime(gameState.elapsedSeconds);
+  }
+  if (winMoves) {
+    winMoves.textContent = gameState.moves;
+  }
+  
+  // Show the overlay
+  if (overlay) {
+    overlay.classList.add('visible');
+  }
+}
+
+// Hide the win screen overlay
+function hideWinScreen() {
+  const overlay = document.getElementById('win-overlay');
+  if (overlay) {
+    overlay.classList.remove('visible');
+  }
 }
 
 // Reset game to initial state with shuffled cards
 function resetGame() {
+  // Hide win screen if visible
+  hideWinScreen();
+  
   // Stop any running timer
   if (gameState.timerInterval) {
     clearInterval(gameState.timerInterval);
@@ -283,6 +324,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const newGameBtn = document.getElementById('new-game-btn');
   if (newGameBtn) {
     newGameBtn.addEventListener('click', resetGame);
+  }
+  
+  // Hook up Play Again button on win screen
+  const playAgainBtn = document.getElementById('play-again-btn');
+  if (playAgainBtn) {
+    playAgainBtn.addEventListener('click', resetGame);
   }
 });
 
