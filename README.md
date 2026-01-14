@@ -154,13 +154,17 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk prompt` | Preview next iteration's prompt |
 | `afk prompt -c` | Copy prompt to clipboard |
 
-### Session Management
+### Session & Config
 
 | Command | Description |
 |---------|-------------|
 | `afk init` | Initialise afk (auto-detects project) |
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
+| `afk config show` | Show all config values |
+| `afk config get <key>` | Get a specific config value |
+| `afk config set <key> <value>` | Set a config value |
+| `afk config explain` | Show documentation for config keys |
 | `afk update` | Update afk to latest version |
 
 ## 🤖 Supported AI CLIs

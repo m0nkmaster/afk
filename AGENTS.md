@@ -177,6 +177,8 @@ afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task
 afk prompt             # Preview next prompt
+afk config show        # View current config
+afk config set <key> <value>  # Set a config value
 afk archive            # Archive session and clear (ready for fresh work)
 afk archive list       # List archived sessions
 ```

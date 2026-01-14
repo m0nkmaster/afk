@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.10] - 2026-01-14
+
+### Changed
+
+- **Simplified versioning** — Removed build timestamp from version string; version now comes directly from `Cargo.toml`
+
 ## [0.4.8] - 2026-01-14
 
 ### Added
@@ -72,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `afk import <file>` — Import requirements into JSON tasks
 - `afk sync` — Alias for `afk tasks sync`
 - `afk source add|list|remove` — Manage task sources
+- `afk config show|get|set|reset|edit|explain|keys` — Manage config
 - `afk archive` — Archive and clear current session
 - `afk archive list` — List archived sessions
 - `afk update` — Self-update to latest version

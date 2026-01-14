@@ -184,6 +184,21 @@ The AI reads these files directly and updates them as it works.
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
 
+### Config Commands
+
+| Command | Description |
+|---------|-------------|
+| `afk config show` | Show all config values |
+| `afk config show -s limits` | Show only the limits section |
+| `afk config get <key>` | Get value (e.g., `limits.max_iterations`) |
+| `afk config set <key> <value>` | Set value (e.g., `limits.max_iterations 20`) |
+| `afk config reset` | Reset all config to defaults |
+| `afk config reset <key>` | Reset specific key to default |
+| `afk config edit` | Open config in $EDITOR |
+| `afk config explain` | List all keys with descriptions |
+| `afk config explain <key>` | Show full docs for a key |
+| `afk config keys` | List all valid config keys |
+
 ### Utility Commands
 
 | Command | Description |
