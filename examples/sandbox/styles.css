@@ -132,6 +132,8 @@ h1 {
 
 #task-list li.completed {
     text-decoration: line-through;
+    color: var(--colour-text-muted);
+    opacity: 0.7;
 }
 
 #task-list li:last-child {
