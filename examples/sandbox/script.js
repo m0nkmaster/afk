@@ -31,6 +31,8 @@ function applyColourToSwatch(swatch, colour) {
   }
   if (hexCodeElement) {
     hexCodeElement.textContent = colour;
+    // Store hex code in data attribute for reliable clipboard access
+    hexCodeElement.dataset.hexCode = colour;
   }
 }
 
@@ -109,7 +111,8 @@ function showCopyFeedback(hexCodeElement) {
 document.querySelectorAll('.hex-code').forEach((hexCode) => {
   hexCode.addEventListener('click', async (event) => {
     event.stopPropagation(); // Prevent swatch lock toggle
-    const text = hexCode.textContent;
+    // Read from data attribute to avoid copying "Copied!" text during feedback
+    const text = hexCode.dataset.hexCode || hexCode.textContent;
     const success = await copyToClipboard(text);
     if (success) {
       showCopyFeedback(hexCode);
@@ -224,3 +227,4 @@ window.isLocked = isLocked;
 window.getCurrentPalette = getCurrentPalette;
 window.exportAsJSON = exportAsJSON;
 window.exportAsCSS = exportAsCSS;
+window.copyToClipboard = copyToClipboard;
