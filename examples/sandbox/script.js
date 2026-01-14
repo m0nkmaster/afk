@@ -85,6 +85,11 @@ function renderCards() {
 
 // Handle card click events
 function handleCardClick(cardId) {
+  // Ignore clicks while game is locked (during flip-back delay)
+  if (gameState.isLocked) {
+    return;
+  }
+  
   const card = gameState.cards.find(c => c.id === cardId);
   
   // Ignore clicks on already flipped or matched cards
@@ -114,10 +119,34 @@ function checkForMatch() {
     // Match found - mark cards as matched
     handleMatch(firstCard, secondCard);
   } else {
-    // No match - will be handled by non-match-flip-back story
-    // For now, just clear flipped cards
-    gameState.flippedCards = [];
+    // No match - flip cards back after a brief delay
+    handleNoMatch(firstCard, secondCard);
   }
+}
+
+// Handle non-matching cards by flipping them back after a delay
+function handleNoMatch(firstCard, secondCard) {
+  // Lock the game to prevent further clicks during the delay
+  gameState.isLocked = true;
+  
+  // Wait ~1 second so player can see both cards, then flip back
+  setTimeout(() => {
+    // Flip cards back to face-down
+    firstCard.isFlipped = false;
+    secondCard.isFlipped = false;
+    
+    // Update the DOM - remove flipped class
+    const firstElement = document.querySelector(`[data-id="${firstCard.id}"]`);
+    const secondElement = document.querySelector(`[data-id="${secondCard.id}"]`);
+    firstElement.classList.remove('flipped');
+    secondElement.classList.remove('flipped');
+    
+    // Clear the flipped cards array
+    gameState.flippedCards = [];
+    
+    // Unlock the game for further clicks
+    gameState.isLocked = false;
+  }, 1000);
 }
 
 // Handle a successful match
