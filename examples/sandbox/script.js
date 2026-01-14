@@ -56,6 +56,7 @@ function renderCards() {
   gameBoard.innerHTML = '';
   
   gameState.cards.forEach(card => {
+    // Create card container
     const cardElement = document.createElement('div');
     cardElement.className = 'card';
     cardElement.dataset.id = card.id;
@@ -70,11 +71,28 @@ function renderCards() {
       cardElement.classList.add('matched');
     }
     
-    // Create card face (shows symbol when flipped)
+    // Create inner container for 3D flip
+    const cardInner = document.createElement('div');
+    cardInner.className = 'card-inner';
+    
+    // Create front face (face-down side with pattern)
+    const cardFront = document.createElement('div');
+    cardFront.className = 'card-front';
+    
+    // Create back face (symbol side)
+    const cardBack = document.createElement('div');
+    cardBack.className = 'card-back';
+    
+    // Add symbol to the back
     const cardFace = document.createElement('span');
     cardFace.className = 'card-face';
     cardFace.textContent = card.symbol;
-    cardElement.appendChild(cardFace);
+    cardBack.appendChild(cardFace);
+    
+    // Assemble card structure
+    cardInner.appendChild(cardFront);
+    cardInner.appendChild(cardBack);
+    cardElement.appendChild(cardInner);
     
     // Add click handler
     cardElement.addEventListener('click', () => handleCardClick(card.id));
