@@ -11,11 +11,22 @@
     /**
      * Creates a new task list item element.
      * @param {string} text - The task text
+     * @param {boolean} [completed=false] - Whether the task is completed
      * @returns {HTMLLIElement} The task list item
      */
-    function createTaskElement(text) {
+    function createTaskElement(text, completed) {
         const li = document.createElement('li');
         li.textContent = text;
+        
+        if (completed) {
+            li.classList.add('completed');
+        }
+        
+        // Toggle complete status on click
+        li.addEventListener('click', function() {
+            li.classList.toggle('completed');
+        });
+        
         return li;
     }
 

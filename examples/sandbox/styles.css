@@ -122,6 +122,16 @@ h1 {
     padding: 0.875rem 1rem;
     border-bottom: 1px solid var(--colour-border);
     font-size: 1rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+#task-list li:hover {
+    background-color: var(--colour-bg);
+}
+
+#task-list li.completed {
+    text-decoration: line-through;
 }
 
 #task-list li:last-child {
