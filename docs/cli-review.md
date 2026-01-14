@@ -394,27 +394,32 @@ afk
 ├── go              # Run the loop (all scenarios)
 ├── init            # Initialise/reconfigure
 ├── status          # Show state (-v for verbose + learnings)
-├── list            # List tasks (--limit, --pending, --complete)
+├── tasks           # List tasks (--limit, --pending, --complete)
+│   └── sync        # Sync from sources
 ├── task            # Show task details
 ├── prompt          # Preview AI prompt
 ├── verify          # Run quality gates
 ├── done            # Mark complete
 ├── fail            # Mark failed
 ├── reset           # Reset task
-├── sync            # Sync from sources (alias for tasks sync)
-├── update          # Self-update
-├── completions     # Shell completions
+├── import          # Import requirements doc
+├── sync            # Alias for tasks sync
 ├── source
 │   ├── add
 │   ├── list
 │   └── remove
-├── prd
-│   └── import      # Import requirements doc
-├── tasks
-│   ├── sync
-│   └── show
-└── archive
-    └── list
+├── config
+│   ├── show        # Show all config
+│   ├── get         # Get specific key
+│   ├── set         # Set key value
+│   ├── reset       # Reset to defaults
+│   ├── edit        # Open in $EDITOR
+│   ├── explain     # Show docs for keys
+│   └── keys        # List valid keys
+├── archive
+│   └── list
+├── update          # Self-update
+└── completions     # Shell completions
 ```
 
 **Total: 13 primary commands + 6 subcommands = 19 commands**
