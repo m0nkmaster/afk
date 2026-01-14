@@ -23,7 +23,20 @@
     textSpan.className = 'task-text';
     textSpan.textContent = text;
     
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.type = 'button';
+    deleteBtn.textContent = '×';
+    deleteBtn.setAttribute('aria-label', 'Delete task');
+    
+    // Delete button click handler
+    deleteBtn.addEventListener('click', function(e) {
+      e.stopPropagation(); // Prevent triggering completion toggle
+      li.remove();
+    });
+    
     li.appendChild(textSpan);
+    li.appendChild(deleteBtn);
     
     // Click handler to toggle completed state
     li.addEventListener('click', function() {
