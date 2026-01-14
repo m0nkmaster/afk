@@ -539,7 +539,10 @@ impl GoCommand {
                 eprintln!("\x1b[31mError:\x1b[0m Failed to save config: {e}");
                 std::process::exit(1);
             }
-            println!("\x1b[32m✓\x1b[0m Configuration saved to {}", config_path.display());
+            println!(
+                "\x1b[32m✓\x1b[0m Configuration saved to {}",
+                config_path.display()
+            );
         }
 
         // Dry run mode
@@ -847,7 +850,7 @@ impl StatusCommand {
 
         // Verbose mode: show additional details
         if self.verbose {
-        println!();
+            println!();
 
             // Feedback Loops
             println!("\x1b[1mFeedback Loops\x1b[0m");
@@ -960,7 +963,7 @@ impl ListCommand {
             } else {
                 story.title.clone()
             };
-        println!(
+            println!(
                 "{:<12} {:<12} {:<8} {}",
                 if story.id.len() > 10 {
                     format!("{}...", &story.id[..7])
@@ -1010,7 +1013,7 @@ impl TaskCommand {
         println!();
 
         println!("\x1b[1mTitle:\x1b[0m {}", story.title);
-            println!(
+        println!(
             "\x1b[1mStatus:\x1b[0m {}",
             if story.passes { "complete" } else { "pending" }
         );
@@ -1046,7 +1049,10 @@ impl TaskCommand {
 
             println!("\x1b[1mAttempts:\x1b[0m {}", task.failure_count + 1);
             if let Some(ref started) = task.started_at {
-                println!("\x1b[1mStarted:\x1b[0m {}", &started[..19].replace('T', " "));
+                println!(
+                    "\x1b[1mStarted:\x1b[0m {}",
+                    &started[..19].replace('T', " ")
+                );
             }
             if let Some(ref completed) = task.completed_at {
                 println!(

@@ -246,7 +246,7 @@ impl PrdDocument {
     /// # Arguments
     ///
     /// * `path` - Path to tasks file. Defaults to `.afk/tasks.json` if None.
-    ///           Falls back to `.afk/prd.json` for backwards compatibility.
+    ///   Falls back to `.afk/prd.json` for backwards compatibility.
     pub fn load(path: Option<&Path>) -> Result<Self, PrdError> {
         let path = path.map(PathBuf::from).unwrap_or_else(|| {
             // Prefer tasks.json, fall back to prd.json for backwards compatibility
