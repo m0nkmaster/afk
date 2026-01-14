@@ -541,13 +541,14 @@ impl GoCommand {
 
         // Dry run mode
         if self.dry_run {
+            let effective_iterations = iterations.unwrap_or(config.limits.max_iterations);
             println!("\x1b[1mDry run mode - would execute:\x1b[0m");
             println!(
                 "  AI CLI: {} {}",
                 config.ai_cli.command,
                 config.ai_cli.args.join(" ")
             );
-            println!("  Iterations: {}", iterations.unwrap_or(10));
+            println!("  Iterations: {}", effective_iterations);
             println!(
                 "  Sources: {:?}",
                 config
@@ -560,8 +561,10 @@ impl GoCommand {
         }
 
         // Build run options with feedback settings
+        // Use config.limits.max_iterations as default when not explicitly specified
+        let effective_iterations = iterations.or(Some(config.limits.max_iterations));
         let options = RunOptions::new()
-            .with_iterations(iterations)
+            .with_iterations(effective_iterations)
             .with_until_complete(self.until_complete)
             .with_timeout(self.timeout)
             .with_resume(false)
@@ -585,6 +588,8 @@ impl GoCommand {
     }
 
     /// Parse iterations_or_source argument.
+    /// Returns (iterations, source_path). When iterations is None, caller should
+    /// fall back to config.limits.max_iterations.
     fn parse_args(&self) -> (Option<u32>, Option<String>) {
         match &self.iterations_or_source {
             Some(arg) => {
@@ -592,11 +597,11 @@ impl GoCommand {
                 if let Ok(n) = arg.parse::<u32>() {
                     (Some(n), None)
                 } else {
-                    // It's a path - use iterations_if_source or default 10
-                    (self.iterations_if_source.or(Some(10)), Some(arg.clone()))
+                    // It's a path - use iterations_if_source if provided
+                    (self.iterations_if_source, Some(arg.clone()))
                 }
             }
-            None => (Some(10), None), // Default 10 iterations
+            None => (None, None), // Use config.limits.max_iterations as default
         }
     }
 }

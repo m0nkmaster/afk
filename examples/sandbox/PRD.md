@@ -1,25 +1,18 @@
-# Task List Website
+# Pomodoro Timer
 
-A simple, elegant task list web application.
+A minimal, elegant Pomodoro timer web application.
 
 ## Overview
 
-Build a single-page task list application using vanilla HTML, CSS, and JavaScript. No frameworks or build tools required — just clean, working code. The task list will be stored and managed within localStorage.
-
-## Tasks
-
-- [ ] Create index.html with basic structure and semantic markup
-- [ ] Add CSS styling with a modern, minimal aesthetic
-- [ ] Implement JavaScript for adding new tasks
-- [ ] Implement JavaScript for marking tasks complete
-- [ ] Implement JavaScript for deleting tasks
-- [ ] Add localStorage persistence so tasks survive page refresh
+Build a single-page Pomodoro timer using vanilla HTML, CSS, and JavaScript. No frameworks or build tools — just clean, working code. The app helps users focus using the Pomodoro technique: 25-minute work sessions with 5-minute breaks.
 
 ## Acceptance Criteria
 
-- Tasks can be added via input field and button/enter key
-- Tasks can be toggled complete (strikethrough styling)
-- Tasks can be deleted
-- Task state persists across browser sessions
-- Clean, readable code with no external dependencies
-- Works in modern browsers
+- Timer displays minutes and seconds in large, readable format
+- Start button begins countdown, converts to Pause while running
+- Reset button stops timer and restores to initial duration
+- Visual distinction between work mode (warm colours) and break mode (cool colours)
+- Audio plays when timer reaches zero
+- Automatically suggests switching mode when timer completes
+- Session count persists across browser sessions
+- Works in modern browsers without external dependencies

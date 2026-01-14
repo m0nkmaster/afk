@@ -40,14 +40,55 @@ h1 {
   border-radius: 1rem;
 }
 
-/* Card placeholder styling */
+/* Card styling - face-down state */
 .card {
   aspect-ratio: 1;
-  background: #0f3460;
   border-radius: 0.5rem;
   cursor: pointer;
   min-width: 60px;
   min-height: 60px;
+  border: 2px solid #e94560;
+  position: relative;
+  overflow: hidden;
+  
+  /* Base gradient for card back */
+  background: 
+    linear-gradient(135deg, #1a1a4e 25%, transparent 25%),
+    linear-gradient(225deg, #1a1a4e 25%, transparent 25%),
+    linear-gradient(45deg, #1a1a4e 25%, transparent 25%),
+    linear-gradient(315deg, #1a1a4e 25%, #0f3460 25%);
+  background-size: 20px 20px;
+  background-color: #0f3460;
+  
+  /* Subtle shadow for depth */
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 0 20px rgba(233, 69, 96, 0.1);
+  
+  /* Smooth interaction */
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Centre icon decoration on card back */
+.card::before {
+  content: '?';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: rgba(233, 69, 96, 0.6);
+  text-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+}
+
+/* Hover effect for interactivity */
+.card:hover {
+  transform: scale(1.03);
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.4),
+    inset 0 0 20px rgba(233, 69, 96, 0.2);
+  border-color: #ff6b8a;
 }
 
 /* Responsive adjustments */
@@ -61,6 +102,11 @@ h1 {
   .card {
     min-width: 50px;
     min-height: 50px;
+    background-size: 16px 16px;
+  }
+  
+  .card::before {
+    font-size: 1.25rem;
   }
   
   h1 {
@@ -77,5 +123,10 @@ h1 {
   .card {
     min-width: 40px;
     min-height: 40px;
+    background-size: 12px 12px;
+  }
+  
+  .card::before {
+    font-size: 1rem;
   }
 }

@@ -12,6 +12,7 @@ use std::process::{Command, Stdio};
 use crate::bootstrap::ensure_ai_cli_configured;
 use crate::cli::output::{get_effective_mode, output_prompt};
 use crate::config::AfkConfig;
+use crate::feedback::Spinner;
 use crate::prd::{generate_prd_prompt, load_prd_file, sync_prd_with_root, PrdDocument, PrdError};
 
 /// Result type for import command operations.
@@ -112,11 +113,11 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
     let command = &config.ai_cli.command;
     let args: Vec<&str> = config.ai_cli.args.iter().map(|s| s.as_str()).collect();
 
-    println!(
-        "\x1b[1mImporting requirements with {}...\x1b[0m",
+    // Start spinner whilst AI CLI initialises
+    let mut spinner = Some(Spinner::start(&format!(
+        "Importing requirements with {}...",
         config.ai_cli.command
-    );
-    println!();
+    )));
 
     // Build the command
     let mut cmd = Command::new(command);
@@ -131,9 +132,14 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
         Ok(child) => child,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
-                eprintln!("\x1b[31mError:\x1b[0m AI CLI not found: {}", command);
+                if let Some(s) = spinner.take() {
+                    s.stop_with_error(&format!("AI CLI not found: {}", command));
+                }
                 eprintln!("\x1b[2mIs it installed and in your PATH?\x1b[0m");
                 return Err(ImportCommandError::ImportError(PrdError::ReadError(e)));
+            }
+            if let Some(s) = spinner.take() {
+                s.stop_with_error("Failed to start AI CLI");
             }
             return Err(ImportCommandError::ImportError(PrdError::ReadError(e)));
         }
@@ -143,6 +149,12 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
+            // Stop spinner on first output
+            if let Some(s) = spinner.take() {
+                s.stop();
+                println!();
+            }
+
             match line {
                 Ok(line) => {
                     println!("{line}");
@@ -153,6 +165,11 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
                 }
             }
         }
+    }
+
+    // If no output was received, stop the spinner now
+    if let Some(s) = spinner.take() {
+        s.stop();
     }
 
     // Wait for process to finish
