@@ -72,7 +72,7 @@ fn setup_project_with_stories() -> TempDir {
             }
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let progress = r#"{
         "started_at": "2025-01-01T00:00:00",
@@ -80,7 +80,7 @@ fn setup_project_with_stories() -> TempDir {
         "tasks": {
             "task-003": {
                 "id": "task-003",
-                "source": "json:prd.json",
+                "source": "json:tasks.json",
                 "status": "completed",
                 "started_at": "2025-01-01T00:00:00",
                 "completed_at": "2025-01-01T01:00:00",
@@ -319,7 +319,7 @@ fn test_prompt_all_complete_shows_signal() {
             }
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
@@ -367,7 +367,7 @@ fn test_prompt_with_configured_gates() {
             {"id": "t1", "title": "Task", "description": "Do it", "acceptanceCriteria": ["Done"], "priority": 1, "passes": false}
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
@@ -421,7 +421,7 @@ fn test_prompt_with_custom_instructions() {
             {"id": "t1", "title": "Task", "description": "Do it", "acceptanceCriteria": ["Done"], "priority": 1, "passes": false}
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
@@ -466,7 +466,7 @@ fn test_prompt_with_context_files() {
             {"id": "t1", "title": "Task", "description": "Do it", "acceptanceCriteria": ["Done"], "priority": 1, "passes": false}
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
@@ -540,7 +540,7 @@ fn test_prompt_respects_iteration_limit() {
             {"id": "t1", "title": "Task", "description": "Do it", "acceptanceCriteria": ["Done"], "priority": 1, "passes": false}
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
@@ -590,7 +590,7 @@ fn test_prompt_empty_prd() {
         "branch": "main",
         "userStories": []
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())
@@ -626,7 +626,7 @@ fn test_prompt_selects_highest_priority() {
             {"id": "medium-priority", "title": "P2 task", "description": "Medium priority", "acceptanceCriteria": ["Done"], "priority": 2, "passes": false}
         ]
     }"#;
-    fs::write(afk_dir.join("prd.json"), prd).unwrap();
+    fs::write(afk_dir.join("tasks.json"), prd).unwrap();
 
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_afk"))
         .current_dir(temp.path())

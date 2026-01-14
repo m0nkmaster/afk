@@ -179,9 +179,8 @@ The AI reads these files directly and updates them as it works.
 
 | Command | Description |
 |---------|-------------|
-| `afk archive create` | Archive current session |
-| `afk archive list` | List archives |
-| `afk archive clear` | Archive and reset |
+| `afk archive` | Archive and clear session (ready for fresh work) |
+| `afk archive list` | List archived sessions |
 
 ### Utility Commands
 
@@ -385,8 +384,8 @@ afk go -u
 # To start fresh, use the --fresh flag
 afk go --fresh
 
-# Or clear the session manually first
-afk archive clear -y
+# Or archive and clear the session manually first
+afk archive -y
 afk go
 ```
 

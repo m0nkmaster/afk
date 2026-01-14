@@ -180,14 +180,14 @@ mod tests {
     #[test]
     fn test_generate_prd_prompt() {
         let content = "# My App\n\nBuild a todo list app with user authentication.";
-        let output_path = ".afk/prd.json";
+        let output_path = ".afk/tasks.json";
 
         let result = generate_prd_prompt(content, output_path);
         assert!(result.is_ok());
 
         let prompt = result.unwrap();
         assert!(prompt.contains("Build a todo list app with user authentication"));
-        assert!(prompt.contains(".afk/prd.json"));
+        assert!(prompt.contains(".afk/tasks.json"));
         assert!(prompt.contains("# Parse PRD into Structured Feature List"));
     }
 
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn test_generate_prd_prompt_empty_content() {
         let content = "";
-        let output_path = ".afk/prd.json";
+        let output_path = ".afk/tasks.json";
 
         let result = generate_prd_prompt(content, output_path);
         assert!(result.is_ok());

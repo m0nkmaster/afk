@@ -661,7 +661,7 @@ fn test_archive_list_empty() {
 }
 
 #[test]
-fn test_archive_create() {
+fn test_archive() {
     let temp = setup_project_with_prd();
 
     // Create progress file
@@ -674,7 +674,7 @@ fn test_archive_create() {
 
     afk()
         .current_dir(temp.path())
-        .args(["archive", "create", "-r", "test archive"])
+        .args(["archive", "-r", "test archive", "-y"])
         .assert()
         .success()
         .stdout(
@@ -688,49 +688,15 @@ fn test_archive_create() {
 }
 
 #[test]
-fn test_archive_create_no_session() {
+fn test_archive_no_session() {
     let temp = setup_project();
 
     // Without a progress file, archiving may succeed silently or warn
     afk()
         .current_dir(temp.path())
-        .args(["archive", "create", "-r", "test"])
+        .args(["archive", "-r", "test", "-y"])
         .assert()
         .success();
-}
-
-#[test]
-fn test_archive_clear_requires_confirmation() {
-    let temp = setup_project();
-
-    // Create some archives
-    let archives_dir = temp.path().join(".afk/archives");
-    fs::create_dir_all(archives_dir.join("2025-01-01_120000_main")).unwrap();
-
-    // Without -y flag, should not clear (or prompt - we expect non-interactive failure)
-    afk()
-        .current_dir(temp.path())
-        .args(["archive", "clear"])
-        .assert()
-        .success(); // May warn but not error
-}
-
-#[test]
-fn test_archive_clear_with_yes_flag() {
-    let temp = setup_project();
-
-    // Create some archives in the right directory (check what the app uses)
-    let archive_dir = temp.path().join(".afk/archive");
-    let archive = archive_dir.join("2025-01-01_120000_main");
-    fs::create_dir_all(&archive).unwrap();
-    fs::write(archive.join("metadata.json"), r#"{"reason": "test"}"#).unwrap();
-
-    afk()
-        .current_dir(temp.path())
-        .args(["archive", "clear", "-y"])
-        .assert()
-        .success();
-    // May output "Cleared", "Deleted", or just succeed silently
 }
 
 // ============================================================================

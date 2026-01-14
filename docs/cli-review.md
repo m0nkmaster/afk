@@ -319,7 +319,7 @@ afk init -y, --yes       # Accept defaults without prompting
 Import a requirements document and convert to structured JSON tasks.
 
 ```bash
-afk prd import requirements.md           # Parse and create .afk/prd.json
+afk prd import requirements.md           # Parse and create .afk/tasks.json
 afk prd import PRD.md -o tasks.json      # Custom output path
 afk prd import spec.md --copy            # Copy prompt to clipboard (manual mode)
 afk prd import spec.md --stdout          # Print prompt to stdout (manual mode)

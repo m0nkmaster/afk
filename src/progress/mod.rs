@@ -384,11 +384,14 @@ pub struct ArchiveMetadata {
     pub tasks_pending: usize,
 }
 
-/// Archive the current session to a timestamped directory.
+/// Archive and clear the current session.
+///
+/// Moves the current session files (progress.json and tasks.json) to an archive
+/// directory with a timestamp. The session is cleared, ready for fresh work.
 ///
 /// # Arguments
 ///
-/// * `reason` - Reason for archiving (e.g., "manual", "branch_change", "session_complete")
+/// * `reason` - Reason for archiving (e.g., "manual", "completed")
 ///
 /// # Returns
 ///
@@ -417,16 +420,16 @@ pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
     // Create archive directory
     fs::create_dir_all(&archive_dir)?;
 
-    // Copy progress.json to archive (if it exists)
+    // Move progress.json to archive (if it exists)
     if progress_path.exists() {
         let archive_progress = archive_dir.join("progress.json");
-        fs::copy(progress_path, &archive_progress)?;
+        fs::rename(progress_path, &archive_progress)?;
     }
 
-    // Copy tasks.json to archive (if it exists)
+    // Move tasks.json to archive (if it exists)
     if tasks_path.exists() {
         let archive_tasks = archive_dir.join("tasks.json");
-        fs::copy(tasks_path, &archive_tasks)?;
+        fs::rename(tasks_path, &archive_tasks)?;
     }
 
     // Write metadata

@@ -148,7 +148,7 @@ src/
 - **Runner**: Implements Ralph Wiggum pattern — spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
-- **Archiving**: Sessions archived on completion or manually via `afk archive`
+- **Archiving**: Sessions archived on completion or manually via `afk archive` (moves files to `.afk/archive/`, clears session)
 
 ## Key Commands
 
@@ -167,6 +167,8 @@ afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task
 afk prompt             # Preview next prompt
+afk archive            # Archive session and clear (ready for fresh work)
+afk archive list       # List archived sessions
 ```
 
 ## PRD Workflow

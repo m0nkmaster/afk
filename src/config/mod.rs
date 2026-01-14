@@ -16,8 +16,6 @@ pub const CONFIG_FILE: &str = ".afk/config.json";
 pub const PROGRESS_FILE: &str = ".afk/progress.json";
 /// Default tasks file path.
 pub const TASKS_FILE: &str = ".afk/tasks.json";
-/// Legacy PRD file path (for backwards compatibility).
-pub const PRD_FILE: &str = ".afk/prd.json";
 /// Default archive directory path.
 pub const ARCHIVE_DIR: &str = ".afk/archive";
 
@@ -562,11 +560,6 @@ impl AfkConfig {
         PathBuf::from(TASKS_FILE)
     }
 
-    /// Get the path for the PRD file (legacy, for backwards compatibility).
-    pub fn prd_file() -> PathBuf {
-        PathBuf::from(PRD_FILE)
-    }
-
     /// Get the path for the archive directory.
     pub fn archive_dir() -> PathBuf {
         PathBuf::from(ARCHIVE_DIR)
@@ -1062,7 +1055,6 @@ mod tests {
         assert_eq!(CONFIG_FILE, ".afk/config.json");
         assert_eq!(PROGRESS_FILE, ".afk/progress.json");
         assert_eq!(TASKS_FILE, ".afk/tasks.json");
-        assert_eq!(PRD_FILE, ".afk/prd.json"); // Legacy
         assert_eq!(ARCHIVE_DIR, ".afk/archive");
     }
 
@@ -1074,7 +1066,6 @@ mod tests {
             AfkConfig::progress_file(),
             PathBuf::from(".afk/progress.json")
         );
-        assert_eq!(AfkConfig::prd_file(), PathBuf::from(".afk/prd.json"));
         assert_eq!(AfkConfig::archive_dir(), PathBuf::from(".afk/archive"));
     }
 

@@ -57,30 +57,28 @@ pub fn sync_prd_with_root(
         return Ok(existing_prd);
     }
 
-    // Build map of existing completion status
-    let existing_status: HashMap<String, bool> = existing_prd
+    // Build map of existing stories by ID for merging
+    let mut existing_by_id: HashMap<String, crate::prd::UserStory> = existing_prd
         .user_stories
-        .iter()
-        .map(|s| (s.id.clone(), s.passes))
+        .into_iter()
+        .map(|s| (s.id.clone(), s))
         .collect();
 
     // Aggregate from all sources
-    let mut stories = aggregate_tasks(&config.sources);
+    let source_stories = aggregate_tasks(&config.sources);
 
-    // Safety check: don't wipe a populated PRD with an empty sync.
-    // This protects against sources returning nothing (e.g., empty beads).
-    if stories.is_empty() && !existing_prd.user_stories.is_empty() {
-        return Ok(existing_prd);
-    }
-
-    // Preserve completion status from previous sync
-    for story in &mut stories {
-        if let Some(&passes) = existing_status.get(&story.id) {
-            story.passes = passes;
+    // Merge: add new tasks from sources, update existing ones (preserving passes status)
+    for mut story in source_stories {
+        if let Some(existing) = existing_by_id.get(&story.id) {
+            // Task exists - preserve completion status
+            story.passes = existing.passes;
         }
+        // Insert or update (source is authoritative for non-passes fields)
+        existing_by_id.insert(story.id.clone(), story);
     }
 
-    // Sort by priority (1 = highest)
+    // Collect all stories and sort by priority (1 = highest)
+    let mut stories: Vec<_> = existing_by_id.into_values().collect();
     stories.sort_by_key(|s| s.priority);
 
     // Get branch name (informational only, afk does not manage branches)
@@ -318,16 +316,16 @@ mod tests {
     }
 
     #[test]
-    fn test_sync_tasks_empty_sync_preserves_existing() {
+    fn test_sync_tasks_empty_sync_preserves_pending_tasks() {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
 
-        // Create existing tasks with stories
+        // Create existing tasks with PENDING stories (passes: false)
         let existing_tasks = r#"{
             "project": "test-project",
             "userStories": [
-                {"id": "story-1", "title": "Existing Story", "description": "Test", "priority": 1}
+                {"id": "story-1", "title": "Pending Story", "description": "Test", "priority": 1, "passes": false}
             ]
         }"#;
         fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
@@ -340,9 +338,81 @@ mod tests {
 
         let result = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
 
-        // Should preserve existing tasks
+        // Should preserve existing pending tasks to protect work in progress
         assert_eq!(result.user_stories.len(), 1);
         assert_eq!(result.user_stories[0].id, "story-1");
+    }
+
+    #[test]
+    fn test_sync_tasks_merges_new_tasks_with_existing_completed() {
+        let temp = TempDir::new().unwrap();
+        let afk_dir = temp.path().join(".afk");
+        fs::create_dir_all(&afk_dir).unwrap();
+
+        // Create existing tasks with completed story
+        let existing_tasks = r#"{
+            "project": "test-project",
+            "userStories": [
+                {"id": "old-story", "title": "Completed Story", "description": "Test", "priority": 1, "passes": true}
+            ]
+        }"#;
+        fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
+
+        // Config with a source that returns a NEW task
+        let source_json = r#"[{"id": "new-story", "title": "New Task", "priority": 2}]"#;
+        let source_path = temp.path().join("source.json");
+        fs::write(&source_path, source_json).unwrap();
+
+        let config = AfkConfig {
+            sources: vec![crate::config::SourceConfig::json(
+                source_path.to_str().unwrap(),
+            )],
+            ..Default::default()
+        };
+
+        let result = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
+
+        // Should have BOTH the old completed task AND the new task
+        assert_eq!(result.user_stories.len(), 2);
+
+        // Old task should still be marked complete
+        let old_story = result.user_stories.iter().find(|s| s.id == "old-story");
+        assert!(old_story.is_some());
+        assert!(old_story.unwrap().passes);
+
+        // New task should be pending
+        let new_story = result.user_stories.iter().find(|s| s.id == "new-story");
+        assert!(new_story.is_some());
+        assert!(!new_story.unwrap().passes);
+    }
+
+    #[test]
+    fn test_sync_tasks_preserves_existing_when_sources_empty() {
+        let temp = TempDir::new().unwrap();
+        let afk_dir = temp.path().join(".afk");
+        fs::create_dir_all(&afk_dir).unwrap();
+
+        // Create existing tasks with completed story
+        let existing_tasks = r#"{
+            "project": "test-project",
+            "userStories": [
+                {"id": "old-story", "title": "Completed Story", "description": "Test", "priority": 1, "passes": true}
+            ]
+        }"#;
+        fs::write(afk_dir.join("tasks.json"), existing_tasks).unwrap();
+
+        // Config with a source that returns empty (non-existent file)
+        let config = AfkConfig {
+            sources: vec![crate::config::SourceConfig::json("/nonexistent/path.json")],
+            ..Default::default()
+        };
+
+        let result = sync_prd_with_root(&config, None, Some(temp.path())).unwrap();
+
+        // Should preserve existing tasks even when sources return empty
+        assert_eq!(result.user_stories.len(), 1);
+        assert_eq!(result.user_stories[0].id, "old-story");
+        assert!(result.user_stories[0].passes);
     }
 
     #[test]

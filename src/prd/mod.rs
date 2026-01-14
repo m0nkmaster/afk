@@ -13,7 +13,7 @@ pub use store::{
     sync_prd, sync_prd_with_root,
 };
 
-use crate::config::{PRD_FILE, TASKS_FILE};
+use crate::config::TASKS_FILE;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -246,22 +246,10 @@ impl PrdDocument {
     /// # Arguments
     ///
     /// * `path` - Path to tasks file. Defaults to `.afk/tasks.json` if None.
-    ///   Falls back to `.afk/prd.json` for backwards compatibility.
     pub fn load(path: Option<&Path>) -> Result<Self, PrdError> {
-        let path = path.map(PathBuf::from).unwrap_or_else(|| {
-            // Prefer tasks.json, fall back to prd.json for backwards compatibility
-            let tasks_path = PathBuf::from(TASKS_FILE);
-            if tasks_path.exists() {
-                tasks_path
-            } else {
-                let prd_path = PathBuf::from(PRD_FILE);
-                if prd_path.exists() {
-                    prd_path
-                } else {
-                    tasks_path // Default to tasks.json for new files
-                }
-            }
-        });
+        let path = path
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(TASKS_FILE));
 
         if !path.exists() {
             return Ok(Self::default());
@@ -579,7 +567,7 @@ mod tests {
     #[test]
     fn test_prd_document_load_missing_file() {
         let temp = TempDir::new().unwrap();
-        let prd_path = temp.path().join(".afk/prd.json");
+        let prd_path = temp.path().join(".afk/tasks.json");
         let prd = PrdDocument::load(Some(&prd_path)).unwrap();
         assert!(prd.user_stories.is_empty());
     }
@@ -589,7 +577,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
-        let prd_path = afk_dir.join("prd.json");
+        let prd_path = afk_dir.join("tasks.json");
 
         let sample_prd = r#"{
             "project": "loaded-project",
@@ -609,7 +597,7 @@ mod tests {
     #[test]
     fn test_prd_document_save_creates_directory() {
         let temp = TempDir::new().unwrap();
-        let prd_path = temp.path().join(".afk/prd.json");
+        let prd_path = temp.path().join(".afk/tasks.json");
 
         let prd = PrdDocument {
             project: "saved-project".to_string(),
@@ -626,7 +614,7 @@ mod tests {
     #[test]
     fn test_prd_document_round_trip() {
         let temp = TempDir::new().unwrap();
-        let prd_path = temp.path().join(".afk/prd.json");
+        let prd_path = temp.path().join(".afk/tasks.json");
 
         let original = PrdDocument {
             project: "roundtrip-project".to_string(),
@@ -924,7 +912,7 @@ mod tests {
 
     #[test]
     fn test_with_real_prd_json_format() {
-        // Test with the actual prd.json format from the Python version
+        // Test with the actual tasks.json format from the Python version
         let json = r#"{
             "project": "afk",
             "branchName": "rust-conversion",

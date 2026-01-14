@@ -71,7 +71,7 @@ fn create_prd_with_stories(afk_dir: &std::path::Path, num_stories: usize) {
     });
 
     fs::write(
-        afk_dir.join("prd.json"),
+        afk_dir.join("tasks.json"),
         serde_json::to_string_pretty(&prd).unwrap(),
     )
     .unwrap();
@@ -132,7 +132,7 @@ fn bench_prd_load(c: &mut Criterion) {
     for size in [10, 50, 100, 500].iter() {
         let (temp, afk_dir) = setup_config_env();
         create_prd_with_stories(&afk_dir, *size);
-        let prd_path = afk_dir.join("prd.json");
+        let prd_path = afk_dir.join("tasks.json");
 
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, _| {
             b.iter(|| {
@@ -154,7 +154,7 @@ fn bench_prd_save(c: &mut Criterion) {
         let temp = TempDir::new().unwrap();
         let afk_dir = temp.path().join(".afk");
         fs::create_dir_all(&afk_dir).unwrap();
-        let prd_path = afk_dir.join("prd.json");
+        let prd_path = afk_dir.join("tasks.json");
 
         // Create PRD in memory
         let stories: Vec<UserStory> = (0..*size)

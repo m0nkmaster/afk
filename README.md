@@ -38,19 +38,48 @@ This means the AI never runs out of context, never gets confused by old attempts
 
 ## 🚀 Quick Start
 
-```bash
-# Zero-config: import a requirements doc and go
-afk prd import requirements.md    # Creates .afk/tasks.json
-afk go                            # Runs the loop (auto-detects everything)
+### Step 1: Write your requirements in plain text
+
+Create a requirements document describing what you want to build. This can be high-level or as detailed as you'd like. You don't need to break it down into granular tasks yourself:
+
+```markdown
+# Weather Dashboard
+
+A simple web app that shows current weather for a given city.
+
+Users should be able to enter a city name and see the temperature, conditions, and a 5-day forecast. Use the OpenWeather API.
+The UI should be clean and mobile-friendly.
 ```
 
-Or point at an existing task file:
+### Step 2: Generate tasks
 
 ```bash
-afk go TODO.md           # Use a markdown checklist as task source
+afk prd import requirements.md
+```
+
+This runs your AI CLI to analyse the PRD and break it down into small, AI-sized tasks. The output goes to `.afk/tasks.json`.
+
+### Step 3: Check and go!
+
+```bash
+afk list      # Review the tasks it generated
+afk go        # Start the autonomous loop
+```
+
+That's it. afk works through the tasks one by one, committing as it goes.
+
+### Already have a task list?
+
+If you've already got tasks in a structured format, skip the import:
+
+```bash
+afk go TODO.md           # Markdown with checkboxes: - [ ] Task name
+afk go tasks.json        # JSON with `afk-`style tasks array
 afk go 20                # Run 20 iterations
 afk go -u                # Run until all tasks complete
 ```
+
+**Note:** These expect task lists, not raw PRDs. Use `afk prd import` to parse requirements into tasks.
 
 ## 📦 Installation
 
@@ -130,9 +159,8 @@ cargo install --git https://github.com/m0nkmaster/afk
 | Command | Description |
 |---------|-------------|
 | `afk init` | Initialise afk (auto-detects project) |
-| `afk archive create` | Archive current session |
+| `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
-| `afk archive clear` | Clear current session |
 | `afk update` | Update afk to latest version |
 
 ## 🤖 Supported AI CLIs

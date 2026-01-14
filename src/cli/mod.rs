@@ -99,12 +99,25 @@ pub enum Commands {
     /// into .afk/tasks.json.
     Sync,
 
-    /// Archive current session.
+    /// Archive and clear current session.
     ///
-    /// Saves tasks.json and progress.json to a timestamped archive directory.
-    /// Use to complete a project and prepare for a new one.
-    #[command(subcommand)]
-    Archive(ArchiveCommands),
+    /// Moves tasks.json and progress.json to a timestamped archive directory,
+    /// clearing the session ready for fresh work. Use `afk archive list` to
+    /// view archived sessions.
+    #[command(subcommand_required = false, args_conflicts_with_subcommands = true)]
+    Archive {
+        /// Archive subcommand (list) or archive now if omitted.
+        #[command(subcommand)]
+        command: Option<ArchiveCommands>,
+
+        /// Reason for archiving.
+        #[arg(short = 'r', long, default_value = "manual")]
+        reason: String,
+
+        /// Skip confirmation prompt.
+        #[arg(short = 'y', long)]
+        yes: bool,
+    },
 
     /// Update afk to the latest version.
     ///
@@ -375,38 +388,8 @@ pub struct ResetCommand {
 /// Subcommands for archive management.
 #[derive(Subcommand, Debug)]
 pub enum ArchiveCommands {
-    /// Archive current session.
-    ///
-    /// Saves progress.json to a timestamped directory for later reference or recovery.
-    Create(ArchiveCreateCommand),
-
     /// List archived sessions.
-    List(ArchiveListCommand),
-
-    /// Clear current session progress.
-    ///
-    /// Removes progress.json to start fresh. Optionally archives first.
-    Clear(ArchiveClearCommand),
-}
-
-/// Arguments for 'archive create' command.
-#[derive(Args, Debug)]
-pub struct ArchiveCreateCommand {
-    /// Reason for archiving.
-    #[arg(short = 'r', long, default_value = "manual")]
-    pub reason: String,
-}
-
-/// Arguments for 'archive list' command.
-#[derive(Args, Debug)]
-pub struct ArchiveListCommand {}
-
-/// Arguments for 'archive clear' command.
-#[derive(Args, Debug)]
-pub struct ArchiveClearCommand {
-    /// Skip confirmation.
-    #[arg(short = 'y', long)]
-    pub yes: bool,
+    List,
 }
 
 /// Arguments for the 'update' command.
@@ -1380,119 +1363,100 @@ impl ResetCommand {
     }
 }
 
-impl ArchiveCreateCommand {
-    /// Execute the archive create command.
-    pub fn execute(&self) {
-        use crate::progress::archive_session;
+/// Execute the archive command (archive and clear session).
+///
+/// Prompts for confirmation, then moves session files to archive.
+pub fn execute_archive_now(reason: &str, yes: bool) {
+    use crate::progress::archive_session;
+    use std::io::{self, Write};
 
-        match archive_session(&self.reason) {
-            Ok(Some(path)) => {
-                println!("\x1b[32m✓\x1b[0m Session archived to: {}", path.display());
+    // Check if there's anything to archive
+    let progress_exists = std::path::Path::new(".afk/progress.json").exists();
+    let tasks_exists = std::path::Path::new(".afk/tasks.json").exists();
+
+    if !progress_exists && !tasks_exists {
+        println!("\x1b[33mNo session to archive.\x1b[0m");
+        return;
+    }
+
+    // Confirm unless --yes
+    if !yes {
+        print!("Archive and clear current session? [Y/n]: ");
+        let _ = io::stdout().flush();
+
+        let mut input = String::new();
+        if io::stdin().read_line(&mut input).is_ok() {
+            let input = input.trim().to_lowercase();
+            if input == "n" || input == "no" {
+                println!("Cancelled.");
+                return;
             }
-            Ok(None) => {
-                println!("\x1b[33mNo session to archive.\x1b[0m");
-            }
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to archive session: {e}");
-                std::process::exit(1);
-            }
+        }
+    }
+
+    match archive_session(reason) {
+        Ok(Some(path)) => {
+            println!("\x1b[32m✓\x1b[0m Session archived to: {}", path.display());
+            println!("\x1b[32m✓\x1b[0m Session cleared, ready for fresh work");
+        }
+        Ok(None) => {
+            println!("\x1b[33mNo session to archive.\x1b[0m");
+        }
+        Err(e) => {
+            eprintln!("\x1b[31mError:\x1b[0m Failed to archive session: {e}");
+            std::process::exit(1);
         }
     }
 }
 
-impl ArchiveListCommand {
-    /// Execute the archive list command.
-    pub fn execute(&self) {
-        use crate::progress::list_archives;
+/// Execute the archive list command.
+pub fn execute_archive_list() {
+    use crate::progress::list_archives;
 
-        match list_archives() {
-            Ok(archives) => {
-                if archives.is_empty() {
-                    println!("No archived sessions found.");
-                    return;
-                }
+    match list_archives() {
+        Ok(archives) => {
+            if archives.is_empty() {
+                println!("No archived sessions found.");
+                return;
+            }
 
-                println!("\x1b[1mArchived Sessions\x1b[0m");
-                println!();
+            println!("\x1b[1mArchived Sessions\x1b[0m");
+            println!();
+            println!(
+                "{:<24} {:<20} {:<8} {:<10} REASON",
+                "DATE", "BRANCH", "ITERS", "COMPLETED"
+            );
+            println!("{}", "-".repeat(75));
+
+            for (_name, metadata) in archives.iter().take(20) {
+                let branch = metadata.branch.as_deref().unwrap_or("-");
+                let date = &metadata.archived_at[..19]; // Trim microseconds
                 println!(
-                    "{:<24} {:<20} {:<8} {:<10} REASON",
-                    "DATE", "BRANCH", "ITERS", "COMPLETED"
+                    "{:<24} {:<20} {:<8} {:<10} {}",
+                    date.replace('T', " "),
+                    if branch.len() > 18 {
+                        &branch[..18]
+                    } else {
+                        branch
+                    },
+                    metadata.iterations,
+                    format!(
+                        "{}/{}",
+                        metadata.tasks_completed,
+                        metadata.tasks_completed + metadata.tasks_pending
+                    ),
+                    metadata.reason
                 );
-                println!("{}", "-".repeat(75));
-
-                for (_name, metadata) in archives.iter().take(20) {
-                    let branch = metadata.branch.as_deref().unwrap_or("-");
-                    let date = &metadata.archived_at[..19]; // Trim microseconds
-                    println!(
-                        "{:<24} {:<20} {:<8} {:<10} {}",
-                        date.replace('T', " "),
-                        if branch.len() > 18 {
-                            &branch[..18]
-                        } else {
-                            branch
-                        },
-                        metadata.iterations,
-                        format!(
-                            "{}/{}",
-                            metadata.tasks_completed,
-                            metadata.tasks_completed + metadata.tasks_pending
-                        ),
-                        metadata.reason
-                    );
-                }
-
-                if archives.len() > 20 {
-                    println!();
-                    println!("\x1b[2m... and {} more\x1b[0m", archives.len() - 20);
-                }
             }
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to list archives: {e}");
-                std::process::exit(1);
+
+            if archives.len() > 20 {
+                println!();
+                println!("\x1b[2m... and {} more\x1b[0m", archives.len() - 20);
             }
         }
-    }
-}
-
-impl ArchiveClearCommand {
-    /// Execute the archive clear command.
-    pub fn execute(&self) {
-        use crate::progress::{archive_session, clear_session};
-        use std::io::{self, Write};
-
-        // Confirm unless --yes
-        if !self.yes {
-            print!("Archive current session before clearing? [Y/n]: ");
-            let _ = io::stdout().flush();
-
-            let mut input = String::new();
-            if io::stdin().read_line(&mut input).is_ok() {
-                let input = input.trim().to_lowercase();
-                if input != "n" && input != "no" {
-                    // Archive first
-                    match archive_session("clear") {
-                        Ok(Some(path)) => {
-                            println!("\x1b[32m✓\x1b[0m Archived to: {}", path.display());
-                        }
-                        Ok(None) => {}
-                        Err(e) => {
-                            eprintln!("\x1b[31mError:\x1b[0m Failed to archive: {e}");
-                            std::process::exit(1);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Clear session
-        match clear_session() {
-            Ok(()) => {
-                println!("\x1b[32m✓\x1b[0m Session cleared");
-            }
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to clear session: {e}");
-                std::process::exit(1);
-            }
+        Err(e) => {
+            eprintln!("\x1b[31mError:\x1b[0m Failed to list archives: {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1833,14 +1797,37 @@ mod tests {
     }
 
     #[test]
-    fn test_archive_create_command() {
-        let cli =
-            Cli::try_parse_from(["afk", "archive", "create", "-r", "switching branches"]).unwrap();
+    fn test_archive_command_default() {
+        // afk archive (no subcommand) should work with default args
+        let cli = Cli::try_parse_from(["afk", "archive"]).unwrap();
         match cli.command {
-            Some(Commands::Archive(ArchiveCommands::Create(cmd))) => {
-                assert_eq!(cmd.reason, "switching branches");
+            Some(Commands::Archive {
+                command,
+                reason,
+                yes,
+            }) => {
+                assert!(command.is_none()); // No subcommand = archive now
+                assert_eq!(reason, "manual"); // Default reason
+                assert!(!yes);
             }
-            _ => panic!("Expected Archive Create command"),
+            _ => panic!("Expected Archive command"),
+        }
+    }
+
+    #[test]
+    fn test_archive_command_with_args() {
+        let cli = Cli::try_parse_from(["afk", "archive", "-r", "completed", "-y"]).unwrap();
+        match cli.command {
+            Some(Commands::Archive {
+                command,
+                reason,
+                yes,
+            }) => {
+                assert!(command.is_none());
+                assert_eq!(reason, "completed");
+                assert!(yes);
+            }
+            _ => panic!("Expected Archive command"),
         }
     }
 
@@ -1849,19 +1836,11 @@ mod tests {
         let cli = Cli::try_parse_from(["afk", "archive", "list"]).unwrap();
         assert!(matches!(
             cli.command,
-            Some(Commands::Archive(ArchiveCommands::List(_)))
+            Some(Commands::Archive {
+                command: Some(ArchiveCommands::List),
+                ..
+            })
         ));
-    }
-
-    #[test]
-    fn test_archive_clear_command() {
-        let cli = Cli::try_parse_from(["afk", "archive", "clear", "-y"]).unwrap();
-        match cli.command {
-            Some(Commands::Archive(ArchiveCommands::Clear(cmd))) => {
-                assert!(cmd.yes);
-            }
-            _ => panic!("Expected Archive Clear command"),
-        }
     }
 
     #[test]

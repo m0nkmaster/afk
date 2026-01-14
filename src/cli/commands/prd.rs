@@ -670,7 +670,7 @@ mod tests {
 
         let result = prd_import_impl(
             "/nonexistent/file.md",
-            ".afk/prd.json",
+            ".afk/tasks.json",
             false,
             false,
             true,
@@ -701,7 +701,7 @@ mod tests {
 
         let result = prd_import_impl(
             input_file.to_str().unwrap(),
-            ".afk/prd.json",
+            ".afk/tasks.json",
             false,
             false,
             true,
@@ -793,7 +793,7 @@ mod tests {
         // No output flags - should try to run AI CLI and fail
         let result = prd_import_impl(
             input_file.to_str().unwrap(),
-            ".afk/prd.json",
+            ".afk/tasks.json",
             false, // copy
             false, // file
             false, // stdout - no output flags!
@@ -820,7 +820,7 @@ mod tests {
         // This will fail due to clipboard access in CI, but that's expected
         let result = prd_import_impl(
             input_file.to_str().unwrap(),
-            ".afk/prd.json",
+            ".afk/tasks.json",
             true, // copy - output flag set
             false,
             false,

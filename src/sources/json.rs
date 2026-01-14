@@ -52,8 +52,8 @@ pub fn load_json_tasks(path: Option<&str>) -> Vec<UserStory> {
             }
         }
         None => {
-            // Try default locations (prefer tasks.json)
-            let defaults = ["tasks.json", ".afk/tasks.json", "prd.json", ".afk/prd.json"];
+            // Try default locations
+            let defaults = ["tasks.json", ".afk/tasks.json"];
             match defaults.iter().find(|p| Path::new(p).exists()) {
                 Some(p) => Path::new(p).to_path_buf(),
                 None => return Vec::new(),
@@ -262,7 +262,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks.len(), 1);
@@ -297,7 +297,7 @@ mod tests {
                 {"id": "story-1", "title": "User story 1"}
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks.len(), 1);
@@ -328,7 +328,7 @@ mod tests {
                 {"id": "pending", "title": "Pending task", "passes": false}
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks.len(), 1);
@@ -355,7 +355,7 @@ mod tests {
         // When no path given and no default files exist
         let tasks = load_json_tasks(None);
         // Should return empty (assuming no default files in current dir)
-        // This test relies on test environment not having prd.json etc.
+        // This test relies on test environment not having tasks.json etc.
         assert!(tasks.is_empty());
     }
 
@@ -434,7 +434,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].acceptance_criteria, vec!["AC1", "AC2"]);
@@ -452,7 +452,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].acceptance_criteria, vec!["Step 1", "Step 2"]);
@@ -470,7 +470,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].acceptance_criteria, vec!["Do this", "Then that"]);
@@ -487,7 +487,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].acceptance_criteria, vec!["Complete: My Task"]);
@@ -505,7 +505,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].acceptance_criteria, vec!["Single criterion"]);
@@ -522,7 +522,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].title, "Summary as title");
@@ -539,7 +539,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].title, "Description as title");
@@ -555,7 +555,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].id, "my-new-feature");
@@ -584,7 +584,7 @@ mod tests {
                 }
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].notes, "Some notes here");
@@ -628,7 +628,7 @@ mod tests {
             ],
             "lastSynced": "2024-01-12T09:48:44.670500"
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         // Should only return the one with passes: false
@@ -666,7 +666,7 @@ mod tests {
                 {"id": "valid", "title": "Valid task"}
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         // First task has empty title -> generates "task" ID, which is valid
@@ -685,7 +685,7 @@ mod tests {
                 {"id": "done-2", "title": "Done 2", "passes": true}
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert!(tasks.is_empty());
@@ -700,7 +700,7 @@ mod tests {
                 {"id": "high-prio", "title": "High", "priority": 100}
             ]
         }"#;
-        let path = write_json_file(&temp, "prd.json", json);
+        let path = write_json_file(&temp, "tasks.json", json);
 
         let tasks = load_json_tasks(Some(path.to_str().unwrap()));
         assert_eq!(tasks[0].priority, 1); // Clamped from -5 to 1

@@ -49,10 +49,17 @@ fn main() {
                 // Alias for `afk tasks sync`
                 TasksSyncCommand {}.execute();
             }
-            Commands::Archive(subcmd) => match subcmd {
-                ArchiveCommands::Create(c) => c.execute(),
-                ArchiveCommands::List(c) => c.execute(),
-                ArchiveCommands::Clear(c) => c.execute(),
+            Commands::Archive {
+                command,
+                reason,
+                yes,
+            } => match command {
+                Some(ArchiveCommands::List) => {
+                    afk::cli::execute_archive_list();
+                }
+                None => {
+                    afk::cli::execute_archive_now(&reason, yes);
+                }
             },
             Commands::Update(c) => c.execute(),
             Commands::Completions(c) => c.execute(),

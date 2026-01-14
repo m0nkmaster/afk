@@ -78,7 +78,7 @@ src/
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Task Sources  │────▶│  aggregate_tasks │────▶│   prd.json      │
+│   Task Sources  │────▶│  aggregate_tasks │────▶│   tasks.json    │
 │ (beads, json,   │     │                 │     │ (unified tasks) │
 │  markdown, gh)  │     └─────────────────┘     └─────────────────┘
 └─────────────────┘                                      │

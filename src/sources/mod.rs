@@ -267,7 +267,7 @@ mod tests {
     #[test]
     fn test_aggregate_tasks_real_prd_format() {
         let temp = TempDir::new().unwrap();
-        let json_path = temp.path().join("prd.json");
+        let json_path = temp.path().join("tasks.json");
         let json_content = r#"{
             "project": "test-project",
             "branchName": "main",
@@ -279,7 +279,7 @@ mod tests {
                     "acceptanceCriteria": ["AC1", "AC2"],
                     "priority": 1,
                     "passes": false,
-                    "source": "json:prd.json",
+                    "source": "json:tasks.json",
                     "notes": ""
                 },
                 {

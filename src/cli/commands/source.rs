@@ -69,7 +69,7 @@ fn source_add_impl(
     // Create the source configuration
     let new_source = match source_type_enum {
         SourceType::Beads => SourceConfig::beads(),
-        SourceType::Json => SourceConfig::json(path.unwrap_or(".afk/prd.json")),
+        SourceType::Json => SourceConfig::json(path.unwrap_or(".afk/tasks.json")),
         SourceType::Markdown => SourceConfig::markdown(path.unwrap_or("TODO.md")),
         SourceType::Github => {
             // GitHub requires special handling - repo and labels
@@ -463,7 +463,7 @@ mod tests {
         let (temp, config_path) = setup_temp_config();
 
         // Create the default PRD file path
-        let prd_path = temp.path().join(".afk/prd.json");
+        let prd_path = temp.path().join(".afk/tasks.json");
         fs::write(&prd_path, r#"[]"#).unwrap();
 
         // Note: Without changing cwd, the default path check won't find the file.
@@ -474,7 +474,7 @@ mod tests {
 
         let config = AfkConfig::load(Some(&config_path)).unwrap();
         assert_eq!(config.sources.len(), 1);
-        assert_eq!(config.sources[0].path, Some(".afk/prd.json".to_string()));
+        assert_eq!(config.sources[0].path, Some(".afk/tasks.json".to_string()));
     }
 
     #[test]
