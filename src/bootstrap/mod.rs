@@ -524,21 +524,25 @@ pub fn prompt_ai_cli_selection(available: &[&AiCliInfo]) -> AiCliSelectionResult
 /// Ensure an AI CLI is configured, prompting the user if needed.
 ///
 /// This is the main entry point for the first-run experience.
-/// If config exists with ai_cli set, returns it.
+/// If config exists with ai_cli set, returns it (unless force_prompt is true).
 /// Otherwise, detects available CLIs and prompts user to choose.
 ///
 /// # Arguments
 ///
 /// * `config` - Optional existing config (loads from file if None)
+/// * `force_prompt` - If true, always prompt even if config exists
 ///
 /// # Returns
 ///
 /// The configured `AiCliConfig`, or None if the user needs to install a CLI.
-pub fn ensure_ai_cli_configured(config: Option<&mut AfkConfig>) -> Option<AiCliConfig> {
+pub fn ensure_ai_cli_configured(
+    config: Option<&mut AfkConfig>,
+    force_prompt: bool,
+) -> Option<AiCliConfig> {
     let config_path = std::path::Path::new(CONFIG_FILE);
 
-    // Check if config file exists - if so, use what's there
-    if config_path.exists() {
+    // Check if config file exists - if so, use what's there (unless forcing)
+    if config_path.exists() && !force_prompt {
         if let Some(cfg) = config {
             return Some(cfg.ai_cli.clone());
         }
@@ -547,7 +551,7 @@ pub fn ensure_ai_cli_configured(config: Option<&mut AfkConfig>) -> Option<AiCliC
         }
     }
 
-    // First run - need to prompt
+    // First run or forced - need to prompt
     let available = detect_available_ai_clis();
     let result = prompt_ai_cli_selection(&available);
 
@@ -583,6 +587,114 @@ pub fn ensure_ai_cli_configured(config: Option<&mut AfkConfig>) -> Option<AiCliC
             Some(ai_cli)
         }
         AiCliSelectionResult::NoneAvailable | AiCliSelectionResult::Cancelled => None,
+    }
+}
+
+/// Switch to a specific AI CLI by name.
+///
+/// Looks up the CLI in the known list and configures it with default args.
+/// If cli_name is None, prompts interactively.
+///
+/// # Returns
+///
+/// The configured `AiCliConfig`, or None if not found/cancelled.
+pub fn switch_ai_cli(cli_name: Option<&str>) -> Option<AiCliConfig> {
+    let config_path = std::path::Path::new(CONFIG_FILE);
+
+    let ai_cli = match cli_name {
+        Some(name) => {
+            // Find the CLI by command name
+            let name_lower = name.to_lowercase();
+            let cli_info = AI_CLIS.iter().find(|c| {
+                c.command.to_lowercase() == name_lower || c.name.to_lowercase() == name_lower
+            });
+
+            match cli_info {
+                Some(info) => {
+                    // Check if it's installed
+                    if !command_exists(info.command) {
+                        eprintln!("\x1b[31mError:\x1b[0m {} is not installed.", info.name);
+                        eprintln!("  Install: {}", info.install_url);
+                        return None;
+                    }
+
+                    AiCliConfig {
+                        command: info.command.to_string(),
+                        args: info.args.iter().map(|s| s.to_string()).collect(),
+                        ..Default::default()
+                    }
+                }
+                None => {
+                    eprintln!("\x1b[31mError:\x1b[0m Unknown AI CLI: {name}");
+                    eprintln!();
+                    eprintln!("Available CLIs:");
+                    for cli in AI_CLIS {
+                        eprintln!("  • \x1b[36m{}\x1b[0m ({})", cli.command, cli.name);
+                    }
+                    return None;
+                }
+            }
+        }
+        None => {
+            // Interactive selection
+            let available = detect_available_ai_clis();
+            match prompt_ai_cli_selection(&available) {
+                AiCliSelectionResult::Selected(config) => config,
+                _ => return None,
+            }
+        }
+    };
+
+    // Load existing config and update
+    let mut config = AfkConfig::load(None).unwrap_or_default();
+    config.ai_cli = ai_cli.clone();
+
+    // Ensure .afk directory exists
+    let afk_dir = std::path::Path::new(AFK_DIR);
+    if let Err(e) = std::fs::create_dir_all(afk_dir) {
+        eprintln!("\x1b[33mWarning:\x1b[0m Could not create .afk directory: {e}");
+    }
+
+    // Save config
+    if let Err(e) = config.save(Some(config_path)) {
+        eprintln!("\x1b[31mError:\x1b[0m Could not save config: {e}");
+        return None;
+    }
+
+    println!(
+        "\x1b[32m✓\x1b[0m Switched to \x1b[36m{}\x1b[0m",
+        ai_cli.command
+    );
+    println!(
+        "  Args: {}",
+        if ai_cli.args.is_empty() {
+            "(none)".to_string()
+        } else {
+            ai_cli.args.join(" ")
+        }
+    );
+
+    Some(ai_cli)
+}
+
+/// List all known AI CLIs with their installation status.
+pub fn list_ai_clis() {
+    println!("\x1b[1mKnown AI CLIs:\x1b[0m");
+    println!();
+
+    for cli in AI_CLIS {
+        let installed = command_exists(cli.command);
+        let status = if installed {
+            "\x1b[32m✓\x1b[0m"
+        } else {
+            "\x1b[2m✗\x1b[0m"
+        };
+        println!("  {} \x1b[36m{}\x1b[0m ({})", status, cli.command, cli.name);
+        println!("    {}", cli.description);
+        if !installed {
+            println!("    \x1b[2mInstall: {}\x1b[0m", cli.install_url);
+        }
+        println!();
     }
 }
 

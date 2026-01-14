@@ -153,6 +153,18 @@ pub enum Commands {
     ///
     /// Outputs completion script to stdout for bash, zsh, or fish.
     Completions(CompletionsCommand),
+
+    /// Switch the AI CLI used by afk.
+    ///
+    /// Quickly switch between AI CLI tools (claude, cursor, codex, etc.)
+    /// with appropriate default arguments.
+    ///
+    /// Examples:
+    ///   afk use claude    # Switch to Claude Code
+    ///   afk use cursor    # Switch to Cursor agent
+    ///   afk use           # Interactive selection
+    ///   afk use --list    # Show available CLIs
+    Use(UseCommand),
 }
 
 /// Arguments for the 'go' command.
@@ -177,9 +189,10 @@ pub struct GoCommand {
     #[arg(short = 'u', long)]
     pub until_complete: bool,
 
-    /// Delete config and re-run setup.
+    /// Re-run setup (re-prompts for AI CLI selection).
     ///
-    /// Wipes existing .afk/config.json and prompts for reconfiguration.
+    /// Deletes existing .afk/config.json and prompts for full reconfiguration
+    /// including AI CLI selection.
     #[arg(long)]
     pub init: bool,
 
@@ -211,7 +224,7 @@ pub struct InitCommand {
     #[arg(short = 'n', long)]
     pub dry_run: bool,
 
-    /// Overwrite existing config.
+    /// Re-initialise existing project (re-prompts for AI CLI).
     #[arg(short = 'f', long)]
     pub force: bool,
 
@@ -483,6 +496,19 @@ pub struct CompletionsCommand {
     pub shell: String,
 }
 
+/// Arguments for the 'use' command.
+#[derive(Args, Debug)]
+pub struct UseCommand {
+    /// AI CLI to switch to (claude, cursor, codex, aider, amp, kiro).
+    ///
+    /// If omitted, prompts for interactive selection.
+    pub cli: Option<String>,
+
+    /// List all known AI CLIs with installation status.
+    #[arg(short = 'l', long)]
+    pub list: bool,
+}
+
 // ============================================================================
 // Command implementations
 // ============================================================================
@@ -598,7 +624,8 @@ impl GoCommand {
 
         // Ensure AI CLI is configured (first-run experience)
         // This will prompt the user to select if not already configured
-        if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+        // With --init, re-prompt even if already configured
+        if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config), self.init) {
             config.ai_cli = ai_cli;
         } else {
             // No AI CLI available - exit
@@ -753,11 +780,12 @@ impl InitCommand {
         // Handle AI CLI selection
         // In dry-run mode, just detect without prompting or saving
         // Otherwise, prompt user to select (first-run experience)
+        // With --force, always re-prompt even if already configured
         if self.dry_run {
             if let Some(ai_cli) = crate::bootstrap::detect_ai_cli() {
                 config.ai_cli = ai_cli;
             }
-        } else if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+        } else if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config), self.force) {
             config.ai_cli = ai_cli;
         } else {
             eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured.");
@@ -1602,6 +1630,24 @@ impl CompletionsCommand {
     }
 }
 
+impl UseCommand {
+    /// Execute the use command - switch AI CLI.
+    pub fn execute(&self) {
+        use crate::bootstrap::{list_ai_clis, switch_ai_cli};
+
+        // List mode
+        if self.list {
+            list_ai_clis();
+            return;
+        }
+
+        // Switch to specified or prompt interactively
+        if switch_ai_cli(self.cli.as_deref()).is_none() {
+            std::process::exit(1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2002,5 +2048,40 @@ mod tests {
     fn test_invalid_shell_rejected() {
         let result = Cli::try_parse_from(["afk", "completions", "powershell"]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_use_command_with_cli_name() {
+        let cli = Cli::try_parse_from(["afk", "use", "claude"]).unwrap();
+        match cli.command {
+            Some(Commands::Use(cmd)) => {
+                assert_eq!(cmd.cli, Some("claude".to_string()));
+                assert!(!cmd.list);
+            }
+            _ => panic!("Expected Use command"),
+        }
+    }
+
+    #[test]
+    fn test_use_command_without_cli_name() {
+        let cli = Cli::try_parse_from(["afk", "use"]).unwrap();
+        match cli.command {
+            Some(Commands::Use(cmd)) => {
+                assert!(cmd.cli.is_none());
+                assert!(!cmd.list);
+            }
+            _ => panic!("Expected Use command"),
+        }
+    }
+
+    #[test]
+    fn test_use_command_list_flag() {
+        let cli = Cli::try_parse_from(["afk", "use", "--list"]).unwrap();
+        match cli.command {
+            Some(Commands::Use(cmd)) => {
+                assert!(cmd.list);
+            }
+            _ => panic!("Expected Use command"),
+        }
     }
 }

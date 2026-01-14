@@ -164,7 +164,7 @@ src/
 ```bash
 afk go                 # Zero-config: auto-detect PRD/sources and run
 afk go 20              # Run 20 iterations
-afk go --init          # Re-run setup, then run
+afk go --init          # Re-run setup (incl. AI CLI selection), then run
 afk go --fresh         # Clear session progress and start fresh
 afk status             # Show current status
 afk status -v          # Verbose status with learnings
@@ -177,8 +177,12 @@ afk done <task-id>     # Mark task complete
 afk fail <task-id>     # Mark task failed
 afk reset <task-id>    # Reset stuck task
 afk prompt             # Preview next prompt
+afk use                # Interactively switch AI CLI
+afk use claude         # Switch to a specific AI CLI
+afk use --list         # List available AI CLIs
 afk config show        # View current config
 afk config set <key> <value>  # Set a config value
+afk init --force       # Re-initialise with AI CLI selection
 afk archive            # Archive session and clear (ready for fresh work)
 afk archive list       # List archived sessions
 ```

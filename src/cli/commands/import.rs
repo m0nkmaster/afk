@@ -98,7 +98,7 @@ pub fn import_impl(
 
     // No output flags - run the AI CLI directly
     // Ensure AI CLI is configured (first-run experience if needed)
-    if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config)) {
+    if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config), false) {
         config.ai_cli = ai_cli;
     } else {
         return Err(ImportCommandError::NoTasks); // No AI CLI available

@@ -180,7 +180,10 @@ The AI reads these files directly and updates them as it works.
 | Command | Description |
 |---------|-------------|
 | `afk init` | Initialise afk (auto-detects project settings) |
-| `afk init -f` | Force re-initialise existing project |
+| `afk init -f` | Force re-initialise (re-prompts for AI CLI) |
+| `afk use` | Interactively switch AI CLI |
+| `afk use claude` | Switch to a specific AI CLI |
+| `afk use --list` | List available AI CLIs with install status |
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
 
@@ -327,6 +330,15 @@ Uses `gh issue list`. Requires GitHub CLI to be installed and authenticated.
 ## AI CLI Support
 
 afk works with any CLI that accepts prompts as the final argument. On first run, `afk go` auto-detects installed CLIs and prompts you to select one.
+
+### Switching AI CLIs
+
+```bash
+afk use              # Interactive selection from installed CLIs
+afk use cursor       # Switch directly to Cursor agent
+afk use claude       # Switch to Claude Code
+afk use --list       # Show all known CLIs with install status
+```
 
 ### Supported CLIs
 

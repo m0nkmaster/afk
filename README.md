@@ -159,6 +159,10 @@ cargo install --git https://github.com/m0nkmaster/afk
 | Command | Description |
 |---------|-------------|
 | `afk init` | Initialise afk (auto-detects project) |
+| `afk init --force` | Re-run setup including AI CLI selection |
+| `afk use` | Interactively switch AI CLI |
+| `afk use claude` | Switch to a specific AI CLI |
+| `afk use --list` | List available AI CLIs with install status |
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
 | `afk config show` | Show all config values |
