@@ -63,7 +63,7 @@ body {
 /* Info section at bottom of swatch */
 .swatch-info {
   padding: 1rem;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.95);
   text-align: center;
 }
 
@@ -74,4 +74,6 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   cursor: pointer;
+  color: #1a1a1a;
+  letter-spacing: 0.05em;
 }
