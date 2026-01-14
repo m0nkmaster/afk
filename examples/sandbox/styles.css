@@ -50,6 +50,17 @@ h1 {
   min-width: 4rem;
 }
 
+.moves {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f39c12;
+  background: rgba(243, 156, 18, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(243, 156, 18, 0.3);
+  min-width: 6rem;
+}
+
 /* New Game button */
 .btn-new-game {
   padding: 0.75rem 1.5rem;

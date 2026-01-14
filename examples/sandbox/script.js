@@ -67,6 +67,14 @@ function updateTimerDisplay() {
   }
 }
 
+// Update the moves counter display in the DOM
+function updateMovesDisplay() {
+  const movesElement = document.getElementById('moves');
+  if (movesElement) {
+    movesElement.textContent = `Moves: ${gameState.moves}`;
+  }
+}
+
 // Start the game timer (called on first card flip)
 function startTimer() {
   if (gameState.timerStarted) {
@@ -166,6 +174,10 @@ function handleCardClick(cardId) {
 function checkForMatch() {
   const [firstCard, secondCard] = gameState.flippedCards;
   
+  // Increment moves counter - a turn (pair of cards flipped) is complete
+  gameState.moves++;
+  updateMovesDisplay();
+  
   if (firstCard.symbol === secondCard.symbol) {
     // Match found - mark cards as matched
     handleMatch(firstCard, secondCard);
@@ -253,6 +265,9 @@ function resetGame() {
   
   // Update timer display to show 0:00
   updateTimerDisplay();
+  
+  // Update moves display to show 0
+  updateMovesDisplay();
   
   // Re-render the board with new shuffled cards
   renderCards();
