@@ -48,8 +48,37 @@ const gameState = {
   isLocked: false,                    // Whether interaction is locked
   timerInterval: null,                // Timer interval reference
   elapsedSeconds: 0,                  // Elapsed time in seconds
+  timerStarted: false,                // Whether timer has started
   isGameWon: false                    // Whether the game has been won
 };
+
+// Format seconds as m:ss display
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Update the timer display in the DOM
+function updateTimerDisplay() {
+  const timerElement = document.getElementById('timer');
+  if (timerElement) {
+    timerElement.textContent = formatTime(gameState.elapsedSeconds);
+  }
+}
+
+// Start the game timer (called on first card flip)
+function startTimer() {
+  if (gameState.timerStarted) {
+    return; // Already started
+  }
+  
+  gameState.timerStarted = true;
+  gameState.timerInterval = setInterval(() => {
+    gameState.elapsedSeconds++;
+    updateTimerDisplay();
+  }, 1000);
+}
 
 // Render all cards to the DOM
 function renderCards() {
@@ -115,6 +144,9 @@ function handleCardClick(cardId) {
   if (card.isFlipped || card.isMatched) {
     return;
   }
+  
+  // Start timer on first card flip
+  startTimer();
   
   // Flip the card
   card.isFlipped = true;
@@ -216,7 +248,11 @@ function resetGame() {
   gameState.moves = 0;
   gameState.isLocked = false;
   gameState.elapsedSeconds = 0;
+  gameState.timerStarted = false;
   gameState.isGameWon = false;
+  
+  // Update timer display to show 0:00
+  updateTimerDisplay();
   
   // Re-render the board with new shuffled cards
   renderCards();

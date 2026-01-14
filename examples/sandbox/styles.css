@@ -31,6 +31,25 @@ h1 {
   margin-bottom: 1rem;
 }
 
+/* Game stats (timer, moves, etc.) */
+.game-stats {
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.timer {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #4ecdc4;
+  background: rgba(78, 205, 196, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(78, 205, 196, 0.3);
+  min-width: 4rem;
+}
+
 /* New Game button */
 .btn-new-game {
   padding: 0.75rem 1.5rem;
