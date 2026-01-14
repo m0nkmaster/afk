@@ -74,6 +74,7 @@ swatches.forEach((swatch) => {
       return;
     }
     toggleLock(swatch);
+    updateUrlHash();
   });
 });
 
@@ -126,11 +127,13 @@ document.addEventListener('keydown', (event) => {
     // Prevent default scrolling behaviour
     event.preventDefault();
     generatePalette();
+    updateUrlHash();
   }
 });
 
 // Generate initial palette on page load
 generatePalette();
+updateUrlHash();
 
 // Export functionality
 const exportBtn = document.getElementById('export-btn');
@@ -219,6 +222,32 @@ document.addEventListener('click', () => {
   exportDropdown.classList.remove('open');
 });
 
+// URL Hash Encoding
+/**
+ * Encodes the current palette state (colours and lock status) into the URL hash.
+ * Format: RRGGBB[L]-RRGGBB[L]-... where L suffix indicates locked
+ */
+function encodeToHash() {
+  const parts = [];
+  swatches.forEach((swatch) => {
+    const hexCode = swatch.querySelector('.hex-code').dataset.hexCode || 
+                    swatch.querySelector('.hex-code').textContent;
+    // Remove # and add L suffix if locked
+    const colourPart = hexCode.replace('#', '');
+    const lockSuffix = isLocked(swatch) ? 'L' : '';
+    parts.push(colourPart + lockSuffix);
+  });
+  return parts.join('-');
+}
+
+/**
+ * Updates the URL hash to reflect the current palette state.
+ */
+function updateUrlHash() {
+  const hash = encodeToHash();
+  window.location.hash = hash;
+}
+
 // Expose to window for browser console access
 window.generateRandomColour = generateRandomColour;
 window.generatePalette = generatePalette;
@@ -228,3 +257,5 @@ window.getCurrentPalette = getCurrentPalette;
 window.exportAsJSON = exportAsJSON;
 window.exportAsCSS = exportAsCSS;
 window.copyToClipboard = copyToClipboard;
+window.encodeToHash = encodeToHash;
+window.updateUrlHash = updateUrlHash;
