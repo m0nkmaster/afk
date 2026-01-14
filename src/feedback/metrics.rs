@@ -46,12 +46,25 @@ impl IterationMetrics {
         Self::default()
     }
 
-    /// Get total number of file operations.
+    /// Get total number of file operations (including reads).
     pub fn total_file_ops(&self) -> usize {
         self.files_modified.len()
             + self.files_created.len()
             + self.files_deleted.len()
             + self.files_read.len()
+    }
+
+    /// Get number of files that were changed (created, modified, or deleted).
+    /// This excludes file reads, which are informational only.
+    /// Counts each file only once, even if it was created and then modified multiple times.
+    pub fn files_changed(&self) -> usize {
+        // Combine all changed file sets to get unique count
+        // A file might be created then modified, so we need to deduplicate
+        let mut unique_files = HashSet::new();
+        unique_files.extend(&self.files_created);
+        unique_files.extend(&self.files_modified);
+        unique_files.extend(&self.files_deleted);
+        unique_files.len()
     }
 }
 
@@ -267,6 +280,50 @@ mod tests {
         collector.record_file_change("d.rs", "read");
 
         assert_eq!(collector.metrics.total_file_ops(), 4);
+    }
+
+    #[test]
+    fn test_files_changed_excludes_reads() {
+        let mut collector = MetricsCollector::new();
+        collector.record_file_change("a.rs", "created");
+        collector.record_file_change("b.rs", "modified");
+        collector.record_file_change("c.rs", "deleted");
+        collector.record_file_change("d.rs", "read");
+        collector.record_file_change("e.rs", "read");
+
+        // Should only count created, modified, deleted (3 files), not reads
+        assert_eq!(collector.metrics.files_changed(), 3);
+    }
+
+    #[test]
+    fn test_files_changed_deduplicates_multiple_operations() {
+        let mut collector = MetricsCollector::new();
+        // Create a file
+        collector.record_file_change("app.js", "created");
+        // Then modify it multiple times
+        collector.record_file_change("app.js", "modified");
+        collector.record_file_change("app.js", "modified");
+        collector.record_file_change("app.js", "modified");
+
+        // Should count as 1 file, not 4 (1 created + 3 modified)
+        assert_eq!(collector.metrics.files_changed(), 1);
+    }
+
+    #[test]
+    fn test_files_changed_with_mixed_operations() {
+        let mut collector = MetricsCollector::new();
+        // File 1: created then modified
+        collector.record_file_change("file1.js", "created");
+        collector.record_file_change("file1.js", "modified");
+        // File 2: just modified
+        collector.record_file_change("file2.js", "modified");
+        // File 3: created only
+        collector.record_file_change("file3.js", "created");
+        // File 4: read only (should not count)
+        collector.record_file_change("file4.js", "read");
+
+        // Should count 3 unique files (file1, file2, file3), not file4
+        assert_eq!(collector.metrics.files_changed(), 3);
     }
 
     #[test]

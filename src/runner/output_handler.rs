@@ -383,8 +383,8 @@ impl OutputHandler {
             ));
         }
 
-        // Files changed
-        let total_files = metrics.total_file_ops();
+        // Files changed (only created/modified/deleted, not reads)
+        let total_files = metrics.files_changed();
         if total_files > 0 {
             summary.push_str(&format!(
                 "\x1b[34m{}\x1b[0m \x1b[2mfiles\x1b[0m  ",

@@ -234,8 +234,8 @@ impl FeedbackDisplay {
         // Separator
         bar.push_str(" \x1b[2m│\x1b[0m ");
 
-        // Files count
-        let files_count = metrics.total_file_ops();
+        // Files count (only changed files, not reads)
+        let files_count = metrics.files_changed();
         bar.push_str(&format!("\x1b[34m{} files\x1b[0m", files_count));
 
         // Separator
@@ -341,8 +341,8 @@ impl FeedbackDisplay {
         );
         lines.push(self.pad_line(&tools_line));
 
-        // Files touched
-        let files_count = metrics.total_file_ops();
+        // Files changed (only created/modified/deleted, not reads)
+        let files_count = metrics.files_changed();
         let files_line = format!(
             "\x1b[36m│\x1b[0m    \x1b[2mFiles:\x1b[0m \x1b[34;1m{}\x1b[0m",
             files_count

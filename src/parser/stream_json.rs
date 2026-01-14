@@ -381,15 +381,15 @@ fn extract_cursor_tool_info(tool_call: &Value) -> (String, ToolType, Option<Stri
         let name = func
             .get("name")
             .and_then(|v| v.as_str())
-            .unwrap_or("unknown")
+            .unwrap_or("Thinking...")
             .to_string();
         let tool_type = classify_tool_name(&name);
         return (name, tool_type, None);
     }
 
     (
-        "unknown".to_string(),
-        ToolType::Other("unknown".to_string()),
+        "Thinking...".to_string(),
+        ToolType::Other("Thinking...".to_string()),
         None,
     )
 }

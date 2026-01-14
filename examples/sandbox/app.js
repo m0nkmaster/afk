@@ -66,4 +66,11 @@
 
     // Event listeners
     addButton.addEventListener('click', addTask);
+    
+    // Allow adding tasks with Enter key
+    taskInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            addTask();
+        }
+    });
 })();
