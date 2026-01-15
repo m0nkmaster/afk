@@ -67,7 +67,6 @@ jobs:
             docs/**/*.md
           fail: true
 
-      # Placeholder for structure validation (afk-2.4)
+      # Validate architecture section matches source tree
       - name: Validate structure
-        run: |
-          echo "Structure validation will be added in afk-2.4"
+        run: ./scripts/validate-structure.sh

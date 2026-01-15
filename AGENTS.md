@@ -82,53 +82,75 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 
 ```
 src/
-├── main.rs          # Entry point
-├── lib.rs           # Library exports
-├── cli/
-│   ├── mod.rs       # Clap CLI - commands and argument handling
-│   └── commands/    # Subcommand implementations
-├── config/
-│   └── mod.rs       # Serde models for .afk/config.json
+├── main.rs              # Entry point
+├── lib.rs               # Library exports
+├── path_matcher.rs      # Shared utility for ignore patterns
 ├── bootstrap/
-│   └── mod.rs       # Project analysis, AI CLI detection
-├── progress/
-│   ├── mod.rs       # Session and task progress tracking
-│   └── limits.rs    # Iteration limits and constraints
-├── prompt/
-│   ├── mod.rs       # Tera template rendering
-│   └── template.rs  # Template utilities
-├── prd/
-│   ├── mod.rs       # PRD document model
-│   ├── parse.rs     # PRD parsing
-│   └── store.rs     # PRD persistence and sync
-├── runner/
-│   ├── mod.rs       # Module exports
-│   ├── controller.rs # Loop lifecycle management
-│   ├── iteration.rs  # Single iteration execution
-│   ├── output_handler.rs # Console output
-│   └── quality_gates.rs  # Lint, test, type checks
-├── git/
-│   └── mod.rs       # Git operations (commit, archive)
+│   └── mod.rs           # Project analysis, AI CLI detection
+├── cli/
+│   ├── mod.rs           # Clap CLI - commands and argument handling
+│   ├── output.rs        # Output formatting utilities
+│   ├── update.rs        # Self-update functionality
+│   └── commands/
+│       ├── mod.rs       # Command module exports
+│       ├── archive.rs   # Archive session management
+│       ├── completions.rs # Shell completions
+│       ├── config.rs    # Config show/set commands
+│       ├── go.rs        # Main loop command
+│       ├── import.rs    # Import PRD/tasks
+│       ├── init.rs      # Project initialisation
+│       ├── progress_cmd.rs # Progress display
+│       ├── prompt.rs    # Prompt preview
+│       ├── source.rs    # Source management
+│       ├── status.rs    # Status display
+│       ├── task.rs      # Task management (done/fail/reset)
+│       ├── use_cli.rs   # AI CLI switching
+│       └── verify.rs    # Quality gate verification
+├── config/
+│   ├── mod.rs           # Serde models for .afk/config.json
+│   ├── field.rs         # Config field definitions
+│   ├── metadata.rs      # Config metadata handling
+│   └── validation.rs    # Config validation rules
 ├── feedback/
-│   ├── mod.rs       # Module exports
-│   ├── metrics.rs   # Iteration metrics collection
-│   ├── display.rs   # Progress display
-│   └── art.rs       # ASCII art spinners and mascots
+│   ├── mod.rs           # Module exports
+│   ├── art.rs           # ASCII art spinners and mascots
+│   ├── display.rs       # Progress display
+│   ├── metrics.rs       # Iteration metrics collection
+│   └── spinner.rs       # Spinner animations
+├── git/
+│   └── mod.rs           # Git operations (commit, archive)
 ├── parser/
-│   ├── mod.rs       # AI CLI output parsing (regex patterns)
-│   └── stream_json.rs # Streaming JSON parser for AI CLI output
-├── watcher/
-│   └── mod.rs       # File system monitoring (notify crate)
+│   ├── mod.rs           # AI CLI output parsing (regex patterns)
+│   └── stream_json.rs   # Streaming JSON parser for AI CLI output
+├── prd/
+│   ├── mod.rs           # PRD document model
+│   ├── parse.rs         # PRD parsing
+│   └── store.rs         # PRD persistence and sync
+├── progress/
+│   ├── mod.rs           # Session and task progress tracking
+│   ├── archive.rs       # Archive logic for sessions
+│   └── limits.rs        # Iteration limits and constraints
+├── prompt/
+│   ├── mod.rs           # Tera template rendering
+│   └── template.rs      # Template utilities
+├── runner/
+│   ├── mod.rs           # Module exports
+│   ├── controller.rs    # Loop lifecycle management
+│   ├── iteration.rs     # Single iteration execution
+│   ├── output_handler.rs # Console output
+│   └── quality_gates.rs # Lint, test, type checks
+├── sources/
+│   ├── mod.rs           # aggregate_tasks() dispatcher
+│   ├── beads.rs         # Beads (bd) integration
+│   ├── github.rs        # GitHub issues via gh CLI
+│   ├── json.rs          # JSON PRD files
+│   └── markdown.rs      # Markdown checklists
 ├── tui/
-│   ├── mod.rs       # Module exports
-│   ├── app.rs       # TUI application state
-│   └── ui.rs        # Ratatui UI rendering
-└── sources/
-    ├── mod.rs       # aggregate_tasks() dispatcher
-    ├── beads.rs     # Beads (bd) integration
-    ├── json.rs      # JSON PRD files
-    ├── markdown.rs  # Markdown checklists
-    └── github.rs    # GitHub issues via gh CLI
+│   ├── mod.rs           # Module exports
+│   ├── app.rs           # TUI application state
+│   └── ui.rs            # Ratatui UI rendering
+└── watcher/
+    └── mod.rs           # File system monitoring (notify crate)
 ```
 
 ### Key Dependencies
