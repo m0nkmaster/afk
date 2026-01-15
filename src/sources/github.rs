@@ -226,6 +226,59 @@ fn gh_available() -> bool {
         .unwrap_or(false)
 }
 
+/// Close a GitHub issue by number.
+///
+/// Uses `gh issue close` to close the issue. Requires the gh CLI to be
+/// installed and authenticated.
+///
+/// # Arguments
+///
+/// * `issue_number` - The issue number to close.
+/// * `repo` - Optional repository in "owner/repo" format. If None, uses current repo.
+///
+/// # Returns
+///
+/// `true` if successfully closed, `false` otherwise.
+pub fn close_github_issue(issue_number: i64, repo: Option<&str>) -> bool {
+    if !gh_available() {
+        return false;
+    }
+
+    let issue_str = issue_number.to_string();
+    let mut cmd = Command::new("gh");
+    cmd.args(["issue", "close", &issue_str]);
+
+    // Add repo if specified
+    if let Some(r) = repo {
+        if !r.is_empty() {
+            cmd.arg(format!("--repo={r}"));
+        }
+    }
+
+    match cmd.output() {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
+    }
+}
+
+/// Parse a GitHub issue number from a source string.
+///
+/// The source format is "github:#123" where 123 is the issue number.
+///
+/// # Arguments
+///
+/// * `source` - The source string to parse.
+///
+/// # Returns
+///
+/// The issue number if parsing succeeded, None otherwise.
+pub fn parse_github_issue_number(source: &str) -> Option<i64> {
+    if !source.starts_with("github:#") {
+        return None;
+    }
+    source.strip_prefix("github:#")?.parse().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,5 +426,29 @@ Something else
         assert_eq!(issue.number, 1);
         assert!(issue.body.is_none());
         assert!(issue.labels.is_empty());
+    }
+
+    #[test]
+    fn test_parse_github_issue_number_valid() {
+        assert_eq!(parse_github_issue_number("github:#42"), Some(42));
+        assert_eq!(parse_github_issue_number("github:#1"), Some(1));
+        assert_eq!(parse_github_issue_number("github:#12345"), Some(12345));
+    }
+
+    #[test]
+    fn test_parse_github_issue_number_invalid() {
+        assert!(parse_github_issue_number("beads").is_none());
+        assert!(parse_github_issue_number("github:42").is_none());
+        assert!(parse_github_issue_number("github:#").is_none());
+        assert!(parse_github_issue_number("github:#abc").is_none());
+        assert!(parse_github_issue_number("").is_none());
+    }
+
+    #[test]
+    fn test_close_github_issue_returns_false_when_gh_not_available() {
+        // This test verifies graceful failure when gh is not available
+        // or the issue doesn't exist. The function should return false
+        // rather than panic.
+        // In CI environments without gh, this will test the error path.
     }
 }

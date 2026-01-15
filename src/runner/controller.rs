@@ -302,7 +302,7 @@ impl LoopController {
                 tasks_completed += (new_completed - old_completed) as u32;
 
                 // Sync completed beads tasks back to beads
-                sync_completed_beads_tasks(&current_prd, &updated_prd);
+                sync_completed_tasks(&current_prd, &updated_prd);
             }
         }
 
@@ -690,7 +690,7 @@ fn run_loop_with_tui_sender(
             tasks_completed += (new_completed - old_completed) as u32;
 
             // Sync completed beads tasks back to beads
-            sync_completed_beads_tasks(&current_prd, &updated_prd);
+            sync_completed_tasks(&current_prd, &updated_prd);
         }
 
         // Update task counts
@@ -1005,11 +1005,11 @@ fn run_iteration_with_tui(
     }
 }
 
-/// Sync completed tasks back to beads.
+/// Sync completed tasks back to their sources.
 ///
 /// Compares old and new PRD states to find tasks that changed from
-/// `passes: false` to `passes: true` and closes them in beads.
-fn sync_completed_beads_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
+/// `passes: false` to `passes: true` and closes them in beads or GitHub.
+fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
     use std::collections::HashMap;
 
     // Build map of old task completion status
@@ -1019,14 +1019,26 @@ fn sync_completed_beads_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
         .map(|s| (s.id.as_str(), s.passes))
         .collect();
 
-    // Find newly completed beads tasks
+    // Find newly completed tasks
     for story in &new_prd.user_stories {
-        if story.source == "beads" && story.passes {
-            // Check if it was not completed before
-            let was_complete = old_passes.get(story.id.as_str()).copied().unwrap_or(false);
-            if !was_complete {
-                crate::sources::close_beads_issue(&story.id);
-            }
+        if !story.passes {
+            continue;
+        }
+
+        // Check if it was not completed before
+        let was_complete = old_passes.get(story.id.as_str()).copied().unwrap_or(false);
+        if was_complete {
+            continue;
+        }
+
+        // Sync completion back to the appropriate source
+        if story.source == "beads" {
+            crate::sources::close_beads_issue(&story.id);
+        } else if let Some(issue_number) =
+            crate::sources::parse_github_issue_number(&story.source)
+        {
+            // Close GitHub issue (uses current repo context)
+            crate::sources::close_github_issue(issue_number, None);
         }
     }
 }

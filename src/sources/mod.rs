@@ -8,7 +8,7 @@ pub mod json;
 pub mod markdown;
 
 pub use beads::{close_beads_issue, load_beads_tasks, start_beads_issue};
-pub use github::load_github_tasks;
+pub use github::{close_github_issue, load_github_tasks, parse_github_issue_number};
 pub use json::load_json_tasks;
 pub use markdown::load_markdown_tasks;
 

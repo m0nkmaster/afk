@@ -275,6 +275,9 @@ pub fn mark_story_complete_with_path(
         if source == "beads" {
             use crate::sources::close_beads_issue;
             close_beads_issue(story_id);
+        } else if let Some(issue_number) = crate::sources::parse_github_issue_number(&source) {
+            use crate::sources::close_github_issue;
+            close_github_issue(issue_number, None);
         }
 
         Ok(true)
