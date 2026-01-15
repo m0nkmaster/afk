@@ -95,7 +95,7 @@ Quality gates (feedback loops) run after each task completion:
 
 ```json
 {
-  "feedbackLoops": {
+  "feedback_loops": {
     "types": "cargo check",
     "lint": "cargo clippy",
     "test": "cargo test"
@@ -222,23 +222,23 @@ All config lives in `.afk/config.json`:
     {"type": "beads"},
     {"type": "json", "path": "tasks.json"}
   ],
-  "feedbackLoops": {
+  "feedback_loops": {
     "types": "cargo check",
     "lint": "cargo clippy",
     "test": "cargo test"
   },
   "limits": {
-    "maxIterations": 20,
-    "maxTaskFailures": 3,
-    "timeoutMinutes": 120
+    "max_iterations": 20,
+    "max_task_failures": 3,
+    "timeout_minutes": 120
   },
-  "aiCli": {
+  "ai_cli": {
     "command": "claude",
     "args": ["--dangerously-skip-permissions", "-p"]
   },
   "git": {
-    "autoCommit": true,
-    "commitMessageTemplate": "afk: {task_id} - {message}"
+    "auto_commit": true,
+    "commit_message_template": "afk: {task_id} - {message}"
   },
   "archive": {
     "enabled": true,
@@ -266,7 +266,7 @@ All config lives in `.afk/config.json`:
 
 ```json
 {
-  "feedbackLoops": {
+  "feedback_loops": {
     "types": "cargo check",
     "lint": "cargo clippy",
     "test": "cargo test",
@@ -282,9 +282,9 @@ All config lives in `.afk/config.json`:
 
 | Limit | Description | Default |
 |-------|-------------|---------|
-| `maxIterations` | Stop after N iterations | 200 |
-| `maxTaskFailures` | Skip task after N failures | 50 |
-| `timeoutMinutes` | Stop after N minutes | 120 |
+| `max_iterations` | Stop after N iterations | 200 |
+| `max_task_failures` | Skip task after N failures | 50 |
+| `timeout_minutes` | Stop after N minutes | 120 |
 
 ## Task Sources
 

@@ -41,11 +41,7 @@ The `afk` codebase is a well-organised Rust CLI tool implementing autonomous AI 
 
 ### Areas for Improvement
 
-1. **CLI Module Size**
-   - `cli/mod.rs` at ~2,000 lines is too large
-   - Command implementations should be extracted to individual files under `cli/commands/`
-
-2. **Circular Dependencies**
+1. **Circular Dependencies**
    - Some modules import heavily from each other (e.g., `prd` ↔ `sources`)
    - Consider introducing a shared types module
 
@@ -399,15 +395,11 @@ Mixed approaches to error handling:
 
 ### Priority 1 (High Impact, Low Effort)
 
-1. **Extract CLI command implementations**
-   - Move each command's `execute()` to `cli/commands/<command>.rs`
-   - Reduces `cli/mod.rs` to ~500 lines
-
-2. **Centralise colour formatting**
+1. **Centralise colour formatting**
    - Create `src/cli/colours.rs`
    - Replace all `\x1b[...` with function calls
 
-3. **Consolidate FeedbackMode enums**
+2. **Consolidate FeedbackMode enums**
    - Keep one definition in `config/mod.rs`
    - Re-export in `runner/mod.rs`
 
@@ -443,12 +435,11 @@ Mixed approaches to error handling:
 
 The `afk` codebase is well-designed and maintainable. The main areas for improvement are:
 
-1. **Reducing `cli/mod.rs` size** - currently a monolith
-2. **DRYing up repeated patterns** - persistence, error handling
-3. **Improving type safety** - IDs, priorities, feedback modes
-4. **Removing dead dependencies** - tokio if unused
+1. **DRYing up repeated patterns** - persistence, error handling
+2. **Improving type safety** - IDs, priorities, feedback modes
+3. **Removing dead dependencies** - tokio if unused
 
-The test coverage is excellent, and the code follows Rust best practices. With the proposed improvements, this codebase would be exemplary.
+The test coverage is excellent, and the code follows Rust best practices. CLI command implementations have been extracted to `cli/commands/`.
 
 ---
 
