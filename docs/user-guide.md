@@ -122,7 +122,7 @@ The AI reads these files directly and updates them as it works.
 
 | Command | Description |
 |---------|-------------|
-| `afk go` | Zero-config: auto-detect and run 10 iterations |
+| `afk go` | Zero-config: auto-detect and run |
 | `afk go 20` | Run 20 iterations |
 | `afk go -u` | Run until all tasks complete |
 | `afk go --init` | Re-run setup, then run |
