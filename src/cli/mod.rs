@@ -486,7 +486,11 @@ pub struct ImportCommand {
 
 /// Arguments for 'tasks sync' command.
 #[derive(Args, Debug)]
-pub struct TasksSyncCommand {}
+pub struct TasksSyncCommand {
+    /// Archive completed tasks before syncing (fresh start).
+    #[arg(short = 'r', long)]
+    pub reset: bool,
+}
 
 /// Arguments for the 'prompt' command.
 #[derive(Args, Debug)]
@@ -724,6 +728,17 @@ impl ImportCommand {
 impl TasksSyncCommand {
     /// Execute the tasks sync command.
     pub fn execute(&self) -> CliResult {
+        // If --reset, archive completed tasks first
+        if self.reset {
+            use crate::progress::archive_session;
+            if let Ok(Some(path)) = archive_session("sync --reset") {
+                println!(
+                    "\x1b[32m✓\x1b[0m Archived completed tasks to: {}",
+                    path.display()
+                );
+            }
+        }
+
         commands::import::tasks_sync()
             .map(|()| ExitCode::SUCCESS)
             .map_err(|e| CliError::Command(e.to_string()))

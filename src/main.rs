@@ -51,7 +51,7 @@ fn main() -> std::process::ExitCode {
             },
             Commands::Sync => {
                 // Alias for `afk tasks sync`
-                TasksSyncCommand {}.execute()
+                TasksSyncCommand { reset: false }.execute()
             }
             Commands::Archive {
                 command,

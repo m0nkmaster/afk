@@ -89,12 +89,30 @@ fn source_add_impl(
         }
     };
 
+    // GitHub source: only allow one - replace any existing
+    let replaced = if source_type_enum == SourceType::Github {
+        let had_github = config
+            .sources
+            .iter()
+            .any(|s| s.source_type == SourceType::Github);
+        config
+            .sources
+            .retain(|s| s.source_type != SourceType::Github);
+        had_github
+    } else {
+        false
+    };
+
     config.sources.push(new_source);
     config.save(config_path)?;
 
     // Print success message
     let path_info = path.map(|p| format!(" ({p})")).unwrap_or_default();
-    println!("\x1b[32mAdded source:\x1b[0m {source_type}{path_info}");
+    if replaced {
+        println!("\x1b[32mReplaced GitHub source:\x1b[0m {source_type}{path_info}");
+    } else {
+        println!("\x1b[32mAdded source:\x1b[0m {source_type}{path_info}");
+    }
 
     Ok(())
 }
@@ -500,5 +518,52 @@ mod tests {
         // This should not error and should print the repo
         let result = source_list_impl(Some(&config_path));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_source_add_github_replaces_existing() {
+        let (_temp, config_path) = setup_temp_config();
+
+        // Add first GitHub source
+        let result = source_add_impl("github", Some("owner/first-repo"), Some(&config_path));
+        assert!(result.is_ok());
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 1);
+        assert_eq!(config.sources[0].repo, Some("owner/first-repo".to_string()));
+
+        // Add second GitHub source - should replace, not add
+        let result = source_add_impl("github", Some("owner/second-repo"), Some(&config_path));
+        assert!(result.is_ok());
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 1); // Still only one source
+        assert_eq!(
+            config.sources[0].repo,
+            Some("owner/second-repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_source_add_github_replaces_only_github() {
+        let (_temp, config_path) = setup_temp_config();
+
+        // Add beads source first
+        source_add_impl("beads", None, Some(&config_path)).unwrap();
+
+        // Add GitHub source
+        source_add_impl("github", Some("owner/repo1"), Some(&config_path)).unwrap();
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 2);
+
+        // Replace GitHub source - beads should remain
+        source_add_impl("github", Some("owner/repo2"), Some(&config_path)).unwrap();
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 2); // beads + github
+        assert_eq!(config.sources[0].source_type, SourceType::Beads);
+        assert_eq!(config.sources[1].source_type, SourceType::Github);
+        assert_eq!(config.sources[1].repo, Some("owner/repo2".to_string()));
     }
 }
