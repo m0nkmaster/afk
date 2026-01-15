@@ -13,8 +13,10 @@ pub type ArchiveCommandResult = Result<(), ArchiveCommandError>;
 /// Error type for archive command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ArchiveCommandError {
+    /// Failed to archive the current session.
     #[error("Failed to archive session: {0}")]
     ArchiveError(String),
+    /// Failed to list archived sessions.
     #[error("Failed to list archives: {0}")]
     ListError(String),
 }

@@ -11,6 +11,7 @@ pub type TaskCommandResult = Result<(), TaskCommandError>;
 /// Error type for task command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum TaskCommandError {
+    /// The specified task was not found.
     #[error("Task not found: {0}")]
     TaskNotFound(String),
 }

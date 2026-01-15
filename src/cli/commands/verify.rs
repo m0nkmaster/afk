@@ -17,6 +17,7 @@ pub struct VerifyOutcome {
 /// Error type for verify command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum VerifyCommandError {
+    /// Error loading the configuration file.
     #[error("Failed to load config: {0}")]
     ConfigError(#[from] crate::config::ConfigError),
 }

@@ -25,18 +25,25 @@ pub struct GoOutcome {
 /// Error type for go command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GoCommandError {
+    /// Failed to remove existing configuration file.
     #[error("Failed to remove config: {0}")]
     RemoveConfigError(std::io::Error),
+    /// Failed to clear session progress file.
     #[error("Failed to clear progress: {0}")]
     ClearProgressError(std::io::Error),
+    /// Specified source file was not found.
     #[error("Source file not found: {0}")]
     SourceNotFound(String),
+    /// Failed to create the .afk directory.
     #[error("Failed to create .afk directory: {0}")]
     CreateDirError(std::io::Error),
+    /// Failed to save configuration to file.
     #[error("Failed to save config: {0}")]
     SaveConfigError(#[from] crate::config::ConfigError),
+    /// No AI CLI tool is configured or available.
     #[error("No AI CLI configured")]
     NoAiCli,
+    /// No task sources found or configured.
     #[error("No task sources found")]
     NoSources,
 }

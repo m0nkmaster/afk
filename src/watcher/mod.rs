@@ -13,8 +13,11 @@ use std::time::SystemTime;
 /// Type of file change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChangeType {
+    /// A new file was created.
     Created,
+    /// An existing file was modified.
     Modified,
+    /// A file was deleted.
     Deleted,
 }
 

@@ -14,18 +14,23 @@ pub type ConfigCommandResult = Result<(), ConfigCommandError>;
 /// Error type for config command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigCommandError {
+    /// Field validation or access error.
     #[error("{0}")]
     FieldError(#[from] FieldError),
 
+    /// Configuration file error.
     #[error("Config error: {0}")]
     ConfigError(#[from] crate::config::ConfigError),
 
+    /// Failed to open or run the editor.
     #[error("Failed to open editor: {0}")]
     EditorError(String),
 
+    /// EDITOR environment variable is not set.
     #[error("No EDITOR environment variable set")]
     NoEditor,
 
+    /// Unknown configuration section name.
     #[error("Unknown section: {0}")]
     UnknownSection(String),
 }

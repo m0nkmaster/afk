@@ -13,8 +13,10 @@ pub use crate::config::OutputMode;
 /// Error type for output operations.
 #[derive(Debug, thiserror::Error)]
 pub enum OutputError {
+    /// Failed to copy content to the system clipboard.
     #[error("Failed to copy to clipboard: {0}")]
     ClipboardError(String),
+    /// Failed to write output to a file.
     #[error("Failed to write to file: {0}")]
     IoError(#[from] std::io::Error),
 }

@@ -13,14 +13,24 @@ pub type SourceCommandResult = Result<(), SourceCommandError>;
 /// Error type for source command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum SourceCommandError {
+    /// Source file was not found at the specified path.
     #[error("File not found: {0}")]
     FileNotFound(String),
+    /// Invalid source type name provided.
     #[error("Invalid source type: {0}")]
     InvalidSourceType(String),
+    /// Index out of range for source list.
     #[error("Invalid index: {index}. Must be 1-{max}")]
-    InvalidIndex { index: usize, max: usize },
+    InvalidIndex {
+        /// The invalid index that was provided.
+        index: usize,
+        /// Maximum valid index.
+        max: usize,
+    },
+    /// No sources are configured.
     #[error("No sources configured")]
     NoSources,
+    /// Configuration error.
     #[error("Config error: {0}")]
     ConfigError(#[from] crate::config::ConfigError),
 }

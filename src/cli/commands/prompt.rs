@@ -12,8 +12,10 @@ pub type PromptCommandResult = Result<(), PromptCommandError>;
 /// Error type for prompt command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PromptCommandError {
+    /// Error generating the prompt from template.
     #[error("Failed to generate prompt: {0}")]
     GenerateError(#[from] crate::prompt::PromptError),
+    /// Error outputting the prompt.
     #[error("Output error: {0}")]
     OutputError(#[from] crate::cli::output::OutputError),
 }

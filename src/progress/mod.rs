@@ -20,11 +20,16 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
+    /// Task is waiting to be started.
     #[default]
     Pending,
+    /// Task is currently being worked on.
     InProgress,
+    /// Task has been completed successfully.
     Completed,
+    /// Task has failed.
     Failed,
+    /// Task was skipped (e.g., due to too many failures).
     Skipped,
 }
 
@@ -114,8 +119,10 @@ fn default_source() -> String {
 /// Error type for progress operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProgressError {
+    /// Error reading the progress file from disk.
     #[error("Failed to read progress file: {0}")]
     ReadError(#[from] std::io::Error),
+    /// Error parsing the progress file JSON.
     #[error("Failed to parse progress JSON: {0}")]
     ParseError(#[from] serde_json::Error),
 }

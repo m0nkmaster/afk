@@ -9,12 +9,17 @@ use std::process::Command;
 /// A GitHub issue as returned by `gh issue list --json`.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GhIssue {
+    /// Issue number.
     pub number: i64,
+    /// Issue title.
     pub title: String,
+    /// Issue body/description (optional).
     #[serde(default)]
     pub body: Option<String>,
+    /// Labels attached to the issue.
     #[serde(default)]
     pub labels: Vec<GhLabel>,
+    /// Issue state (open/closed).
     #[serde(default)]
     pub state: String,
 }
@@ -22,6 +27,7 @@ pub struct GhIssue {
 /// A GitHub label.
 #[derive(Debug, Clone, Deserialize)]
 pub struct GhLabel {
+    /// Label name.
     pub name: String,
 }
 

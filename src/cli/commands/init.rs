@@ -15,14 +15,19 @@ pub type InitCommandResult = Result<(), InitCommandError>;
 /// Error type for init command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum InitCommandError {
+    /// Project is already initialised with .afk directory.
     #[error("Already initialised. Use --force to reinitialise.")]
     AlreadyInitialised,
+    /// Failed to create the .afk directory.
     #[error("Failed to create .afk directory: {0}")]
     CreateDirError(std::io::Error),
+    /// Failed to save configuration file.
     #[error("Failed to save config: {0}")]
     SaveConfigError(#[from] crate::config::ConfigError),
+    /// Failed to create tasks.json file.
     #[error("Failed to create tasks.json: {0}")]
     CreateTasksError(std::io::Error),
+    /// No AI CLI tool is configured or available.
     #[error("No AI CLI configured")]
     NoAiCli,
 }

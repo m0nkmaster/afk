@@ -22,22 +22,44 @@ pub enum TuiEvent {
     /// Tool call detected.
     ToolCall(String),
     /// File changed.
-    FileChange { path: String, change_type: String },
+    FileChange {
+        /// Path to the changed file.
+        path: String,
+        /// Type of change (created, modified, deleted).
+        change_type: String,
+    },
     /// Error detected.
     Error(String),
     /// Warning detected.
     Warning(String),
     /// Iteration started.
-    IterationStart { current: u32, max: u32 },
+    IterationStart {
+        /// Current iteration number.
+        current: u32,
+        /// Maximum iterations.
+        max: u32,
+    },
     /// Iteration complete.
-    IterationComplete { duration_secs: f64 },
+    IterationComplete {
+        /// Duration in seconds.
+        duration_secs: f64,
+    },
     /// Task info updated.
-    TaskInfo { id: String, title: String },
+    TaskInfo {
+        /// Task ID.
+        id: String,
+        /// Task title.
+        title: String,
+    },
     /// Session complete.
     SessionComplete {
+        /// Total iterations completed.
         iterations: u32,
+        /// Total tasks completed.
         tasks: u32,
+        /// Total duration in seconds.
         duration: f64,
+        /// Reason for session ending.
         reason: String,
     },
     /// Quit the TUI.
@@ -47,12 +69,15 @@ pub enum TuiEvent {
 /// Statistics tracked by the TUI.
 #[derive(Debug, Clone, Default)]
 pub struct TuiStats {
+    /// Total number of tool calls.
     pub tool_calls: u32,
     /// Unique files that were modified (deduplicated).
     pub files_modified_set: HashSet<String>,
     /// Unique files that were created (deduplicated).
     pub files_created_set: HashSet<String>,
+    /// Total number of errors.
     pub errors: u32,
+    /// Total number of warnings.
     pub warnings: u32,
 }
 

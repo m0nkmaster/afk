@@ -86,8 +86,10 @@ fn load_from_source(source: &SourceConfig) -> Result<Vec<UserStory>, SourceError
 /// Error type for source loading operations.
 #[derive(Debug, thiserror::Error)]
 pub enum SourceError {
+    /// The specified source type is not implemented.
     #[error("Source type '{0}' is not yet implemented")]
     NotImplemented(String),
+    /// Failed to load tasks from the source.
     #[error("Failed to load source: {0}")]
     LoadError(String),
 }

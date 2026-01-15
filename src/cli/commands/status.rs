@@ -14,6 +14,7 @@ pub type StatusCommandResult = Result<(), StatusCommandError>;
 /// Error type for status command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum StatusCommandError {
+    /// The afk project is not initialised.
     #[error("afk not initialised")]
     NotInitialised,
 }

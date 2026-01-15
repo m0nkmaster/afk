@@ -29,17 +29,23 @@ pub const ARCHIVE_DIR: &str = ".afk/archive";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
+    /// Beads (bd) issue tracker integration.
     Beads,
+    /// JSON file containing tasks.
     Json,
+    /// Markdown file with checklist items.
     Markdown,
+    /// GitHub issues via gh CLI.
     Github,
 }
 
 /// Configuration for a task source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceConfig {
+    /// Type of source (beads, json, markdown, github).
     #[serde(rename = "type")]
     pub source_type: SourceType,
+    /// Path to source file (for json/markdown sources).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     /// GitHub-specific: repository in "owner/repo" format.
@@ -152,8 +158,11 @@ impl Default for LimitsConfig {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputMode {
+    /// Copy prompt to clipboard.
     Clipboard,
+    /// Write prompt to file.
     File,
+    /// Print prompt to stdout (default).
     #[default]
     Stdout,
 }
@@ -413,9 +422,12 @@ impl Default for ArchiveConfig {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FeedbackMode {
+    /// Full TUI with all panels (default).
     #[default]
     Full,
+    /// Minimal output display.
     Minimal,
+    /// No feedback display.
     Off,
 }
 
@@ -518,8 +530,10 @@ pub struct AfkConfig {
 /// Error type for config operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    /// Error reading the config file from disk.
     #[error("Failed to read config file: {0}")]
     ReadError(#[from] std::io::Error),
+    /// Error parsing the config file JSON.
     #[error("Failed to parse config JSON: {0}")]
     ParseError(#[from] serde_json::Error),
 }

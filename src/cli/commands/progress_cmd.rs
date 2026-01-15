@@ -12,8 +12,10 @@ pub type ProgressCommandResult = Result<(), ProgressCommandError>;
 /// Error type for progress command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ProgressCommandError {
+    /// Error loading the progress file.
     #[error("Failed to load progress: {0}")]
     LoadError(#[from] crate::progress::ProgressError),
+    /// Error saving the progress file.
     #[error("Failed to save progress: {0}")]
     SaveError(std::io::Error),
 }

@@ -96,6 +96,7 @@ pub fn handle_result(result: CliResult) -> std::process::ExitCode {
 #[command(author, version = crate::VERSION, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct Cli {
+    /// The subcommand to run.
     #[command(subcommand)]
     pub command: Option<Commands>,
 }

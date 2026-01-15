@@ -10,6 +10,7 @@ pub type UseCommandResult = Result<(), UseCommandError>;
 /// Error type for use command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum UseCommandError {
+    /// Failed to switch to the specified AI CLI.
     #[error("Failed to switch AI CLI")]
     SwitchFailed,
 }

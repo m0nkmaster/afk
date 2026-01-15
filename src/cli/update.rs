@@ -53,16 +53,22 @@ pub struct UpdateCheckResult {
 /// Error type for update operations.
 #[derive(Debug, thiserror::Error)]
 pub enum UpdateError {
+    /// HTTP request to GitHub API failed.
     #[error("HTTP request failed: {0}")]
     HttpError(#[from] reqwest::Error),
+    /// File I/O error during update.
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
+    /// No release found on GitHub.
     #[error("No release found")]
     NoReleaseFound,
+    /// No pre-built binary available for this platform.
     #[error("No binary available for this platform")]
     NoBinaryForPlatform,
+    /// Could not determine the current executable path.
     #[error("Failed to determine current executable path")]
     NoExecutablePath,
+    /// Self-update not available for pip installations.
     #[error("Self-update not supported when installed via pip")]
     InstalledViaPip,
 }

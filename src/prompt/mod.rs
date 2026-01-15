@@ -18,10 +18,13 @@ pub use template::{get_template, get_template_with_root, DEFAULT_TEMPLATE};
 /// Error type for prompt generation operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PromptError {
+    /// Error loading the session progress file.
     #[error("Failed to load progress: {0}")]
     ProgressError(#[from] crate::progress::ProgressError),
+    /// Error loading the PRD/tasks file.
     #[error("Failed to load PRD: {0}")]
     PrdError(#[from] crate::prd::PrdError),
+    /// Error rendering the Tera template.
     #[error("Template rendering failed: {0}")]
     TemplateError(#[from] tera::Error),
 }
@@ -29,7 +32,9 @@ pub enum PromptError {
 /// A simplified story struct for template rendering.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NextStoryContext {
+    /// The story/task ID.
     pub id: String,
+    /// The story priority (1 = highest).
     pub priority: i32,
 }
 

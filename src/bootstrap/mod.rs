@@ -76,10 +76,15 @@ pub const AI_CLIS: &[AiCliInfo] = &[
 /// Detected project type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectType {
+    /// Rust project (Cargo.toml detected).
     Rust,
+    /// Python project (pyproject.toml or setup.py detected).
     Python,
+    /// Node.js project (package.json detected).
     Node,
+    /// Go project (go.mod detected).
     Go,
+    /// Unknown project type.
     Unknown,
 }
 

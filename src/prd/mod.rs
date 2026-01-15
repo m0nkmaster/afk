@@ -181,8 +181,10 @@ pub struct PrdDocument {
 /// Error type for PRD operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PrdError {
+    /// Failed to read the PRD/tasks file.
     #[error("Failed to read PRD file: {0}")]
     ReadError(#[from] std::io::Error),
+    /// Failed to parse the PRD/tasks JSON.
     #[error("Failed to parse PRD JSON: {0}")]
     ParseError(#[from] serde_json::Error),
 }

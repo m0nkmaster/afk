@@ -10,49 +10,84 @@ use serde_json::Value;
 pub enum StreamEvent {
     /// System initialisation event.
     SystemInit {
+        /// The model being used.
         model: Option<String>,
+        /// The session ID.
         session_id: Option<String>,
     },
     /// User message (the prompt).
-    UserMessage { text: String },
+    UserMessage {
+        /// The message text.
+        text: String,
+    },
     /// Assistant message (what the AI is saying/planning).
-    AssistantMessage { text: String },
+    AssistantMessage {
+        /// The message text.
+        text: String,
+    },
     /// Tool call started.
     ToolStarted {
+        /// Name of the tool.
         tool_name: String,
+        /// Type of the tool.
         tool_type: ToolType,
+        /// File path if applicable.
         path: Option<String>,
     },
     /// Tool call completed.
     ToolCompleted {
+        /// Name of the tool.
         tool_name: String,
+        /// Type of the tool.
         tool_type: ToolType,
+        /// File path if applicable.
         path: Option<String>,
+        /// Whether the tool call succeeded.
         success: bool,
+        /// Number of lines read/written if applicable.
         lines: Option<u32>,
+        /// File size if applicable.
         file_size: Option<u32>,
     },
     /// Session/iteration result.
     Result {
+        /// Whether the session succeeded.
         success: bool,
+        /// Duration in milliseconds.
         duration_ms: Option<u64>,
+        /// Result text/summary.
         result_text: Option<String>,
     },
     /// Error event.
-    Error { message: String },
+    Error {
+        /// The error message.
+        message: String,
+    },
     /// Unknown event type (raw JSON preserved).
-    Unknown { event_type: String, raw: String },
+    Unknown {
+        /// The event type string.
+        event_type: String,
+        /// The raw JSON.
+        raw: String,
+    },
 }
 
 /// Type of tool being used.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolType {
+    /// File read operation.
     Read,
+    /// File write operation.
     Write,
+    /// File edit operation.
     Edit,
+    /// File delete operation.
     Delete,
+    /// Shell command execution.
     Command,
+    /// Search operation (grep, glob, etc.).
     Search,
+    /// Other tool type with custom name.
     Other(String),
 }
 

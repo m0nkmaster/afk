@@ -6,12 +6,20 @@
 /// Error type for config field operations.
 #[derive(Debug, thiserror::Error)]
 pub enum FieldError {
+    /// The specified config key is not recognised.
     #[error("Unknown config key: {0}")]
     UnknownKey(String),
 
+    /// The value provided is invalid for the specified key.
     #[error("Invalid value for {key}: expected {expected}")]
-    InvalidValue { key: String, expected: String },
+    InvalidValue {
+        /// The config key that was being set.
+        key: String,
+        /// Description of the expected value format.
+        expected: String,
+    },
 
+    /// The config path format is invalid.
     #[error("Invalid path format: {0}")]
     InvalidPath(String),
 }

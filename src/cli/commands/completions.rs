@@ -14,6 +14,7 @@ pub type CompletionsCommandResult = Result<(), CompletionsCommandError>;
 /// Error type for completions command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum CompletionsCommandError {
+    /// The specified shell is not supported for completions.
     #[error("Unsupported shell: {0}")]
     UnsupportedShell(String),
 }

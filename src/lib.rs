@@ -5,6 +5,8 @@
 //!
 //! See AGENTS.md for project conventions and architecture overview.
 
+#![deny(missing_docs)]
+
 /// Version string from Cargo.toml.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

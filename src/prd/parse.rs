@@ -103,8 +103,10 @@ Write the complete JSON to `{{ output_path }}` and confirm the number of tasks e
 /// Error type for PRD parse operations.
 #[derive(Debug, thiserror::Error)]
 pub enum PrdParseError {
+    /// File I/O error.
     #[error("Failed to read file: {0}")]
     IoError(#[from] std::io::Error),
+    /// Tera template rendering error.
     #[error("Template rendering failed: {0}")]
     TemplateError(#[from] tera::Error),
 }

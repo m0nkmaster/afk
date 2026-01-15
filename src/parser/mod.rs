@@ -51,9 +51,13 @@ pub struct ToolCallEvent {
 /// Type of file change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileChangeType {
+    /// A new file was created.
     Created,
+    /// An existing file was modified.
     Modified,
+    /// A file was deleted.
     Deleted,
+    /// A file was read (not modified).
     Read,
 }
 
@@ -95,9 +99,13 @@ pub struct WarningEvent {
 /// Union of all event types.
 #[derive(Debug, Clone)]
 pub enum ParsedEvent {
+    /// A tool call event (e.g., Read, Write, Edit, Shell).
     ToolCall(ToolCallEvent),
+    /// A file change event.
     FileChange(FileChangeEvent),
+    /// An error event.
     Error(ErrorEvent),
+    /// A warning event.
     Warning(WarningEvent),
 }
 

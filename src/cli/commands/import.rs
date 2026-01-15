@@ -21,16 +21,22 @@ pub type ImportCommandResult = Result<(), ImportCommandError>;
 /// Error type for import command operations.
 #[derive(Debug, thiserror::Error)]
 pub enum ImportCommandError {
+    /// Error during PRD import operation.
     #[error("Import error: {0}")]
     ImportError(#[from] PrdError),
+    /// Configuration error.
     #[error("Config error: {0}")]
     ConfigError(#[from] crate::config::ConfigError),
+    /// No tasks found in the task file.
     #[error("No tasks found. Run `afk tasks sync` or `afk import` first.")]
     NoTasks,
+    /// Error parsing PRD document.
     #[error("Parse error: {0}")]
     ParseError(#[from] crate::prd::PrdParseError),
+    /// Error writing output.
     #[error("Output error: {0}")]
     OutputError(#[from] crate::cli::output::OutputError),
+    /// Input file was not found.
     #[error("File not found: {0}")]
     FileNotFound(String),
 }
