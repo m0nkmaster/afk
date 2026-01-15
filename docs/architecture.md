@@ -13,20 +13,35 @@ src/
 ├── main.rs          # Entry point, CLI dispatch
 ├── lib.rs           # Library exports
 ├── cli/             # CLI layer
-│   ├── mod.rs       # Clap CLI definitions (~2000 lines)
+│   ├── mod.rs       # Clap CLI definitions
 │   ├── commands/    # Subcommand implementations
 │   │   ├── mod.rs   # Module exports
-│   │   ├── prd.rs   # PRD commands
-│   │   └── source.rs # Source commands
+│   │   ├── archive.rs
+│   │   ├── completions.rs
+│   │   ├── config.rs
+│   │   ├── go.rs
+│   │   ├── import.rs
+│   │   ├── init.rs
+│   │   ├── progress_cmd.rs
+│   │   ├── prompt.rs
+│   │   ├── source.rs
+│   │   ├── status.rs
+│   │   ├── task.rs
+│   │   ├── use_cli.rs
+│   │   └── verify.rs
 │   ├── output.rs    # Output formatting (clipboard, file, stdout)
 │   └── update.rs    # Self-update logic
 ├── config/          # Configuration layer
-│   └── mod.rs       # Serde models for .afk/config.json
+│   ├── mod.rs       # Serde models for .afk/config.json
+│   ├── field.rs     # Field-level access and manipulation
+│   ├── metadata.rs  # Config metadata and documentation
+│   └── validation.rs # Config validation
 ├── bootstrap/       # Project analysis
 │   └── mod.rs       # Project type detection, AI CLI detection
 ├── progress/        # Session tracking
 │   ├── mod.rs       # SessionProgress, TaskProgress models
-│   └── limits.rs    # Iteration limits and constraints
+│   ├── limits.rs    # Iteration limits and constraints
+│   └── archive.rs   # Session archiving
 ├── prompt/          # Prompt generation
 │   ├── mod.rs       # Tera template rendering
 │   └── template.rs  # Template utilities
@@ -46,7 +61,8 @@ src/
 │   ├── mod.rs       # Module exports
 │   ├── metrics.rs   # Iteration metrics collection
 │   ├── display.rs   # Progress display
-│   └── art.rs       # ASCII art spinners and mascots
+│   ├── art.rs       # ASCII art mascots
+│   └── spinner.rs   # Spinner animations
 ├── parser/          # Output parsing
 │   ├── mod.rs       # AI CLI output parsing (regex patterns)
 │   └── stream_json.rs # Streaming JSON parser for AI CLI output
@@ -126,13 +142,15 @@ pub struct AfkConfig {
 Sources implement a common pattern returning `Vec<UserStory>`:
 
 ```rust
-pub fn aggregate_tasks(config: &AfkConfig) -> Result<Vec<UserStory>, SourceError> {
-    let mut stories = Vec::new();
-    for source in &config.sources {
-        let source_stories = load_from_source(source)?;
-        stories.extend(source_stories);
+pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
+    let mut all_tasks = Vec::new();
+    for source in sources {
+        match load_from_source(source) {
+            Ok(tasks) => all_tasks.extend(tasks),
+            Err(e) => eprintln!("Warning: Failed to load from {:?}: {}", source.source_type, e),
+        }
     }
-    Ok(stories)
+    all_tasks
 }
 ```
 
