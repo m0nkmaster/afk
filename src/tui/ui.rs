@@ -104,6 +104,26 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
         ));
     }
 
+    // Task counts
+    if state.tasks_pending > 0 || state.tasks_complete > 0 {
+        spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled("Tasks: ", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            format!("{}", state.tasks_pending),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
+        spans.push(Span::styled(" pending, ", Style::default().fg(Color::DarkGray)));
+        spans.push(Span::styled(
+            format!("{}", state.tasks_complete),
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ));
+        spans.push(Span::styled(" complete", Style::default().fg(Color::DarkGray)));
+    }
+
     spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));
     spans.push(Span::styled(time_str, Style::default().fg(Color::Blue)));
     spans.push(Span::styled(" │ ", Style::default().fg(Color::DarkGray)));

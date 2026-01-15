@@ -51,6 +51,13 @@ pub enum TuiEvent {
         /// Task title.
         title: String,
     },
+    /// Task counts updated.
+    TaskCounts {
+        /// Number of pending tasks.
+        pending: u32,
+        /// Number of complete tasks.
+        complete: u32,
+    },
     /// Session complete.
     SessionComplete {
         /// Total iterations completed.
@@ -109,6 +116,10 @@ pub struct TuiState {
     pub task_id: Option<String>,
     /// Current task title.
     pub task_title: Option<String>,
+    /// Number of pending tasks.
+    pub tasks_pending: u32,
+    /// Number of complete tasks.
+    pub tasks_complete: u32,
     /// Start time.
     pub start_time: Instant,
     /// Iteration start time.
@@ -148,6 +159,8 @@ impl TuiState {
             iteration_max: 0,
             task_id: None,
             task_title: None,
+            tasks_pending: 0,
+            tasks_complete: 0,
             start_time: now,
             iteration_start: now,
             stats: TuiStats::default(),
@@ -358,6 +371,10 @@ impl TuiApp {
             TuiEvent::TaskInfo { id, title } => {
                 self.state.task_id = Some(id);
                 self.state.task_title = Some(title);
+            }
+            TuiEvent::TaskCounts { pending, complete } => {
+                self.state.tasks_pending = pending;
+                self.state.tasks_complete = complete;
             }
             TuiEvent::SessionComplete {
                 iterations,

@@ -560,6 +560,13 @@ fn run_loop_with_tui_sender(
         });
     }
 
+    // Send initial task counts
+    let initial_complete = prd.user_stories.iter().filter(|s| s.passes).count() as u32;
+    let _ = tx.send(TuiEvent::TaskCounts {
+        pending: task_count,
+        complete: initial_complete,
+    });
+
     // Main loop
     let mut iterations_completed: u32 = 0;
     let mut tasks_completed: u32 = 0;
@@ -685,6 +692,14 @@ fn run_loop_with_tui_sender(
             // Sync completed beads tasks back to beads
             sync_completed_beads_tasks(&current_prd, &updated_prd);
         }
+
+        // Update task counts
+        let current_pending = updated_prd.get_pending_stories().len() as u32;
+        let current_complete = updated_prd.user_stories.iter().filter(|s| s.passes).count() as u32;
+        let _ = tx.send(TuiEvent::TaskCounts {
+            pending: current_pending,
+            complete: current_complete,
+        });
     }
 
     // Send session complete
