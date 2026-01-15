@@ -117,16 +117,24 @@ fn create_client() -> Result<Client, UpdateError> {
         .build()?)
 }
 
-/// Get the latest release from GitHub.
+/// Get the latest release from GitHub that has binaries for this platform.
 fn get_latest_release(client: &Client, include_prerelease: bool) -> Result<Release, UpdateError> {
     let url = format!("{}/{}/releases", GITHUB_API_URL, GITHUB_REPO);
 
     let response: Vec<Release> = client.get(&url).send()?.json()?;
 
-    // Find the first release that matches our criteria
+    let platform_binary = get_platform_binary();
+
+    // Find the first release that:
+    // 1. Matches prerelease criteria
+    // 2. Has a binary for this platform (skip releases still building)
     response
         .into_iter()
-        .find(|r| include_prerelease || !r.prerelease)
+        .find(|r| {
+            let prerelease_ok = include_prerelease || !r.prerelease;
+            let has_binary = r.assets.iter().any(|a| a.name == platform_binary);
+            prerelease_ok && has_binary
+        })
         .ok_or(UpdateError::NoReleaseFound)
 }
 
