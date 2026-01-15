@@ -195,7 +195,7 @@ pub enum Commands {
     ///
     /// Alias for `afk tasks sync`. Aggregates tasks from all sources
     /// into .afk/tasks.json.
-    Sync,
+    Sync(TasksSyncCommand),
 
     /// Archive and clear current session.
     ///

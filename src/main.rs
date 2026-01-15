@@ -4,7 +4,7 @@
 
 use afk::cli::{
     handle_result, ArchiveCommands, Cli, CliResult, Commands, ConfigCommands, ExitCode,
-    SourceCommands, TasksCommands, TasksSyncCommand,
+    SourceCommands, TasksCommands,
 };
 use clap::Parser;
 
@@ -49,10 +49,7 @@ fn main() -> std::process::ExitCode {
                 Some(TasksCommands::Sync(c)) => c.execute(),
                 None => afk::cli::execute_tasks(pending, complete, limit),
             },
-            Commands::Sync => {
-                // Alias for `afk tasks sync`
-                TasksSyncCommand { reset: false }.execute()
-            }
+            Commands::Sync(c) => c.execute(),
             Commands::Archive {
                 command,
                 reason,
