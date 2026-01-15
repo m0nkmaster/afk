@@ -176,12 +176,35 @@ fn test_init_dry_run_does_not_create_files() {
 fn test_init_force_overwrites_existing() {
     let temp = setup_project();
 
+    // Create a mock AI CLI so init can detect something
+    let mock_bin_dir = temp.path().join("mock_bin");
+    fs::create_dir_all(&mock_bin_dir).unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mock_claude = mock_bin_dir.join("claude");
+        fs::write(&mock_claude, "#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(&mock_claude, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[cfg(windows)]
+    {
+        let mock_claude = mock_bin_dir.join("claude.bat");
+        fs::write(&mock_claude, "@echo off\nexit /b 0\n").unwrap();
+    }
+
     // Modify config
     let config_path = temp.path().join(".afk/config.json");
     fs::write(&config_path, r#"{"custom": true}"#).unwrap();
 
+    // Build PATH with mock bin dir first
+    let original_path = std::env::var("PATH").unwrap_or_default();
+    let new_path = format!("{}:{}", mock_bin_dir.display(), original_path);
+
     afk()
         .current_dir(temp.path())
+        .env("PATH", &new_path)
         .args(["init", "-f", "-y"])
         .assert()
         .success();
