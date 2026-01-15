@@ -1,0 +1,60 @@
+name: Documentation Validation
+
+# Validate documentation accuracy on code changes
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'docs/**'
+      - '.github/workflows/docs-review.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'docs/**'
+      - '.github/workflows/docs-review.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Placeholder for code example validation (afk-2.2)
+      - name: Validate code examples
+        run: |
+          echo "Code example validation will be added in afk-2.2"
+
+      # Placeholder for internal link checking (afk-2.3)
+      - name: Check internal links
+        run: |
+          echo "Internal link checking will be added in afk-2.3"
+
+      # Placeholder for structure validation (afk-2.4)
+      - name: Validate structure
+        run: |
+          echo "Structure validation will be added in afk-2.4"
