@@ -13,10 +13,10 @@ src/
 ├── main.rs          # Entry point, CLI dispatch
 ├── lib.rs           # Library exports
 ├── cli/             # CLI layer
-│   ├── mod.rs       # Clap CLI definitions (~2000 lines)
+│   ├── mod.rs       # Clap CLI definitions
 │   ├── commands/    # Subcommand implementations
 │   │   ├── mod.rs   # Module exports
-│   │   ├── prd.rs   # PRD commands
+│   │   ├── import.rs # PRD import commands
 │   │   └── source.rs # Source commands
 │   ├── output.rs    # Output formatting (clipboard, file, stdout)
 │   └── update.rs    # Self-update logic

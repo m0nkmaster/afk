@@ -25,17 +25,17 @@ fn setup_config_env() -> (TempDir, std::path::PathBuf) {
     fs::create_dir_all(&afk_dir).unwrap();
 
     let config = r#"{
-        "aiCli": {
+        "ai_cli": {
             "command": "echo",
             "args": ["test"]
         },
         "sources": [],
         "limits": {
-            "maxIterations": 100,
-            "maxTaskFailures": 5,
-            "timeoutMinutes": 60
+            "max_iterations": 100,
+            "max_task_failures": 5,
+            "timeout_minutes": 60
         },
-        "feedbackLoops": {
+        "feedback_loops": {
             "lint": "cargo clippy",
             "test": "cargo test"
         }

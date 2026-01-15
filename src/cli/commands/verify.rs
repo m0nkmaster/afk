@@ -33,7 +33,7 @@ pub fn verify(verbose: bool) -> VerifyCommandResult {
         println!();
         println!("Configure gates in .afk/config.json:");
         println!("  {{");
-        println!("    \"feedbackLoops\": {{");
+        println!("    \"feedback_loops\": {{");
         println!("      \"lint\": \"cargo clippy\",");
         println!("      \"test\": \"cargo test\"");
         println!("    }}");
