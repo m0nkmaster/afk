@@ -1,6 +1,7 @@
 //! CLI commands and argument handling.
 //!
-//! This module contains the clap CLI definitions and command implementations.
+//! This module contains the clap CLI definitions. Command implementations
+//! are in the `commands` submodule.
 
 pub mod commands;
 pub mod output;
@@ -510,353 +511,84 @@ pub struct UseCommand {
 }
 
 // ============================================================================
-// Command implementations
+// Command implementations - thin wrappers around commands/ modules
 // ============================================================================
 
 impl GoCommand {
     /// Execute the go command.
     pub fn execute(&self) {
-        use crate::bootstrap::{
-            analyse_project, ensure_ai_cli_configured, generate_config,
-            infer_sources as bootstrap_infer_sources,
-        };
-        use crate::config::{AfkConfig, SourceConfig};
-        use crate::prd::PrdDocument;
-        use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions};
-        use std::fs;
-        use std::path::Path;
+        use commands::go::{print_no_sources_help, GoOptions};
+        use crate::runner::StopReason;
 
-        let afk_dir = Path::new(".afk");
-        let config_path = afk_dir.join("config.json");
+        let (iterations, source_path) = self.parse_args();
 
-        // Handle --init flag: delete config and re-run setup
-        if self.init && config_path.exists() {
-            if let Err(e) = fs::remove_file(&config_path) {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to remove config: {e}");
-                std::process::exit(1);
-            }
-            println!("\x1b[2mCleared existing configuration.\x1b[0m");
-        }
-
-        // Handle --fresh flag: clear session progress to start fresh
-        if self.fresh {
-            let progress_path = afk_dir.join("progress.json");
-            if progress_path.exists() {
-                if let Err(e) = fs::remove_file(&progress_path) {
-                    eprintln!("\x1b[31mError:\x1b[0m Failed to clear progress: {e}");
-                    std::process::exit(1);
-                }
-                println!("\x1b[2mCleared session progress.\x1b[0m");
-            }
-        }
-
-        // Parse iterations_or_source
-        let (iterations, explicit_source) = self.parse_args();
-
-        // Load or create config
-        let mut config = if config_path.exists() {
-            AfkConfig::load(None).unwrap_or_default()
-        } else {
-            // First run: analyse project and create config
-            println!("\x1b[1mAnalysing project...\x1b[0m");
-            let analysis = analyse_project(None);
-
-            println!("  Project type: {:?}", analysis.project_type);
-            if let Some(ref name) = analysis.name {
-                println!("  Project name: {name}");
-            }
-
-            let mut new_config = generate_config(&analysis);
-            new_config.sources = bootstrap_infer_sources(None);
-
-            // Create .afk directory
-            if !afk_dir.exists() {
-                if let Err(e) = fs::create_dir_all(afk_dir) {
-                    eprintln!("\x1b[31mError:\x1b[0m Failed to create .afk directory: {e}");
-                    std::process::exit(1);
-                }
-            }
-
-            new_config
+        let options = GoOptions {
+            iterations,
+            source_path,
+            init: self.init,
+            fresh: self.fresh,
+            until_complete: self.until_complete,
+            timeout: self.timeout,
+            feedback: self.feedback.clone(),
+            no_mascot: self.no_mascot,
+            dry_run: self.dry_run,
         };
 
-        // Handle explicit source file path
-        if let Some(ref source_path) = explicit_source {
-            let path = Path::new(source_path);
-            if !path.exists() {
-                eprintln!("\x1b[31mError:\x1b[0m Source file not found: {source_path}");
-                std::process::exit(1);
-            }
-
-            // Determine source type from extension
-            let source = if source_path.ends_with(".json") {
-                SourceConfig::json(source_path)
-            } else {
-                SourceConfig::markdown(source_path)
-            };
-
-            config.sources = vec![source];
-        }
-
-        // Check for existing PRD with stories (zero-config mode)
-        if config.sources.is_empty() {
-            let prd = PrdDocument::load(None).unwrap_or_default();
-            if !prd.user_stories.is_empty() {
-                println!(
-                    "\x1b[2mUsing existing .afk/tasks.json ({} tasks)\x1b[0m",
-                    prd.user_stories.len()
-                );
-            } else {
-                // Try to infer sources
-                let inferred = infer_sources();
-                if inferred.is_empty() {
-                    eprintln!("\x1b[33mNo task sources found.\x1b[0m");
-                    eprintln!();
-                    eprintln!("Try one of:");
-                    eprintln!("  afk go TODO.md           # Use a markdown file");
-                    eprintln!("  afk import spec.md       # Import a requirements doc");
-                    eprintln!("  afk source add beads     # Use beads issues");
-                    std::process::exit(1);
+        match commands::go::go(options) {
+            Ok(outcome) => {
+                match outcome.stop_reason {
+                    StopReason::Complete => std::process::exit(0),
+                    StopReason::MaxIterations => std::process::exit(0),
+                    StopReason::UserInterrupt => std::process::exit(130),
+                    _ => std::process::exit(1),
                 }
-                config.sources = inferred;
             }
-        }
-
-        // Ensure AI CLI is configured (first-run experience)
-        // This will prompt the user to select if not already configured
-        // With --init, re-prompt even if already configured
-        if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config), self.init) {
-            config.ai_cli = ai_cli;
-        } else {
-            // No AI CLI available - exit
-            eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured. Install one and try again.");
-            std::process::exit(1);
-        }
-
-        // Save config if it was newly created or modified
-        if !config_path.exists() || self.init {
-            if let Err(e) = config.save(Some(&config_path)) {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to save config: {e}");
+            Err(commands::go::GoCommandError::NoSources) => {
+                print_no_sources_help();
                 std::process::exit(1);
             }
-            println!(
-                "\x1b[32m✓\x1b[0m Configuration saved to {}",
-                config_path.display()
-            );
-        }
-
-        // Dry run mode
-        if self.dry_run {
-            let effective_iterations = iterations.unwrap_or(config.limits.max_iterations);
-            println!("\x1b[1mDry run mode - would execute:\x1b[0m");
-            println!(
-                "  AI CLI: {} {}",
-                config.ai_cli.command,
-                config.ai_cli.args.join(" ")
-            );
-            println!("  Iterations: {}", effective_iterations);
-            println!(
-                "  Sources: {:?}",
-                config
-                    .sources
-                    .iter()
-                    .map(|s| &s.source_type)
-                    .collect::<Vec<_>>()
-            );
-            return;
-        }
-
-        // Build run options with feedback settings
-        // Use config.limits.max_iterations as default when not explicitly specified
-        let effective_iterations = iterations.or(Some(config.limits.max_iterations));
-        let options = RunOptions::new()
-            .with_iterations(effective_iterations)
-            .with_until_complete(self.until_complete)
-            .with_timeout(self.timeout)
-            .with_resume(false)
-            .with_feedback_mode(RunOptions::parse_feedback_mode(self.feedback.as_deref()))
-            .with_mascot(!self.no_mascot);
-
-        // Run the loop - use TUI if requested
-        let result = if RunOptions::is_tui_mode(self.feedback.as_deref()) {
-            run_loop_with_tui(&config, options)
-        } else {
-            run_loop_with_options(&config, options)
-        };
-
-        // Exit with appropriate code
-        match result.stop_reason {
-            crate::runner::StopReason::Complete => std::process::exit(0),
-            crate::runner::StopReason::MaxIterations => std::process::exit(0),
-            crate::runner::StopReason::UserInterrupt => std::process::exit(130),
-            _ => std::process::exit(1),
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
+            }
         }
     }
 
     /// Parse iterations_or_source argument.
-    /// Returns (iterations, source_path). When iterations is None, caller should
-    /// fall back to config.limits.max_iterations.
     fn parse_args(&self) -> (Option<u32>, Option<String>) {
         match &self.iterations_or_source {
             Some(arg) => {
-                // Try to parse as number first
                 if let Ok(n) = arg.parse::<u32>() {
                     (Some(n), None)
                 } else {
-                    // It's a path - use iterations_if_source if provided
                     (self.iterations_if_source, Some(arg.clone()))
                 }
             }
-            None => (None, None), // Use config.limits.max_iterations as default
+            None => (None, None),
         }
     }
-}
-
-/// Infer sources from the current directory.
-fn infer_sources() -> Vec<crate::config::SourceConfig> {
-    use crate::config::SourceConfig;
-    use std::path::Path;
-
-    let mut sources = Vec::new();
-
-    // Check for TODO.md or similar
-    for name in ["TODO.md", "TASKS.md", "tasks.md", "todo.md"] {
-        if Path::new(name).exists() {
-            sources.push(SourceConfig::markdown(name));
-            break;
-        }
-    }
-
-    // Check for beads (bd command)
-    if std::process::Command::new("bd")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        // Only add if .beads directory exists
-        if Path::new(".beads").exists() {
-            sources.push(SourceConfig::beads());
-        }
-    }
-
-    sources
 }
 
 impl InitCommand {
     /// Execute the init command.
     pub fn execute(&self) {
-        use crate::bootstrap::{
-            analyse_project, ensure_ai_cli_configured, generate_config, infer_sources,
+        use commands::init::InitOptions;
+
+        let options = InitOptions {
+            dry_run: self.dry_run,
+            force: self.force,
+            yes: self.yes,
         };
-        use std::fs;
-        use std::path::Path;
 
-        let afk_dir = Path::new(".afk");
-        let config_path = afk_dir.join("config.json");
-
-        // Check if already initialised
-        if config_path.exists() && !self.force {
-            eprintln!("\x1b[33mAlready initialised.\x1b[0m Use --force to reinitialise.");
-            return;
-        }
-
-        // Analyse project
-        println!("\x1b[1mAnalysing project...\x1b[0m");
-        let analysis = analyse_project(None);
-
-        println!("  Project type: {:?}", analysis.project_type);
-        if let Some(ref name) = analysis.name {
-            println!("  Project name: {name}");
-        }
-        if let Some(ref pm) = analysis.package_manager {
-            println!("  Package manager: {pm}");
-        }
-
-        // Generate config
-        let mut config = generate_config(&analysis);
-        config.sources = infer_sources(None);
-
-        // Handle AI CLI selection
-        // In dry-run mode, just detect without prompting or saving
-        // Otherwise, prompt user to select (first-run experience)
-        // With --force, always re-prompt even if already configured
-        if self.dry_run {
-            if let Some(ai_cli) = crate::bootstrap::detect_ai_cli() {
-                config.ai_cli = ai_cli;
+        match commands::init::init(options) {
+            Ok(()) => {}
+            Err(commands::init::InitCommandError::AlreadyInitialised) => {
+                eprintln!("\x1b[33mAlready initialised.\x1b[0m Use --force to reinitialise.");
             }
-        } else if let Some(ai_cli) = ensure_ai_cli_configured(Some(&mut config), self.force) {
-            config.ai_cli = ai_cli;
-        } else {
-            eprintln!("\x1b[31mError:\x1b[0m No AI CLI configured.");
-            std::process::exit(1);
-        }
-
-        // Show what would be written
-        println!("\n\x1b[1mConfiguration:\x1b[0m");
-        println!(
-            "  AI CLI: {} {}",
-            config.ai_cli.command,
-            config.ai_cli.args.join(" ")
-        );
-        println!(
-            "  Sources: {:?}",
-            config
-                .sources
-                .iter()
-                .map(|s| &s.source_type)
-                .collect::<Vec<_>>()
-        );
-        if let Some(ref cmd) = config.feedback_loops.test {
-            println!("  Test: {cmd}");
-        }
-        if let Some(ref cmd) = config.feedback_loops.lint {
-            println!("  Lint: {cmd}");
-        }
-
-        // Dry run mode
-        if self.dry_run {
-            println!("\n\x1b[2mDry run - no files written.\x1b[0m");
-            return;
-        }
-
-        // Create .afk directory
-        if let Err(e) = fs::create_dir_all(afk_dir) {
-            eprintln!("\x1b[31mError creating .afk directory:\x1b[0m {e}");
-            std::process::exit(1);
-        }
-
-        // Write config
-        if let Err(e) = config.save(Some(&config_path)) {
-            eprintln!("\x1b[31mError saving config:\x1b[0m {e}");
-            std::process::exit(1);
-        }
-
-        // Create empty tasks.json
-        let tasks_path = afk_dir.join("tasks.json");
-        if !tasks_path.exists() {
-            let empty_tasks = r#"{
-  "project": "",
-  "branchName": "",
-  "description": "",
-  "userStories": []
-}"#;
-            if let Err(e) = fs::write(&tasks_path, empty_tasks) {
-                eprintln!("\x1b[31mError creating tasks.json:\x1b[0m {e}");
+            Err(e) => {
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
+                std::process::exit(1);
             }
-        }
-
-        println!("\n\x1b[32m✓ Initialised afk\x1b[0m");
-        println!("  Config: {}", config_path.display());
-
-        // Suggest next steps
-        println!("\n\x1b[1mNext steps:\x1b[0m");
-        if config.sources.is_empty() {
-            println!("  1. Add a task source:");
-            println!("     afk source add beads      # Use beads issues");
-            println!("     afk import spec.md        # Import a requirements doc");
-        } else {
-            println!("  1. afk go   # Start working through tasks");
         }
     }
 }
@@ -864,158 +596,9 @@ impl InitCommand {
 impl StatusCommand {
     /// Execute the status command.
     pub fn execute(&self) {
-        use crate::config::AfkConfig;
-        use crate::prd::PrdDocument;
-        use crate::progress::SessionProgress;
-        use std::path::Path;
-
-        // Check if initialised
-        if !Path::new(".afk").exists() {
-            println!("\x1b[33mafk not initialised.\x1b[0m");
-            println!("Run \x1b[1mafk init\x1b[0m or \x1b[1mafk go\x1b[0m to get started.");
-            return;
-        }
-
-        let config = AfkConfig::load(None).unwrap_or_default();
-        let prd = PrdDocument::load(None).unwrap_or_default();
-        let progress = SessionProgress::load(None).unwrap_or_default();
-
-        println!("\x1b[1m=== afk status ===\x1b[0m");
-        println!();
-
-        // Task summary
-        let (completed, total) = prd.get_story_counts();
-        let pending = total - completed;
-
-        println!("\x1b[1mTasks\x1b[0m");
-        if total == 0 {
-            println!("  No tasks configured.");
-        } else {
-            println!("  Total: {total} ({completed} complete, {pending} pending)");
-            if let Some(next) = prd.get_next_story() {
-                let title = if next.title.len() > 50 {
-                    format!("{}...", &next.title[..47])
-                } else {
-                    next.title.clone()
-                };
-                println!("  Next: \x1b[36m{}\x1b[0m - {}", next.id, title);
-            }
-        }
-        println!();
-
-        // Session progress
-        println!("\x1b[1mSession\x1b[0m");
-        println!(
-            "  Started: {}",
-            &progress.started_at[..19].replace('T', " ")
-        );
-        println!("  Iterations: {}", progress.iterations);
-        let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
-        if pend + in_prog + comp + fail + skip > 0 {
-            println!(
-                "  Tasks: {} pending, {} in-progress, {} complete, {} failed, {} skipped",
-                pend, in_prog, comp, fail, skip
-            );
-        }
-        println!();
-
-        // Sources
-        println!("\x1b[1mSources\x1b[0m");
-        if config.sources.is_empty() {
-            println!("  (none configured)");
-        } else {
-            for (i, source) in config.sources.iter().enumerate() {
-                let desc = match &source.source_type {
-                    crate::config::SourceType::Beads => "beads".to_string(),
-                    crate::config::SourceType::Json => {
-                        format!("json: {}", source.path.as_deref().unwrap_or("?"))
-                    }
-                    crate::config::SourceType::Markdown => {
-                        format!("markdown: {}", source.path.as_deref().unwrap_or("?"))
-                    }
-                    crate::config::SourceType::Github => {
-                        format!(
-                            "github: {}",
-                            source.repo.as_deref().unwrap_or("current repo")
-                        )
-                    }
-                };
-                println!("  {}. {}", i + 1, desc);
-            }
-        }
-        println!();
-
-        // AI CLI
-        println!("\x1b[1mAI CLI\x1b[0m");
-        println!(
-            "  Command: {} {}",
-            config.ai_cli.command,
-            config.ai_cli.args.join(" ")
-        );
-
-        // Verbose mode: show additional details
-        if self.verbose {
-            println!();
-
-            // Feedback Loops
-            println!("\x1b[1mFeedback Loops\x1b[0m");
-            let fb = &config.feedback_loops;
-            let has_any = fb.types.is_some()
-                || fb.lint.is_some()
-                || fb.test.is_some()
-                || fb.build.is_some()
-                || !fb.custom.is_empty();
-            if has_any {
-                if let Some(ref cmd) = fb.types {
-                    println!("  types: {cmd}");
-                }
-                if let Some(ref cmd) = fb.lint {
-                    println!("  lint: {cmd}");
-                }
-                if let Some(ref cmd) = fb.test {
-                    println!("  test: {cmd}");
-                }
-                if let Some(ref cmd) = fb.build {
-                    println!("  build: {cmd}");
-                }
-                for (name, cmd) in &fb.custom {
-                    println!("  {name}: {cmd}");
-                }
-            } else {
-                println!("  (none configured)");
-            }
-            println!();
-
-            // Pending Stories
-            println!("\x1b[1mPending Stories\x1b[0m");
-            let pending_stories = prd.get_pending_stories();
-            if pending_stories.is_empty() {
-                println!("  (none)");
-            } else {
-                for story in pending_stories.iter().take(5) {
-                    println!("  - {} (P{}) {}", story.id, story.priority, story.title);
-                }
-                if pending_stories.len() > 5 {
-                    println!("  ... and {} more", pending_stories.len() - 5);
-                }
-            }
-            println!();
-
-            // Recent Learnings
-            println!("\x1b[1mRecent Learnings\x1b[0m");
-            let learnings = progress.get_recent_learnings(5);
-            if learnings.is_empty() {
-                println!("  (none recorded)");
-            } else {
-                for (i, (task_id, learning)) in learnings.iter().enumerate() {
-                    let truncated = if learning.len() > 60 {
-                        format!("{}...", &learning[..57])
-                    } else {
-                        learning.clone()
-                    };
-                    println!("  {}. [{}] {}", i + 1, task_id, truncated);
-                }
-            }
+        if let Err(e) = commands::status::status(self.verbose) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1023,75 +606,9 @@ impl StatusCommand {
 impl TaskCommand {
     /// Execute the task command.
     pub fn execute(&self) {
-        use crate::prd::PrdDocument;
-        use crate::progress::SessionProgress;
-
-        let prd = PrdDocument::load(None).unwrap_or_default();
-        let progress = SessionProgress::load(None).unwrap_or_default();
-
-        // Find the story
-        let story = match prd.user_stories.iter().find(|s| s.id == self.task_id) {
-            Some(s) => s,
-            None => {
-                eprintln!("\x1b[31mError:\x1b[0m Task not found: {}", self.task_id);
-                std::process::exit(1);
-            }
-        };
-
-        // Get task progress if available
-        let task_progress = progress.get_task(&self.task_id);
-
-        println!("\x1b[1m=== {} ===\x1b[0m", story.id);
-        println!();
-
-        println!("\x1b[1mTitle:\x1b[0m {}", story.title);
-        println!(
-            "\x1b[1mStatus:\x1b[0m {}",
-            if story.passes { "complete" } else { "pending" }
-        );
-        println!("\x1b[1mPriority:\x1b[0m {}", story.priority);
-        println!();
-
-        if !story.description.is_empty() {
-            println!("\x1b[1mDescription:\x1b[0m");
-            for line in story.description.lines() {
-                println!("  {line}");
-            }
-            println!();
-        }
-
-        if !story.acceptance_criteria.is_empty() {
-            println!("\x1b[1mAcceptance Criteria:\x1b[0m");
-            for criterion in &story.acceptance_criteria {
-                let check = if story.passes { "✓" } else { "○" };
-                println!("  {check} {criterion}");
-            }
-            println!();
-        }
-
-        // Show learnings from progress
-        if let Some(task) = task_progress {
-            if !task.learnings.is_empty() {
-                println!("\x1b[1mLearnings:\x1b[0m");
-                for learning in &task.learnings {
-                    println!("  - {learning}");
-                }
-                println!();
-            }
-
-            println!("\x1b[1mAttempts:\x1b[0m {}", task.failure_count + 1);
-            if let Some(ref started) = task.started_at {
-                println!(
-                    "\x1b[1mStarted:\x1b[0m {}",
-                    &started[..19].replace('T', " ")
-                );
-            }
-            if let Some(ref completed) = task.completed_at {
-                println!(
-                    "\x1b[1mCompleted:\x1b[0m {}",
-                    &completed[..19].replace('T', " ")
-                );
-            }
+        if let Err(e) = commands::task::task(&self.task_id) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1099,12 +616,9 @@ impl TaskCommand {
 impl SourceAddCommand {
     /// Execute the source add command.
     pub fn execute(&self) {
-        match commands::source::source_add(&self.source_type, self.path.as_deref()) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::source::source_add(&self.source_type, self.path.as_deref()) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1112,12 +626,9 @@ impl SourceAddCommand {
 impl SourceListCommand {
     /// Execute the source list command.
     pub fn execute(&self) {
-        match commands::source::source_list() {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::source::source_list() {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1125,12 +636,9 @@ impl SourceListCommand {
 impl SourceRemoveCommand {
     /// Execute the source remove command.
     pub fn execute(&self) {
-        match commands::source::source_remove(self.index) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::source::source_remove(self.index) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1138,18 +646,15 @@ impl SourceRemoveCommand {
 impl ImportCommand {
     /// Execute the import command.
     pub fn execute(&self) {
-        match commands::import::import(
+        if let Err(e) = commands::import::import(
             &self.input_file,
             &self.output,
             self.copy,
             self.file,
             self.stdout,
         ) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1157,67 +662,37 @@ impl ImportCommand {
 impl TasksSyncCommand {
     /// Execute the tasks sync command.
     pub fn execute(&self) {
-        match commands::import::tasks_sync() {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
-        }
-    }
-}
-
-/// Execute the tasks command (list tasks).
-pub fn execute_tasks(pending: bool, complete: bool, limit: usize) {
-    match commands::import::tasks_show(pending, complete, limit) {
-        Ok(()) => {}
-        Err(e) => {
+        if let Err(e) = commands::import::tasks_sync() {
             eprintln!("\x1b[31mError:\x1b[0m {e}");
             std::process::exit(1);
         }
     }
 }
 
+/// Execute the tasks command (list tasks).
+pub fn execute_tasks(pending: bool, complete: bool, limit: usize) {
+    if let Err(e) = commands::import::tasks_show(pending, complete, limit) {
+        eprintln!("\x1b[31mError:\x1b[0m {e}");
+        std::process::exit(1);
+    }
+}
+
 impl PromptCommand {
     /// Execute the prompt command.
     pub fn execute(&self) {
-        use crate::cli::output::output_prompt;
-        use crate::config::{AfkConfig, OutputMode};
-        use crate::prompt::generate_prompt;
+        use commands::prompt::PromptOptions;
 
-        // Load config
-        let config = AfkConfig::load(None).unwrap_or_default();
-
-        // Generate the prompt
-        let result = match generate_prompt(&config, self.bootstrap, self.limit) {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("\x1b[31mError generating prompt:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        let options = PromptOptions {
+            copy: self.copy,
+            file: self.file,
+            stdout: self.stdout,
+            bootstrap: self.bootstrap,
+            limit: self.limit,
         };
 
-        // Determine output mode
-        let mode = if self.stdout {
-            OutputMode::Stdout
-        } else if self.file {
-            OutputMode::File
-        } else if self.copy {
-            OutputMode::Clipboard
-        } else {
-            config.output.default.clone()
-        };
-
-        // Output the prompt
-        let is_stdout = mode == OutputMode::Stdout;
-        let _ = output_prompt(&result.prompt, mode, &config);
-
-        // Show info unless going to stdout
-        if !self.stdout && !is_stdout {
-            println!("\x1b[2mIteration {}\x1b[0m", result.iteration);
-            if result.all_complete {
-                println!("\x1b[32m✓ All tasks complete!\x1b[0m");
-            }
+        if let Err(e) = commands::prompt::prompt(options) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1225,40 +700,18 @@ impl PromptCommand {
 impl VerifyCommand {
     /// Execute the verify command.
     pub fn execute(&self) {
-        use crate::config::AfkConfig;
-        use crate::runner::{has_configured_gates, run_quality_gates};
-
-        // Load config
-        let config = match AfkConfig::load(None) {
-            Ok(c) => c,
+        match commands::verify::verify(self.verbose) {
+            Ok(outcome) => {
+                if outcome.all_passed {
+                    std::process::exit(0);
+                } else {
+                    std::process::exit(1);
+                }
+            }
             Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m Failed to load config: {e}");
+                eprintln!("\x1b[31mError:\x1b[0m {e}");
                 std::process::exit(1);
             }
-        };
-
-        // Check if any gates are configured
-        if !has_configured_gates(&config.feedback_loops) {
-            println!("\x1b[33mNo quality gates configured.\x1b[0m");
-            println!();
-            println!("Configure gates in .afk/config.json:");
-            println!("  {{");
-            println!("    \"feedbackLoops\": {{");
-            println!("      \"lint\": \"cargo clippy\",");
-            println!("      \"test\": \"cargo test\"");
-            println!("    }}");
-            println!("  }}");
-            std::process::exit(0);
-        }
-
-        // Run quality gates
-        let result = run_quality_gates(&config.feedback_loops, self.verbose);
-
-        // Exit with appropriate code
-        if result.all_passed {
-            std::process::exit(0);
-        } else {
-            std::process::exit(1);
         }
     }
 }
@@ -1266,43 +719,9 @@ impl VerifyCommand {
 impl DoneCommand {
     /// Execute the done command.
     pub fn execute(&self) {
-        use crate::prd::PrdDocument;
-        use crate::progress::{SessionProgress, TaskStatus};
-
-        // Load progress
-        let mut progress = match SessionProgress::load(None) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("\x1b[31mError loading progress:\x1b[0m {e}");
-                std::process::exit(1);
-            }
-        };
-
-        // Mark task as completed in progress
-        progress.set_task_status(
-            &self.task_id,
-            TaskStatus::Completed,
-            "manual",
-            self.message.clone(),
-        );
-
-        if let Err(e) = progress.save(None) {
-            eprintln!("\x1b[31mError saving progress:\x1b[0m {e}");
+        if let Err(e) = commands::progress_cmd::done(&self.task_id, self.message.clone()) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
             std::process::exit(1);
-        }
-
-        // Also mark as passed in PRD
-        if let Ok(mut prd) = PrdDocument::load(None) {
-            prd.mark_story_complete(&self.task_id);
-            let _ = prd.save(None);
-        }
-
-        println!(
-            "\x1b[32m✓\x1b[0m Task \x1b[1m{}\x1b[0m marked complete",
-            self.task_id
-        );
-        if let Some(ref msg) = self.message {
-            println!("  \x1b[2m{msg}\x1b[0m");
         }
     }
 }
@@ -1310,39 +729,9 @@ impl DoneCommand {
 impl FailCommand {
     /// Execute the fail command.
     pub fn execute(&self) {
-        use crate::progress::{SessionProgress, TaskStatus};
-
-        // Load progress
-        let mut progress = match SessionProgress::load(None) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("\x1b[31mError loading progress:\x1b[0m {e}");
-                std::process::exit(1);
-            }
-        };
-
-        // Mark task as failed in progress
-        progress.set_task_status(
-            &self.task_id,
-            TaskStatus::Failed,
-            "manual",
-            self.message.clone(),
-        );
-
-        if let Err(e) = progress.save(None) {
-            eprintln!("\x1b[31mError saving progress:\x1b[0m {e}");
+        if let Err(e) = commands::progress_cmd::fail(&self.task_id, self.message.clone()) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
             std::process::exit(1);
-        }
-
-        let task = progress.get_task(&self.task_id);
-        let count = task.map(|t| t.failure_count).unwrap_or(1);
-
-        println!(
-            "\x1b[31m✗\x1b[0m Task \x1b[1m{}\x1b[0m marked failed (attempt {count})",
-            self.task_id
-        );
-        if let Some(ref msg) = self.message {
-            println!("  \x1b[2m{msg}\x1b[0m");
         }
     }
 }
@@ -1350,155 +739,35 @@ impl FailCommand {
 impl ResetCommand {
     /// Execute the reset command.
     pub fn execute(&self) {
-        use crate::prd::PrdDocument;
-        use crate::progress::{SessionProgress, TaskStatus};
-
-        // Load progress
-        let mut progress = match SessionProgress::load(None) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("\x1b[31mError loading progress:\x1b[0m {e}");
-                std::process::exit(1);
-            }
-        };
-
-        // Reset task to pending
-        progress.set_task_status(&self.task_id, TaskStatus::Pending, "manual", None);
-
-        // Clear failure count if the task exists
-        if let Some(task) = progress.get_task_mut(&self.task_id) {
-            task.failure_count = 0;
-            task.started_at = None;
-            task.completed_at = None;
-        }
-
-        if let Err(e) = progress.save(None) {
-            eprintln!("\x1b[31mError saving progress:\x1b[0m {e}");
+        if let Err(e) = commands::progress_cmd::reset(&self.task_id) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
             std::process::exit(1);
         }
-
-        // Also reset passes in PRD
-        if let Ok(mut prd) = PrdDocument::load(None) {
-            if let Some(story) = prd.user_stories.iter_mut().find(|s| s.id == self.task_id) {
-                story.passes = false;
-            }
-            let _ = prd.save(None);
-        }
-
-        println!(
-            "\x1b[33m↺\x1b[0m Task \x1b[1m{}\x1b[0m reset to pending",
-            self.task_id
-        );
     }
 }
 
 /// Execute the archive command (archive and clear session).
-///
-/// Prompts for confirmation, then moves session files to archive.
 pub fn execute_archive_now(reason: &str, yes: bool) {
-    use crate::progress::archive_session;
-    use std::io::{self, Write};
-
-    // Check if there's anything to archive
-    let progress_exists = std::path::Path::new(".afk/progress.json").exists();
-    let tasks_exists = std::path::Path::new(".afk/tasks.json").exists();
-
-    if !progress_exists && !tasks_exists {
-        println!("\x1b[33mNo session to archive.\x1b[0m");
-        return;
-    }
-
-    // Confirm unless --yes
-    if !yes {
-        print!("Archive and clear current session? [Y/n]: ");
-        let _ = io::stdout().flush();
-
-        let mut input = String::new();
-        if io::stdin().read_line(&mut input).is_ok() {
-            let input = input.trim().to_lowercase();
-            if input == "n" || input == "no" {
-                println!("Cancelled.");
-                return;
-            }
-        }
-    }
-
-    match archive_session(reason) {
-        Ok(Some(path)) => {
-            println!("\x1b[32m✓\x1b[0m Session archived to: {}", path.display());
-            println!("\x1b[32m✓\x1b[0m Session cleared, ready for fresh work");
-        }
-        Ok(None) => {
-            println!("\x1b[33mNo session to archive.\x1b[0m");
-        }
-        Err(e) => {
-            eprintln!("\x1b[31mError:\x1b[0m Failed to archive session: {e}");
-            std::process::exit(1);
-        }
+    if let Err(e) = commands::archive::archive_now(reason, yes) {
+        eprintln!("\x1b[31mError:\x1b[0m {e}");
+        std::process::exit(1);
     }
 }
 
 /// Execute the archive list command.
 pub fn execute_archive_list() {
-    use crate::progress::list_archives;
-
-    match list_archives() {
-        Ok(archives) => {
-            if archives.is_empty() {
-                println!("No archived sessions found.");
-                return;
-            }
-
-            println!("\x1b[1mArchived Sessions\x1b[0m");
-            println!();
-            println!(
-                "{:<24} {:<20} {:<8} {:<10} REASON",
-                "DATE", "BRANCH", "ITERS", "COMPLETED"
-            );
-            println!("{}", "-".repeat(75));
-
-            for (_name, metadata) in archives.iter().take(20) {
-                let branch = metadata.branch.as_deref().unwrap_or("-");
-                let date = &metadata.archived_at[..19]; // Trim microseconds
-                println!(
-                    "{:<24} {:<20} {:<8} {:<10} {}",
-                    date.replace('T', " "),
-                    if branch.len() > 18 {
-                        &branch[..18]
-                    } else {
-                        branch
-                    },
-                    metadata.iterations,
-                    format!(
-                        "{}/{}",
-                        metadata.tasks_completed,
-                        metadata.tasks_completed + metadata.tasks_pending
-                    ),
-                    metadata.reason
-                );
-            }
-
-            if archives.len() > 20 {
-                println!();
-                println!("\x1b[2m... and {} more\x1b[0m", archives.len() - 20);
-            }
-        }
-        Err(e) => {
-            eprintln!("\x1b[31mError:\x1b[0m Failed to list archives: {e}");
-            std::process::exit(1);
-        }
+    if let Err(e) = commands::archive::archive_list() {
+        eprintln!("\x1b[31mError:\x1b[0m {e}");
+        std::process::exit(1);
     }
 }
 
 impl ConfigShowCommand {
     /// Execute the config show command.
     pub fn execute(&self) {
-        match commands::config::config_show(self.section.as_deref()) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_show(self.section.as_deref()) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1506,12 +775,9 @@ impl ConfigShowCommand {
 impl ConfigGetCommand {
     /// Execute the config get command.
     pub fn execute(&self) {
-        match commands::config::config_get(&self.key) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_get(&self.key) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1519,12 +785,9 @@ impl ConfigGetCommand {
 impl ConfigSetCommand {
     /// Execute the config set command.
     pub fn execute(&self) {
-        match commands::config::config_set(&self.key, &self.value) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_set(&self.key, &self.value) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1549,12 +812,9 @@ impl ConfigResetCommand {
             }
         }
 
-        match commands::config::config_reset(self.key.as_deref()) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_reset(self.key.as_deref()) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1562,12 +822,9 @@ impl ConfigResetCommand {
 impl ConfigEditCommand {
     /// Execute the config edit command.
     pub fn execute(&self) {
-        match commands::config::config_edit() {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_edit() {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1575,12 +832,9 @@ impl ConfigEditCommand {
 impl ConfigExplainCommand {
     /// Execute the config explain command.
     pub fn execute(&self) {
-        match commands::config::config_explain(self.key.as_deref()) {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_explain(self.key.as_deref()) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -1588,18 +842,15 @@ impl ConfigExplainCommand {
 impl ConfigKeysCommand {
     /// Execute the config keys command.
     pub fn execute(&self) {
-        match commands::config::config_keys() {
-            Ok(()) => {}
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+        if let Err(e) = commands::config::config_keys() {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
         }
     }
 }
 
 impl UpdateCommand {
-    /// Execute the update command - checks for and installs updates.
+    /// Execute the update command.
     pub fn execute(&self) {
         if let Err(e) = update::execute_update(self.beta, self.check) {
             eprintln!("\x1b[31mError:\x1b[0m {e}");
@@ -1609,40 +860,20 @@ impl UpdateCommand {
 }
 
 impl CompletionsCommand {
-    /// Execute the completions command - generates shell completions.
+    /// Execute the completions command.
     pub fn execute(&self) {
-        use clap::CommandFactory;
-        use clap_complete::{generate, Shell};
-        use std::io;
-
-        let shell = match self.shell.as_str() {
-            "bash" => Shell::Bash,
-            "zsh" => Shell::Zsh,
-            "fish" => Shell::Fish,
-            _ => {
-                eprintln!("\x1b[31mError:\x1b[0m Unsupported shell: {}", self.shell);
-                std::process::exit(1);
-            }
-        };
-
-        let mut cmd = Cli::command();
-        generate(shell, &mut cmd, "afk", &mut io::stdout());
+        if let Err(e) = commands::completions::completions(&self.shell) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
+            std::process::exit(1);
+        }
     }
 }
 
 impl UseCommand {
-    /// Execute the use command - switch AI CLI.
+    /// Execute the use command.
     pub fn execute(&self) {
-        use crate::bootstrap::{list_ai_clis, switch_ai_cli};
-
-        // List mode
-        if self.list {
-            list_ai_clis();
-            return;
-        }
-
-        // Switch to specified or prompt interactively
-        if switch_ai_cli(self.cli.as_deref()).is_none() {
+        if let Err(e) = commands::use_cli::use_ai_cli(self.cli.as_deref(), self.list) {
+            eprintln!("\x1b[31mError:\x1b[0m {e}");
             std::process::exit(1);
         }
     }
