@@ -364,10 +364,11 @@ impl ConfigField for FeedbackConfig {
                 Ok(())
             }
             "active_threshold_secs" => {
-                self.active_threshold_secs = value.parse().map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "positive integer (e.g., 2)".into(),
-                })?;
+                self.active_threshold_secs =
+                    value.parse().map_err(|_| FieldError::InvalidValue {
+                        key: key.into(),
+                        expected: "positive integer (e.g., 2)".into(),
+                    })?;
                 Ok(())
             }
             "thinking_threshold_secs" => {

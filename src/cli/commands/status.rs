@@ -114,11 +114,7 @@ pub fn status(verbose: bool) -> StatusCommandResult {
 }
 
 /// Print verbose status details.
-fn print_verbose_details(
-    config: &AfkConfig,
-    prd: &PrdDocument,
-    progress: &SessionProgress,
-) {
+fn print_verbose_details(config: &AfkConfig, prd: &PrdDocument, progress: &SessionProgress) {
     println!();
 
     // Feedback Loops

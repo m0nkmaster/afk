@@ -229,7 +229,10 @@ mod tests {
     fn test_add_ignore_pattern() {
         let mut watcher = FileWatcher::new("/tmp");
         watcher.add_ignore_pattern("new_pattern");
-        assert!(watcher.matcher.patterns().contains(&"new_pattern".to_string()));
+        assert!(watcher
+            .matcher
+            .patterns()
+            .contains(&"new_pattern".to_string()));
     }
 
     #[test]

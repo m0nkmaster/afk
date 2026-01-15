@@ -1568,7 +1568,10 @@ fn test_archive_creates_timestamped_directory() {
     let archives_dir = temp.path().join(".afk/archives");
     if archives_dir.exists() {
         let entries: Vec<_> = fs::read_dir(&archives_dir).unwrap().collect();
-        assert!(!entries.is_empty(), "Archive directory should contain entries");
+        assert!(
+            !entries.is_empty(),
+            "Archive directory should contain entries"
+        );
     }
 }
 

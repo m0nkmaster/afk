@@ -596,8 +596,8 @@ pub struct UseCommand {
 impl GoCommand {
     /// Execute the go command.
     pub fn execute(&self) -> CliResult {
-        use commands::go::GoOptions;
         use crate::runner::StopReason;
+        use commands::go::GoOptions;
 
         let (iterations, source_path) = self.parse_args();
 
@@ -614,14 +614,12 @@ impl GoCommand {
         };
 
         match commands::go::go(options) {
-            Ok(outcome) => {
-                match outcome.stop_reason {
-                    StopReason::Complete => Ok(ExitCode::SUCCESS),
-                    StopReason::MaxIterations => Ok(ExitCode::SUCCESS),
-                    StopReason::UserInterrupt => Ok(ExitCode::INTERRUPT),
-                    _ => Ok(ExitCode::FAILURE),
-                }
-            }
+            Ok(outcome) => match outcome.stop_reason {
+                StopReason::Complete => Ok(ExitCode::SUCCESS),
+                StopReason::MaxIterations => Ok(ExitCode::SUCCESS),
+                StopReason::UserInterrupt => Ok(ExitCode::INTERRUPT),
+                _ => Ok(ExitCode::FAILURE),
+            },
             Err(commands::go::GoCommandError::NoSources) => Err(CliError::NoSources),
             Err(e) => Err(CliError::Command(e.to_string())),
         }

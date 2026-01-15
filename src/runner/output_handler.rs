@@ -118,7 +118,11 @@ impl OutputHandler {
     ///
     /// * `active_threshold_secs` - Seconds before transitioning to "thinking" state.
     /// * `thinking_threshold_secs` - Seconds before transitioning to "stalled" state.
-    pub fn set_activity_thresholds(&mut self, active_threshold_secs: u64, thinking_threshold_secs: u64) {
+    pub fn set_activity_thresholds(
+        &mut self,
+        active_threshold_secs: u64,
+        thinking_threshold_secs: u64,
+    ) {
         self.metrics_collector =
             MetricsCollector::with_thresholds(active_threshold_secs, thinking_threshold_secs);
     }
