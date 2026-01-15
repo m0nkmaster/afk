@@ -1,17 +1,20 @@
 //! TUI rendering with ratatui.
 
 use ratatui::{
+    buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     symbols,
     text::{Line, Span},
     widgets::{
         Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Widget,
     },
     Frame,
 };
 
 use super::app::TuiState;
+use crate::feedback;
 
 /// Spinner frames for animation.
 const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -317,7 +320,107 @@ fn draw_footer(f: &mut Frame, area: Rect) {
     f.render_widget(footer, area);
 }
 
-/// Draw session complete screen.
+/// Animated starfield background widget.
+struct StarfieldBackground {
+    frame: usize,
+}
+
+impl Widget for StarfieldBackground {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        // Create a moving starfield effect
+        let frame = self.frame;
+
+        for y in area.top()..area.bottom() {
+            for x in area.left()..area.right() {
+                // Pseudo-random star placement based on position and frame
+                let seed = (x as usize * 31 + y as usize * 17 + frame / 3) % 47;
+                if seed < 2 {
+                    // Animate star brightness based on frame
+                    let star_idx = (seed + frame / 5) % feedback::STAR_CHARS.len();
+                    let star = feedback::get_star_char(star_idx);
+
+                    // Colour varies with position for depth effect
+                    let color = match (x as usize + y as usize + frame / 4) % 4 {
+                        0 => Color::DarkGray,
+                        1 => Color::Gray,
+                        2 => Color::Blue,
+                        _ => Color::Cyan,
+                    };
+
+                    buf[(x, y)].set_char(star).set_fg(color);
+                }
+            }
+        }
+    }
+}
+
+/// A single firework explosion.
+struct Firework {
+    x: u16,
+    y: u16,
+    pattern_idx: usize,
+    char_idx: usize,
+    age: usize,
+}
+
+impl Firework {
+    fn new(x: u16, y: u16, pattern_idx: usize, char_idx: usize) -> Self {
+        Self {
+            x,
+            y,
+            pattern_idx,
+            char_idx,
+            age: 0,
+        }
+    }
+
+    /// Render firework particles to buffer.
+    fn render(&self, area: Rect, buf: &mut Buffer, frame: usize) {
+        let pattern = feedback::get_burst_pattern(self.pattern_idx);
+        let base_char = feedback::get_firework_char(self.char_idx);
+
+        // Explosion expands over time
+        let scale = ((self.age + frame / 2) % 6) as i16;
+
+        // Colours cycle for sparkle effect
+        let colors = [
+            Color::Yellow,
+            Color::Magenta,
+            Color::Cyan,
+            Color::Red,
+            Color::Green,
+            Color::White,
+        ];
+
+        for (i, (dx, dy)) in pattern.iter().enumerate() {
+            // Scale the pattern outward over time
+            let scaled_dx = dx * (scale + 1) / 2;
+            let scaled_dy = dy * (scale + 1) / 3;
+
+            let px = self.x as i16 + scaled_dx;
+            let py = self.y as i16 + scaled_dy;
+
+            if px >= area.left() as i16
+                && px < area.right() as i16
+                && py >= area.top() as i16
+                && py < area.bottom() as i16
+            {
+                let color = colors[(i + frame / 2) % colors.len()];
+                // Fade particles as they age
+                let char_to_use = if (self.age + frame) % 8 < 6 {
+                    base_char
+                } else {
+                    '·'
+                };
+                buf[(px as u16, py as u16)]
+                    .set_char(char_to_use)
+                    .set_fg(color);
+            }
+        }
+    }
+}
+
+/// Draw session complete screen with fireworks and moving background.
 fn draw_session_complete(
     f: &mut Frame,
     area: Rect,
@@ -326,6 +429,22 @@ fn draw_session_complete(
     duration: f64,
     reason: &str,
 ) {
+    // Use a simple frame counter based on terminal size for animation
+    // (In real usage, this would come from TuiState.spinner_frame)
+    static FRAME: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let frame = FRAME.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+    // Render moving starfield background
+    let starfield = StarfieldBackground { frame };
+    f.render_widget(starfield, area);
+
+    // Generate fireworks at pseudo-random positions based on frame
+    let fireworks = generate_fireworks(area, frame);
+    for fw in &fireworks {
+        fw.render(area, f.buffer_mut(), frame);
+    }
+
+    // Centre panel layout
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -354,15 +473,49 @@ fn draw_session_complete(
         (Color::Cyan, " Session Ended ")
     };
 
+    // Animated celebration border characters
+    let celebration_chars = ['★', '✦', '✧', '◆', '❋'];
+    let border_char = celebration_chars[frame % celebration_chars.len()];
+    let celebration_line = format!(
+        "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}",
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char,
+        border_char
+    );
+
+    // Animated colours for celebration line
+    let celebration_colors = [
+        Color::Yellow,
+        Color::Magenta,
+        Color::Cyan,
+        Color::Green,
+        Color::Red,
+    ];
+    let line_color = celebration_colors[(frame / 2) % celebration_colors.len()];
+
     // Format stats with consistent alignment
     let label_style = Style::default().fg(Color::DarkGray);
-    let label_width = 16; // "Tasks completed:" is longest at 16 chars
+    let label_width = 16;
 
     let lines = vec![
         Line::from(""),
         Line::from(Span::styled(
-            "★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★",
-            Style::default().fg(Color::Yellow),
+            celebration_line.clone(),
+            Style::default()
+                .fg(line_color)
+                .add_modifier(ratatui::style::Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(vec![
@@ -396,8 +549,10 @@ fn draw_session_complete(
         ]),
         Line::from(""),
         Line::from(Span::styled(
-            "★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★ ★",
-            Style::default().fg(Color::Yellow),
+            celebration_line,
+            Style::default()
+                .fg(line_color)
+                .add_modifier(ratatui::style::Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(Span::styled(
@@ -424,6 +579,34 @@ fn draw_session_complete(
         .centered();
 
     f.render_widget(panel, center);
+}
+
+/// Generate fireworks at pseudo-random positions based on animation frame.
+fn generate_fireworks(area: Rect, frame: usize) -> Vec<Firework> {
+    let mut fireworks = Vec::new();
+
+    // Generate 3-5 fireworks at different positions
+    // Positions cycle to create continuous explosions
+    let positions = [
+        (0.15, 0.2),
+        (0.85, 0.25),
+        (0.1, 0.75),
+        (0.9, 0.8),
+        (0.5, 0.15),
+    ];
+
+    for (i, (x_pct, y_pct)) in positions.iter().enumerate() {
+        // Stagger firework appearances
+        let fw_frame = (frame + i * 7) % 30;
+        if fw_frame < 20 {
+            let x = (area.width as f64 * x_pct) as u16 + area.left();
+            let y = (area.height as f64 * y_pct) as u16 + area.top();
+
+            fireworks.push(Firework::new(x, y, i, (frame / 3 + i) % 10));
+        }
+    }
+
+    fireworks
 }
 
 /// Truncate a line to fit within width.

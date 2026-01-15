@@ -1,10 +1,79 @@
 //! ASCII art module with animated spinner definitions.
 //!
-//! Provides spinner frame sequences, mascot states, and helper functions
-//! for terminal animations.
+//! Provides spinner frame sequences, mascot states, firework animations,
+//! and helper functions for terminal animations.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;
+
+/// Firework explosion particle characters for celebration animations.
+pub static FIREWORK_CHARS: &[char] = &['✦', '✧', '★', '☆', '●', '◆', '✴', '✵', '❋', '❊'];
+
+/// Firework burst patterns - each pattern represents an explosion shape.
+/// The patterns use (dx, dy) offsets from centre.
+pub static FIREWORK_BURSTS: &[&[(i16, i16)]] = &[
+    // Starburst pattern
+    &[
+        (0, -2),
+        (0, 2),
+        (-2, 0),
+        (2, 0),
+        (-1, -1),
+        (1, -1),
+        (-1, 1),
+        (1, 1),
+    ],
+    // Diamond pattern
+    &[(0, -2), (0, 2), (-2, 0), (2, 0), (0, -1), (0, 1), (-1, 0), (1, 0)],
+    // Cross pattern
+    &[
+        (0, -3),
+        (0, -2),
+        (0, -1),
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (-3, 0),
+        (-2, 0),
+        (-1, 0),
+        (1, 0),
+        (2, 0),
+        (3, 0),
+    ],
+    // Circular pattern
+    &[
+        (0, -2),
+        (1, -2),
+        (2, -1),
+        (2, 0),
+        (2, 1),
+        (1, 2),
+        (0, 2),
+        (-1, 2),
+        (-2, 1),
+        (-2, 0),
+        (-2, -1),
+        (-1, -2),
+    ],
+];
+
+/// Background star characters for moving star field.
+pub static STAR_CHARS: &[char] = &['·', '∙', '•', '◦', '°', '˚', '˙'];
+
+/// Get a firework character by index (cycles through available chars).
+pub fn get_firework_char(index: usize) -> char {
+    FIREWORK_CHARS[index % FIREWORK_CHARS.len()]
+}
+
+/// Get a burst pattern by index (cycles through available patterns).
+pub fn get_burst_pattern(index: usize) -> &'static [(i16, i16)] {
+    FIREWORK_BURSTS[index % FIREWORK_BURSTS.len()]
+}
+
+/// Get a star character for background animation.
+pub fn get_star_char(index: usize) -> char {
+    STAR_CHARS[index % STAR_CHARS.len()]
+}
 
 /// Spinner frame sequences for different animation styles.
 pub static SPINNERS: LazyLock<HashMap<&'static str, Vec<&'static str>>> = LazyLock::new(|| {
@@ -99,6 +168,47 @@ pub fn get_mascot(state: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_firework_chars_not_empty() {
+        assert!(!FIREWORK_CHARS.is_empty());
+        assert!(FIREWORK_CHARS.len() >= 5);
+    }
+
+    #[test]
+    fn test_firework_bursts_not_empty() {
+        assert!(!FIREWORK_BURSTS.is_empty());
+        for burst in FIREWORK_BURSTS.iter() {
+            assert!(!burst.is_empty(), "Burst pattern should have particles");
+        }
+    }
+
+    #[test]
+    fn test_get_firework_char_wraps() {
+        let len = FIREWORK_CHARS.len();
+        assert_eq!(get_firework_char(0), FIREWORK_CHARS[0]);
+        assert_eq!(get_firework_char(len), FIREWORK_CHARS[0]);
+        assert_eq!(get_firework_char(len + 1), FIREWORK_CHARS[1]);
+    }
+
+    #[test]
+    fn test_get_burst_pattern_wraps() {
+        let len = FIREWORK_BURSTS.len();
+        assert_eq!(get_burst_pattern(0), FIREWORK_BURSTS[0]);
+        assert_eq!(get_burst_pattern(len), FIREWORK_BURSTS[0]);
+    }
+
+    #[test]
+    fn test_star_chars_not_empty() {
+        assert!(!STAR_CHARS.is_empty());
+    }
+
+    #[test]
+    fn test_get_star_char_wraps() {
+        let len = STAR_CHARS.len();
+        assert_eq!(get_star_char(0), STAR_CHARS[0]);
+        assert_eq!(get_star_char(len), STAR_CHARS[0]);
+    }
 
     #[test]
     fn test_spinners_exist() {
