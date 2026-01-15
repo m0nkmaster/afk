@@ -18,6 +18,9 @@ pub enum InitCommandError {
     /// Project is already initialised with .afk directory.
     #[error("Already initialised. Use --force to reinitialise.")]
     AlreadyInitialised,
+    /// Running inside a .afk directory.
+    #[error("Cannot init inside a .afk folder. Run from the project root instead.")]
+    InsideAfkFolder,
     /// Failed to create the .afk directory.
     #[error("Failed to create .afk directory: {0}")]
     CreateDirError(std::io::Error),
@@ -42,8 +45,21 @@ pub struct InitOptions {
     pub yes: bool,
 }
 
+/// Check if the current directory is inside a .afk folder.
+fn is_inside_afk_folder() -> bool {
+    std::env::current_dir()
+        .ok()
+        .map(|cwd| cwd.components().any(|c| c.as_os_str() == ".afk"))
+        .unwrap_or(false)
+}
+
 /// Execute the init command.
 pub fn init(options: InitOptions) -> InitCommandResult {
+    // Reject running inside a .afk folder
+    if is_inside_afk_folder() {
+        return Err(InitCommandError::InsideAfkFolder);
+    }
+
     let afk_dir = Path::new(".afk");
     let config_path = afk_dir.join("config.json");
 
@@ -144,6 +160,7 @@ pub fn init(options: InitOptions) -> InitCommandResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_init_command_error_display() {
@@ -152,5 +169,57 @@ mod tests {
 
         let err = InitCommandError::NoAiCli;
         assert_eq!(err.to_string(), "No AI CLI configured");
+
+        let err = InitCommandError::InsideAfkFolder;
+        assert!(err.to_string().contains("Cannot init inside a .afk folder"));
+    }
+
+    #[test]
+    fn test_is_inside_afk_folder_detection() {
+        // Create a temp dir with .afk subdirectory
+        let temp = tempdir().unwrap();
+        let afk_subdir = temp.path().join(".afk");
+        fs::create_dir_all(&afk_subdir).unwrap();
+
+        // Save current dir
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Change to the .afk directory
+        std::env::set_current_dir(&afk_subdir).unwrap();
+        assert!(is_inside_afk_folder());
+
+        // Change back to temp root (not inside .afk)
+        std::env::set_current_dir(temp.path()).unwrap();
+        assert!(!is_inside_afk_folder());
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_init_rejects_inside_afk_folder() {
+        // Create a temp dir with .afk subdirectory
+        let temp = tempdir().unwrap();
+        let afk_subdir = temp.path().join(".afk");
+        fs::create_dir_all(&afk_subdir).unwrap();
+
+        // Save current dir
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Change to the .afk directory
+        std::env::set_current_dir(&afk_subdir).unwrap();
+
+        // Try to init - should fail
+        let result = init(InitOptions {
+            dry_run: true,
+            force: false,
+            yes: false,
+        });
+
+        // Restore original directory before assertions
+        std::env::set_current_dir(original_dir).unwrap();
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), InitCommandError::InsideAfkFolder));
     }
 }
