@@ -1,0 +1,32 @@
+# Lychee link checker configuration
+# Run locally: lychee README.md AGENTS.md CONTRIBUTING.md docs/**/*.md
+
+# Only check local/internal links (not external URLs)
+# External links are skipped to avoid flaky network-dependent CI failures
+offline = true
+
+# Include fragment/anchor links in checking
+include_fragments = true
+
+# Base directory for resolving relative links
+base = "."
+
+# Max concurrent requests (not relevant for offline mode, but good for external checks)
+max_concurrency = 2
+
+# Timeout per request in seconds
+timeout = 10
+
+# Exclude patterns
+exclude = [
+    # GitHub compare URLs (dynamically generated)
+    "https://github.com/.*/compare/.*",
+    # Placeholder URLs
+    "https://example.com.*",
+]
+
+# Accept these status codes as valid
+accept = [200, 204]
+
+# Files to check (can be overridden on command line)
+# Default: markdown files in docs, README, AGENTS, CONTRIBUTING

@@ -13,6 +13,7 @@ on:
       - 'AGENTS.md'
       - 'CONTRIBUTING.md'
       - 'docs/**'
+      - '.lychee.toml'
       - '.github/workflows/docs-review.yml'
   pull_request:
     branches: [main]
@@ -25,6 +26,7 @@ on:
       - 'AGENTS.md'
       - 'CONTRIBUTING.md'
       - 'docs/**'
+      - '.lychee.toml'
       - '.github/workflows/docs-review.yml'
 
 env:
@@ -49,10 +51,21 @@ jobs:
         run: |
           echo "Code example validation will be added in afk-2.2"
 
-      # Placeholder for internal link checking (afk-2.3)
+      # Check internal links using lychee
       - name: Check internal links
-        run: |
-          echo "Internal link checking will be added in afk-2.3"
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # Check markdown files for broken internal links
+          args: >-
+            --offline
+            --no-progress
+            --include-fragments
+            --base .
+            README.md
+            AGENTS.md
+            CONTRIBUTING.md
+            docs/**/*.md
+          fail: true
 
       # Placeholder for structure validation (afk-2.4)
       - name: Validate structure

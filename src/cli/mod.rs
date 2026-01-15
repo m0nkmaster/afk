@@ -487,7 +487,7 @@ pub struct ImportCommand {
 /// Arguments for 'tasks sync' command.
 #[derive(Args, Debug)]
 pub struct TasksSyncCommand {
-    /// Archive completed tasks before syncing (fresh start).
+    /// Clear completed tasks and progress before syncing (pending tasks preserved).
     #[arg(short = 'r', long)]
     pub reset: bool,
 }
@@ -728,14 +728,32 @@ impl ImportCommand {
 impl TasksSyncCommand {
     /// Execute the tasks sync command.
     pub fn execute(&self) -> CliResult {
-        // If --reset, archive completed tasks first
+        // If --reset, clear completed tasks and progress (keep pending)
         if self.reset {
-            use crate::progress::archive_session;
-            if let Ok(Some(path)) = archive_session("sync --reset") {
-                println!(
-                    "\x1b[32m✓\x1b[0m Archived completed tasks to: {}",
-                    path.display()
-                );
+            use crate::prd::PrdDocument;
+            use crate::progress::clear_session;
+
+            // Load existing tasks and filter to only pending
+            if let Ok(mut prd) = PrdDocument::load(None) {
+                let original_count = prd.user_stories.len();
+                let completed_count = prd.user_stories.iter().filter(|s| s.passes).count();
+
+                // Keep only pending tasks
+                prd.user_stories.retain(|s| !s.passes);
+
+                if completed_count > 0 {
+                    let _ = prd.save(None);
+                    println!(
+                        "\x1b[32m✓\x1b[0m Cleared {} completed tasks (kept {} pending)",
+                        completed_count,
+                        original_count - completed_count
+                    );
+                }
+            }
+
+            // Clear session progress
+            if clear_session().is_ok() {
+                println!("\x1b[32m✓\x1b[0m Cleared session progress");
             }
         }
 
