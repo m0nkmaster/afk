@@ -98,12 +98,22 @@ Task fields:
 
 ### Long-term: `AGENTS.md`
 
-Update `AGENTS.md` for discoveries that benefit future sessions:
-- Project conventions and patterns
-- Architectural decisions
-- Gotchas that affect the whole codebase
+**Check and update `AGENTS.md` each iteration.** This is your long-term memory that persists across sessions. If it doesn't exist, create it.
 
-If working deep in a subfolder with its own concerns, create a local `AGENTS.md` there instead.
+Add discoveries that would help a future AI work effectively:
+- Architectural patterns and conventions (e.g. "All API routes use kebab-case")
+- Non-obvious gotchas (e.g. "Tests must run single-threaded due to shared state")
+- Key commands or workflows specific to this project
+- Dependencies between modules or systems
+
+**Keep updates brief** — a single line or short paragraph per learning. Don't dump verbose explanations; write what a colleague would need to know.
+
+**Skip updates when:**
+- The information is already in AGENTS.md
+- It's task-specific context (use progress.json learnings instead)
+- It's obvious from code/comments
+
+For subfolder-specific concerns (e.g. `frontend/` has its own patterns), create a local `AGENTS.md` there.
 
 {% for instruction in custom_instructions -%}
 - {{ instruction }}
