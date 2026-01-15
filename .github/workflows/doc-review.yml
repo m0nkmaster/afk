@@ -161,13 +161,16 @@ jobs:
             echo "*This PR was created by the [doc-review workflow](.github/workflows/doc-review.yml).*"
           } > /tmp/pr-body.md
           
+          # Create PR (labels are optional - don't fail if they don't exist)
           gh pr create \
             --title "docs: sync documentation with codebase" \
             --body-file /tmp/pr-body.md \
-            --label "documentation" \
-            --label "ai-review" \
             --head "$DOC_UPDATE_BRANCH" \
             --base main
+          
+          # Try to add labels (ignore failures if labels don't exist)
+          gh pr edit --add-label "documentation" || true
+          gh pr edit --add-label "ai-review" || true
           
           echo "Pull request created successfully"
 

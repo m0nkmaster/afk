@@ -29,8 +29,8 @@ jobs:
           while IFS= read -r -d '' file; do
             # Extract internal links: [text](path) where path doesn't start with http
             grep -oP '\[([^\]]+)\]\((?!https?://)([^)]+)\)' "$file" 2>/dev/null | while read -r match; do
-              # Extract the path from the match
-              link_path=$(echo "$match" | sed -E 's/\[([^\]]+)\]\(([^)#]+)(#[^)]*)?\)/\2/')
+              # Extract the path from the match (allow empty path for anchor-only links)
+              link_path=$(echo "$match" | sed -E 's/\[([^\]]+)\]\(([^)#]*)(#[^)]*)?\)/\2/')
               
               # Skip empty paths and anchors-only
               if [[ -z "$link_path" ]] || [[ "$link_path" == "#"* ]]; then
