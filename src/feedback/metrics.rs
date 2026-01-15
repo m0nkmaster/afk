@@ -9,11 +9,11 @@ use std::time::{Duration, Instant};
 /// Activity state based on time since last activity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ActivityState {
-    /// Recent activity (within 2 seconds).
+    /// Recent activity (within the active threshold).
     Active,
-    /// No activity for 2-10 seconds.
+    /// No activity for a short period (between active and thinking thresholds).
     Thinking,
-    /// No activity for more than 10 seconds.
+    /// No activity for an extended period (beyond thinking threshold).
     Stalled,
 }
 
@@ -68,9 +68,10 @@ impl IterationMetrics {
     }
 }
 
-/// Activity thresholds in seconds.
-const ACTIVE_THRESHOLD_SECS: u64 = 2;
-const THINKING_THRESHOLD_SECS: u64 = 10;
+/// Default activity threshold in seconds (for "active" state).
+const DEFAULT_ACTIVE_THRESHOLD_SECS: u64 = 2;
+/// Default thinking threshold in seconds (for "thinking" state).
+const DEFAULT_THINKING_THRESHOLD_SECS: u64 = 10;
 
 /// Collector for iteration metrics.
 #[derive(Debug)]
@@ -79,14 +80,35 @@ pub struct MetricsCollector {
     metrics: IterationMetrics,
     /// Time of last recorded activity.
     last_activity: Option<Instant>,
+    /// Threshold for "active" state in seconds.
+    active_threshold_secs: u64,
+    /// Threshold for "thinking" state in seconds.
+    thinking_threshold_secs: u64,
 }
 
 impl MetricsCollector {
-    /// Create a new MetricsCollector.
+    /// Create a new MetricsCollector with default thresholds.
     pub fn new() -> Self {
         Self {
             metrics: IterationMetrics::new(),
             last_activity: None,
+            active_threshold_secs: DEFAULT_ACTIVE_THRESHOLD_SECS,
+            thinking_threshold_secs: DEFAULT_THINKING_THRESHOLD_SECS,
+        }
+    }
+
+    /// Create a new MetricsCollector with custom activity thresholds.
+    ///
+    /// # Arguments
+    ///
+    /// * `active_threshold_secs` - Seconds before transitioning to "thinking" state.
+    /// * `thinking_threshold_secs` - Seconds before transitioning to "stalled" state.
+    pub fn with_thresholds(active_threshold_secs: u64, thinking_threshold_secs: u64) -> Self {
+        Self {
+            metrics: IterationMetrics::new(),
+            last_activity: None,
+            active_threshold_secs,
+            thinking_threshold_secs,
         }
     }
 
@@ -152,9 +174,9 @@ impl MetricsCollector {
             None => ActivityState::Thinking,
             Some(last) => {
                 let elapsed = last.elapsed();
-                if elapsed < Duration::from_secs(ACTIVE_THRESHOLD_SECS) {
+                if elapsed < Duration::from_secs(self.active_threshold_secs) {
                     ActivityState::Active
-                } else if elapsed < Duration::from_secs(THINKING_THRESHOLD_SECS) {
+                } else if elapsed < Duration::from_secs(self.thinking_threshold_secs) {
                     ActivityState::Thinking
                 } else {
                     ActivityState::Stalled

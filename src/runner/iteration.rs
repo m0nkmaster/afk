@@ -82,9 +82,15 @@ impl IterationRunner {
             None
         };
 
+        let mut output = OutputHandler::new();
+        output.set_activity_thresholds(
+            config.feedback.active_threshold_secs,
+            config.feedback.thinking_threshold_secs,
+        );
+
         Self {
             config,
-            output: OutputHandler::new(),
+            output,
             current_iteration: 0,
             max_iterations: 0,
             current_task_id: None,

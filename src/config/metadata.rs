@@ -201,6 +201,30 @@ pub static METADATA: &[KeyMetadata] = &[
         default: "0.1",
         examples: &["0.1", "0.5", "1.0"],
     },
+    KeyMetadata {
+        key: "feedback.max_output_lines",
+        description: "Maximum number of output lines to keep in the TUI buffer. Older lines \
+                      are discarded when this limit is reached.",
+        value_type: "positive integer",
+        default: "500",
+        examples: &["250", "500", "1000"],
+    },
+    KeyMetadata {
+        key: "feedback.active_threshold_secs",
+        description: "Seconds of inactivity before transitioning from 'active' to 'thinking' \
+                      state. Lower values make the UI more responsive to brief pauses.",
+        value_type: "positive integer",
+        default: "2",
+        examples: &["1", "2", "5"],
+    },
+    KeyMetadata {
+        key: "feedback.thinking_threshold_secs",
+        description: "Seconds of inactivity before transitioning from 'thinking' to 'stalled' \
+                      state. This indicates potential connection issues or long processing.",
+        value_type: "positive integer",
+        default: "10",
+        examples: &["5", "10", "30"],
+    },
     // feedback_loops section
     KeyMetadata {
         key: "feedback_loops.types",

@@ -102,12 +102,21 @@ pub struct TuiState {
     pub auto_scroll: bool,
 }
 
+/// Default maximum output lines for TUI buffer.
+const DEFAULT_MAX_OUTPUT_LINES: usize = 500;
+
 impl TuiState {
+    /// Create a new TuiState with default settings.
     fn new() -> Self {
+        Self::with_max_output_lines(DEFAULT_MAX_OUTPUT_LINES)
+    }
+
+    /// Create a new TuiState with a custom max output lines limit.
+    pub fn with_max_output_lines(max_output_lines: usize) -> Self {
         let now = Instant::now();
         Self {
-            output_lines: VecDeque::with_capacity(1000),
-            max_output_lines: 500,
+            output_lines: VecDeque::with_capacity(max_output_lines.min(1000)),
+            max_output_lines,
             recent_files: VecDeque::with_capacity(10),
             recent_tools: VecDeque::with_capacity(10),
             iteration_current: 0,

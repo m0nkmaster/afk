@@ -37,10 +37,18 @@ impl LoopController {
         let mut output = OutputHandler::with_feedback(feedback_mode, show_mascot);
         output.set_feedback_mode(feedback_mode);
         output.set_show_mascot(show_mascot);
+        output.set_activity_thresholds(
+            config.feedback.active_threshold_secs,
+            config.feedback.thinking_threshold_secs,
+        );
 
         let mut iter_output = OutputHandler::with_feedback(feedback_mode, show_mascot);
         iter_output.set_feedback_mode(feedback_mode);
         iter_output.set_show_mascot(show_mascot);
+        iter_output.set_activity_thresholds(
+            config.feedback.active_threshold_secs,
+            config.feedback.thinking_threshold_secs,
+        );
 
         let iteration_runner = IterationRunner::with_output_handler(config.clone(), iter_output);
 

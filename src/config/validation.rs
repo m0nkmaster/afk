@@ -298,6 +298,9 @@ impl ConfigField for FeedbackConfig {
             "show_metrics" => Some(self.show_metrics.to_string()),
             "show_mascot" => Some(self.show_mascot.to_string()),
             "refresh_rate" => Some(self.refresh_rate.to_string()),
+            "max_output_lines" => Some(self.max_output_lines.to_string()),
+            "active_threshold_secs" => Some(self.active_threshold_secs.to_string()),
+            "thinking_threshold_secs" => Some(self.thinking_threshold_secs.to_string()),
             _ => None,
         }
     }
@@ -353,6 +356,28 @@ impl ConfigField for FeedbackConfig {
                 })?;
                 Ok(())
             }
+            "max_output_lines" => {
+                self.max_output_lines = value.parse().map_err(|_| FieldError::InvalidValue {
+                    key: key.into(),
+                    expected: "positive integer (e.g., 500)".into(),
+                })?;
+                Ok(())
+            }
+            "active_threshold_secs" => {
+                self.active_threshold_secs = value.parse().map_err(|_| FieldError::InvalidValue {
+                    key: key.into(),
+                    expected: "positive integer (e.g., 2)".into(),
+                })?;
+                Ok(())
+            }
+            "thinking_threshold_secs" => {
+                self.thinking_threshold_secs =
+                    value.parse().map_err(|_| FieldError::InvalidValue {
+                        key: key.into(),
+                        expected: "positive integer (e.g., 10)".into(),
+                    })?;
+                Ok(())
+            }
             _ => Err(FieldError::UnknownKey(key.into())),
         }
     }
@@ -365,6 +390,9 @@ impl ConfigField for FeedbackConfig {
             "show_metrics",
             "show_mascot",
             "refresh_rate",
+            "max_output_lines",
+            "active_threshold_secs",
+            "thinking_threshold_secs",
         ]
     }
 

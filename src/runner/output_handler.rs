@@ -112,6 +112,17 @@ impl OutputHandler {
         self.show_mascot = show;
     }
 
+    /// Set activity thresholds for the metrics collector.
+    ///
+    /// # Arguments
+    ///
+    /// * `active_threshold_secs` - Seconds before transitioning to "thinking" state.
+    /// * `thinking_threshold_secs` - Seconds before transitioning to "stalled" state.
+    pub fn set_activity_thresholds(&mut self, active_threshold_secs: u64, thinking_threshold_secs: u64) {
+        self.metrics_collector =
+            MetricsCollector::with_thresholds(active_threshold_secs, thinking_threshold_secs);
+    }
+
     /// Set iteration context for display updates.
     pub fn set_iteration_context(
         &mut self,

@@ -440,10 +440,31 @@ pub struct FeedbackConfig {
     /// Refresh rate in seconds.
     #[serde(default = "default_refresh_rate")]
     pub refresh_rate: f64,
+    /// Maximum output lines to keep in TUI buffer.
+    #[serde(default = "default_max_output_lines")]
+    pub max_output_lines: usize,
+    /// Seconds of inactivity before "thinking" state (was actively receiving output).
+    #[serde(default = "default_active_threshold_secs")]
+    pub active_threshold_secs: u64,
+    /// Seconds of inactivity before "stalled" state (no output for extended period).
+    #[serde(default = "default_thinking_threshold_secs")]
+    pub thinking_threshold_secs: u64,
 }
 
 fn default_refresh_rate() -> f64 {
     0.1
+}
+
+fn default_max_output_lines() -> usize {
+    500
+}
+
+fn default_active_threshold_secs() -> u64 {
+    2
+}
+
+fn default_thinking_threshold_secs() -> u64 {
+    10
 }
 
 impl Default for FeedbackConfig {
@@ -455,6 +476,9 @@ impl Default for FeedbackConfig {
             show_metrics: default_true(),
             show_mascot: default_true(),
             refresh_rate: default_refresh_rate(),
+            max_output_lines: default_max_output_lines(),
+            active_threshold_secs: default_active_threshold_secs(),
+            thinking_threshold_secs: default_thinking_threshold_secs(),
         }
     }
 }
