@@ -115,7 +115,7 @@ cargo install --git https://github.com/m0nkmaster/afk
 
 | Command | Description |
 |---------|-------------|
-| `afk go` | Zero-config: auto-detect and run (10 iterations) |
+| `afk go` | Zero-config: auto-detect and run |
 | `afk go 20` | Run 20 iterations |
 | `afk go -u` | Run until all tasks complete |
 | `afk go TODO.md 5` | Use TODO.md as source, run 5 iterations |

@@ -13,10 +13,10 @@ src/
 ├── main.rs          # Entry point, CLI dispatch
 ├── lib.rs           # Library exports
 ├── cli/             # CLI layer
-│   ├── mod.rs       # Clap CLI definitions (~2000 lines)
+│   ├── mod.rs       # Clap CLI definitions
 │   ├── commands/    # Subcommand implementations
 │   │   ├── mod.rs   # Module exports
-│   │   ├── prd.rs   # PRD commands
+│   │   ├── import.rs # Import commands
 │   │   └── source.rs # Source commands
 │   ├── output.rs    # Output formatting (clipboard, file, stdout)
 │   └── update.rs    # Self-update logic
@@ -126,13 +126,15 @@ pub struct AfkConfig {
 Sources implement a common pattern returning `Vec<UserStory>`:
 
 ```rust
-pub fn aggregate_tasks(config: &AfkConfig) -> Result<Vec<UserStory>, SourceError> {
-    let mut stories = Vec::new();
-    for source in &config.sources {
-        let source_stories = load_from_source(source)?;
-        stories.extend(source_stories);
+pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
+    let mut all_tasks = Vec::new();
+    for source in sources {
+        match load_from_source(source) {
+            Ok(tasks) => all_tasks.extend(tasks),
+            Err(e) => eprintln!("Warning: Failed to load: {}", e),
+        }
     }
-    Ok(stories)
+    all_tasks
 }
 ```
 
