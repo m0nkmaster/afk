@@ -227,7 +227,8 @@ impl SessionProgress {
             _ => {}
         }
 
-        self.tasks.get(task_id).unwrap()
+        // Return the task reference directly from entry() rather than re-fetching
+        task
     }
 
     /// Get all pending tasks.
