@@ -6,7 +6,7 @@ use std::path::Path;
 
 use crate::config::AfkConfig;
 use crate::prd::PrdDocument;
-use crate::progress::SessionProgress;
+use crate::progress::{SessionProgress, TaskStatus};
 
 /// Result type for status command operations.
 pub type StatusCommandResult = Result<(), StatusCommandError>;
@@ -62,7 +62,11 @@ pub fn status(verbose: bool) -> StatusCommandResult {
         &progress.started_at[..19].replace('T', " ")
     );
     println!("  Iterations: {}", progress.iterations);
-    let (pend, in_prog, comp, fail, skip) = progress.get_task_counts();
+
+    // Calculate task counts from PRD with session status overlays
+    // This ensures counts are consistent with the Tasks section
+    let (pend, in_prog, comp, fail, skip) =
+        calculate_merged_task_counts(&prd, &progress);
     if pend + in_prog + comp + fail + skip > 0 {
         println!(
             "  Tasks: {} pending, {} in-progress, {} complete, {} failed, {} skipped",
@@ -111,6 +115,47 @@ pub fn status(verbose: bool) -> StatusCommandResult {
     }
 
     Ok(())
+}
+
+/// Calculate task counts by merging PRD data with session progress.
+///
+/// This ensures the Session section's counts are consistent with the Tasks section.
+/// For each story in the PRD:
+/// - If it exists in progress.json, use the session status
+/// - If it doesn't exist in progress.json:
+///   - If `passes` is true, count as "completed"
+///   - If `passes` is false, count as "pending"
+fn calculate_merged_task_counts(
+    prd: &PrdDocument,
+    progress: &SessionProgress,
+) -> (usize, usize, usize, usize, usize) {
+    let mut pending = 0;
+    let mut in_progress = 0;
+    let mut completed = 0;
+    let mut failed = 0;
+    let mut skipped = 0;
+
+    for story in &prd.user_stories {
+        if let Some(task_progress) = progress.tasks.get(&story.id) {
+            // Use session status if task is tracked
+            match task_progress.status {
+                TaskStatus::Pending => pending += 1,
+                TaskStatus::InProgress => in_progress += 1,
+                TaskStatus::Completed => completed += 1,
+                TaskStatus::Failed => failed += 1,
+                TaskStatus::Skipped => skipped += 1,
+            }
+        } else {
+            // Fall back to PRD passes status
+            if story.passes {
+                completed += 1;
+            } else {
+                pending += 1;
+            }
+        }
+    }
+
+    (pending, in_progress, completed, failed, skipped)
 }
 
 /// Print verbose status details.
@@ -181,10 +226,148 @@ fn print_verbose_details(config: &AfkConfig, prd: &PrdDocument, progress: &Sessi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prd::UserStory;
+    use crate::progress::TaskProgress;
 
     #[test]
     fn test_status_command_error_display() {
         let err = StatusCommandError::NotInitialised;
         assert_eq!(err.to_string(), "afk not initialised");
+    }
+
+    #[test]
+    fn test_calculate_merged_task_counts_empty() {
+        let prd = PrdDocument::default();
+        let progress = SessionProgress::default();
+
+        let (pend, in_prog, comp, fail, skip) = calculate_merged_task_counts(&prd, &progress);
+        assert_eq!((pend, in_prog, comp, fail, skip), (0, 0, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_calculate_merged_task_counts_prd_only() {
+        // Tasks in PRD but not tracked in progress
+        let mut prd = PrdDocument::default();
+        prd.user_stories = vec![
+            UserStory {
+                id: "task-1".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "task-2".to_string(),
+                passes: true,
+                ..Default::default()
+            },
+            UserStory {
+                id: "task-3".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+        ];
+        let progress = SessionProgress::default();
+
+        let (pend, in_prog, comp, fail, skip) = calculate_merged_task_counts(&prd, &progress);
+        // 2 pending (passes=false), 1 completed (passes=true)
+        assert_eq!((pend, in_prog, comp, fail, skip), (2, 0, 1, 0, 0));
+    }
+
+    #[test]
+    fn test_calculate_merged_task_counts_with_progress_overlay() {
+        // Tasks in PRD with session progress overlay
+        let mut prd = PrdDocument::default();
+        prd.user_stories = vec![
+            UserStory {
+                id: "task-1".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "task-2".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "task-3".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+        ];
+
+        let mut progress = SessionProgress::default();
+        // task-1 is in_progress in session
+        let mut tp1 = TaskProgress::new("task-1", "prd");
+        tp1.status = TaskStatus::InProgress;
+        progress.tasks.insert("task-1".to_string(), tp1);
+
+        let (pend, in_prog, comp, fail, skip) = calculate_merged_task_counts(&prd, &progress);
+        // task-1 is in_progress (from session), task-2 and task-3 are pending (from PRD)
+        assert_eq!((pend, in_prog, comp, fail, skip), (2, 1, 0, 0, 0));
+    }
+
+    #[test]
+    fn test_calculate_merged_task_counts_all_statuses() {
+        let mut prd = PrdDocument::default();
+        prd.user_stories = vec![
+            UserStory {
+                id: "pending-prd".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "completed-prd".to_string(),
+                passes: true,
+                ..Default::default()
+            },
+            UserStory {
+                id: "in-progress".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "failed".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "skipped".to_string(),
+                passes: false,
+                ..Default::default()
+            },
+            UserStory {
+                id: "completed-session".to_string(),
+                passes: false, // Not yet marked in PRD
+                ..Default::default()
+            },
+        ];
+
+        let mut progress = SessionProgress::default();
+
+        let mut tp_in_prog = TaskProgress::new("in-progress", "prd");
+        tp_in_prog.status = TaskStatus::InProgress;
+        progress.tasks.insert("in-progress".to_string(), tp_in_prog);
+
+        let mut tp_failed = TaskProgress::new("failed", "prd");
+        tp_failed.status = TaskStatus::Failed;
+        progress.tasks.insert("failed".to_string(), tp_failed);
+
+        let mut tp_skipped = TaskProgress::new("skipped", "prd");
+        tp_skipped.status = TaskStatus::Skipped;
+        progress.tasks.insert("skipped".to_string(), tp_skipped);
+
+        let mut tp_comp = TaskProgress::new("completed-session", "prd");
+        tp_comp.status = TaskStatus::Completed;
+        progress
+            .tasks
+            .insert("completed-session".to_string(), tp_comp);
+
+        let (pend, in_prog, comp, fail, skip) = calculate_merged_task_counts(&prd, &progress);
+        // pending-prd: pending (from PRD)
+        // completed-prd: completed (from PRD)
+        // in-progress: in_progress (from session)
+        // failed: failed (from session)
+        // skipped: skipped (from session)
+        // completed-session: completed (from session)
+        assert_eq!((pend, in_prog, comp, fail, skip), (1, 1, 2, 1, 1));
     }
 }
