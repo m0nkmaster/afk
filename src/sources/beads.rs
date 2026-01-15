@@ -8,21 +8,21 @@ use std::process::Command;
 
 /// Load tasks from beads.
 ///
-/// Includes both `ready` and `in_progress` issues so that work in progress
-/// is not lost during sync. Falls back to text parsing if JSON output fails.
+/// Syncs all open and in_progress issues. Previously only synced "ready"
+/// issues, but this caused tasks with soft dependencies to be missed.
+/// Falls back to text parsing if JSON output fails.
 /// Returns an empty vector if `bd` is not installed or times out.
 pub fn load_beads_tasks() -> Vec<UserStory> {
-    // Try to get both ready and in_progress issues
     let mut tasks = Vec::new();
 
-    // Get ready issues using `bd ready --json`
-    if let Ok(ready_tasks) = run_bd_ready_json() {
-        tasks.extend(ready_tasks);
+    // Get open issues (beads doesn't support comma-separated statuses)
+    if let Ok(open_tasks) = run_bd_list_json("open") {
+        tasks.extend(open_tasks);
     }
 
-    // Get in_progress issues (so we don't lose work in progress)
-    if let Ok(in_progress_tasks) = run_bd_list_json(&["in_progress"]) {
-        // Deduplicate by ID (in case an issue appears in both somehow)
+    // Get in_progress issues
+    if let Ok(in_progress_tasks) = run_bd_list_json("in_progress") {
+        // Deduplicate by ID
         for task in in_progress_tasks {
             if !tasks.iter().any(|t| t.id == task.id) {
                 tasks.push(task);
@@ -75,46 +75,10 @@ pub fn close_beads_issue(issue_id: &str) -> bool {
     }
 }
 
-/// Run `bd ready --json` and parse the output.
-///
-/// Uses the `bd ready` command which returns issues that are open/in_progress
-/// and have no blocking dependencies.
-fn run_bd_ready_json() -> Result<Vec<UserStory>, BeadsError> {
+/// Run `bd list --status <status> --json` and parse the output.
+fn run_bd_list_json(status: &str) -> Result<Vec<UserStory>, BeadsError> {
     let output = Command::new("bd")
-        .args(["ready", "--json"])
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                BeadsError::NotInstalled
-            } else {
-                BeadsError::CommandFailed
-            }
-        })?;
-
-    if !output.status.success() {
-        return Err(BeadsError::NonZeroExit);
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let data: serde_json::Value =
-        serde_json::from_str(&stdout).map_err(|_| BeadsError::InvalidJson)?;
-
-    // Parse JSON array of issues
-    let items = match &data {
-        serde_json::Value::Array(arr) => arr,
-        _ => return Ok(Vec::new()),
-    };
-
-    let tasks: Vec<UserStory> = items.iter().filter_map(parse_beads_item).collect();
-
-    Ok(tasks)
-}
-
-/// Run `bd list --status <statuses> --json` and parse the output.
-fn run_bd_list_json(statuses: &[&str]) -> Result<Vec<UserStory>, BeadsError> {
-    let status_arg = statuses.join(",");
-    let output = Command::new("bd")
-        .args(["list", "--status", &status_arg, "--json"])
+        .args(["list", "--status", status, "--json"])
         .output()
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
