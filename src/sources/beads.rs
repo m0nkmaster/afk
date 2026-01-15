@@ -15,8 +15,8 @@ pub fn load_beads_tasks() -> Vec<UserStory> {
     // Try to get both ready and in_progress issues
     let mut tasks = Vec::new();
 
-    // Get ready issues
-    if let Ok(ready_tasks) = run_bd_list_json(&["ready"]) {
+    // Get ready issues using `bd ready --json`
+    if let Ok(ready_tasks) = run_bd_ready_json() {
         tasks.extend(ready_tasks);
     }
 
@@ -73,6 +73,41 @@ pub fn close_beads_issue(issue_id: &str) -> bool {
         Ok(output) => output.status.success(),
         Err(_) => false,
     }
+}
+
+/// Run `bd ready --json` and parse the output.
+///
+/// Uses the `bd ready` command which returns issues that are open/in_progress
+/// and have no blocking dependencies.
+fn run_bd_ready_json() -> Result<Vec<UserStory>, BeadsError> {
+    let output = Command::new("bd")
+        .args(["ready", "--json"])
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                BeadsError::NotInstalled
+            } else {
+                BeadsError::CommandFailed(e.to_string())
+            }
+        })?;
+
+    if !output.status.success() {
+        return Err(BeadsError::NonZeroExit);
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let data: serde_json::Value =
+        serde_json::from_str(&stdout).map_err(|_| BeadsError::InvalidJson)?;
+
+    // Parse JSON array of issues
+    let items = match &data {
+        serde_json::Value::Array(arr) => arr,
+        _ => return Ok(Vec::new()),
+    };
+
+    let tasks: Vec<UserStory> = items.iter().filter_map(parse_beads_item).collect();
+
+    Ok(tasks)
 }
 
 /// Run `bd list --status <statuses> --json` and parse the output.
