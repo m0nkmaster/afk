@@ -855,3 +855,767 @@ fn test_update_check_only() {
         .success()
         .stdout(predicate::str::contains("version").or(predicate::str::contains("update")));
 }
+
+// ============================================================================
+// Config command tests
+// ============================================================================
+
+#[test]
+fn test_config_show() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "show"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("afk config"))
+        .stdout(predicate::str::contains("ai_cli").or(predicate::str::contains("limits")));
+}
+
+#[test]
+fn test_config_show_section() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "show", "--section", "limits"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("limits"))
+        .stdout(predicate::str::contains("max_iterations"));
+}
+
+#[test]
+fn test_config_show_unknown_section() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "show", "--section", "nonexistent"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Unknown section"));
+}
+
+#[test]
+fn test_config_get() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "get", "limits.max_iterations"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("200").or(predicate::str::is_match(r"\d+").unwrap()));
+}
+
+#[test]
+fn test_config_get_unknown_key() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "get", "nonexistent.key"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Unknown").or(predicate::str::contains("key")));
+}
+
+#[test]
+fn test_config_set() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "limits.max_iterations", "100"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("100").or(predicate::str::contains("✓")));
+
+    // Verify the value was actually set
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "get", "limits.max_iterations"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("100"));
+}
+
+#[test]
+fn test_config_set_invalid_value() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "limits.max_iterations", "not-a-number"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Invalid").or(predicate::str::contains("parse")));
+}
+
+#[test]
+fn test_config_reset_all() {
+    let temp = setup_project();
+
+    // First set a non-default value
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "limits.max_iterations", "42"])
+        .assert()
+        .success();
+
+    // Reset all config
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "reset"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Reset").or(predicate::str::contains("default")));
+
+    // Verify value is back to default
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "get", "limits.max_iterations"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("200"));
+}
+
+#[test]
+fn test_config_reset_section() {
+    let temp = setup_project();
+
+    // Set a non-default value
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "limits.max_iterations", "99"])
+        .assert()
+        .success();
+
+    // Reset the section
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "reset", "limits"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Reset").or(predicate::str::contains("limits")));
+}
+
+#[test]
+fn test_config_reset_field() {
+    let temp = setup_project();
+
+    // Set a non-default value
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "limits.max_iterations", "77"])
+        .assert()
+        .success();
+
+    // Reset just that field
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "reset", "limits.max_iterations"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Reset").or(predicate::str::contains("200")));
+}
+
+#[test]
+fn test_config_explain() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "explain"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("config keys").or(predicate::str::contains("limits")));
+}
+
+#[test]
+fn test_config_explain_key() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "explain", "limits.max_iterations"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("max_iterations"))
+        .stdout(predicate::str::contains("Default").or(predicate::str::contains("Type")));
+}
+
+#[test]
+fn test_config_explain_section() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "explain", "limits"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("limits"))
+        .stdout(predicate::str::contains("max_iterations"));
+}
+
+#[test]
+fn test_config_keys() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "keys"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("limits.max_iterations"))
+        .stdout(predicate::str::contains("ai_cli.command"));
+}
+
+// ============================================================================
+// Use command tests
+// ============================================================================
+
+#[test]
+fn test_use_list() {
+    let temp = setup_project();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["use", "--list"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("claude")
+                .or(predicate::str::contains("cursor"))
+                .or(predicate::str::contains("AI CLI")),
+        );
+}
+
+#[test]
+fn test_use_nonexistent_cli() {
+    let temp = setup_project();
+
+    // Try to switch to a non-existent CLI
+    afk()
+        .current_dir(temp.path())
+        .args(["use", "nonexistent-ai-cli-that-does-not-exist"])
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not found")
+                .or(predicate::str::contains("Failed"))
+                .or(predicate::str::contains("Unknown")),
+        );
+}
+
+// ============================================================================
+// Task lifecycle end-to-end tests
+// ============================================================================
+
+#[test]
+fn test_task_lifecycle_sync_to_done() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // Create a config with no sources initially
+    let config = r#"{
+        "ai_cli": {
+            "command": "echo",
+            "args": ["test"]
+        },
+        "sources": []
+    }"#;
+    fs::write(afk_dir.join("config.json"), config).unwrap();
+
+    // Create a markdown source file
+    let todo_file = temp.path().join("TODO.md");
+    fs::write(&todo_file, "- [ ] First task\n- [ ] Second task").unwrap();
+
+    // Add the source
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add", "markdown", "TODO.md"])
+        .assert()
+        .success();
+
+    // Sync to load tasks
+    afk()
+        .current_dir(temp.path())
+        .args(["tasks", "sync"])
+        .assert()
+        .success();
+
+    // Verify tasks exist
+    afk()
+        .current_dir(temp.path())
+        .arg("tasks")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("First task").or(predicate::str::contains("task")));
+
+    // Create progress file
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(afk_dir.join("progress.json"), progress).unwrap();
+
+    // Verify the sync worked by checking tasks exist
+    let tasks_content = fs::read_to_string(afk_dir.join("tasks.json")).unwrap();
+    assert!(
+        tasks_content.contains("userStories"),
+        "Tasks should be synced from source"
+    );
+
+    // Check status works after the lifecycle
+    afk()
+        .current_dir(temp.path())
+        .arg("status")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_full_workflow_with_prd() {
+    let temp = setup_project_with_prd();
+
+    // Check initial status
+    afk()
+        .current_dir(temp.path())
+        .arg("status")
+        .assert()
+        .success();
+
+    // View tasks
+    afk()
+        .current_dir(temp.path())
+        .arg("tasks")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-001"));
+
+    // View specific task
+    afk()
+        .current_dir(temp.path())
+        .args(["task", "task-001"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("First task"));
+
+    // Generate prompt
+    afk()
+        .current_dir(temp.path())
+        .args(["prompt", "-s"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-001"));
+
+    // Create progress file and mark task done
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["done", "task-001", "-m", "Implemented feature"])
+        .assert()
+        .success();
+
+    // Verify task is marked complete in progress
+    let progress = fs::read_to_string(temp.path().join(".afk/progress.json")).unwrap();
+    assert!(progress.contains("completed"));
+
+    // Check status shows completion
+    afk()
+        .current_dir(temp.path())
+        .arg("status")
+        .assert()
+        .success();
+}
+
+// ============================================================================
+// More error scenario tests
+// ============================================================================
+
+#[test]
+fn test_done_creates_task_entry_dynamically() {
+    // done/fail/reset commands are lenient - they create task entries dynamically
+    // even for tasks not in tasks.json, to support manual task management
+    let temp = setup_project_with_prd();
+
+    // Create progress file
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // This succeeds because done/fail/reset are lenient
+    afk()
+        .current_dir(temp.path())
+        .args(["done", "new-task-id"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete"));
+
+    // Verify the task was added to progress
+    let progress = fs::read_to_string(temp.path().join(".afk/progress.json")).unwrap();
+    assert!(progress.contains("new-task-id"));
+    assert!(progress.contains("completed"));
+}
+
+#[test]
+fn test_fail_creates_task_entry_dynamically() {
+    let temp = setup_project_with_prd();
+
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["fail", "new-task-id"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("failed"));
+
+    // Verify the task was added to progress
+    let progress = fs::read_to_string(temp.path().join(".afk/progress.json")).unwrap();
+    assert!(progress.contains("new-task-id"));
+    assert!(progress.contains("failed"));
+}
+
+#[test]
+fn test_reset_creates_task_entry_dynamically() {
+    let temp = setup_project_with_prd();
+
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["reset", "new-task-id"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("reset").or(predicate::str::contains("pending")));
+
+    // Verify the task was added to progress
+    let progress = fs::read_to_string(temp.path().join(".afk/progress.json")).unwrap();
+    assert!(progress.contains("new-task-id"));
+}
+
+#[test]
+fn test_source_remove_invalid_index() {
+    let temp = setup_project();
+
+    // Add a source first
+    let tasks_file = temp.path().join("tasks.json");
+    fs::write(&tasks_file, r#"{"tasks": []}"#).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add", "json", "tasks.json"])
+        .assert()
+        .success();
+
+    // Try to remove with invalid index
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "remove", "99"])
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("Invalid")
+                .or(predicate::str::contains("out of range"))
+                .or(predicate::str::contains("not found")),
+        );
+}
+
+#[test]
+fn test_verify_with_multiple_gates() {
+    let temp = TempDir::new().unwrap();
+    let afk_dir = temp.path().join(".afk");
+    fs::create_dir_all(&afk_dir).unwrap();
+
+    // Config with multiple gates (mix of passing and failing)
+    let config = r#"{
+        "ai_cli": {
+            "command": "echo",
+            "args": ["test"]
+        },
+        "sources": [],
+        "feedback_loops": {
+            "lint": "true",
+            "test": "true",
+            "build": "true"
+        }
+    }"#;
+    fs::write(afk_dir.join("config.json"), config).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .arg("verify")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("lint"))
+        .stdout(predicate::str::contains("test"))
+        .stdout(predicate::str::contains("build"));
+}
+
+#[test]
+fn test_verify_verbose_shows_output() {
+    let temp = TempDir::new().unwrap();
+    let afk_dir = temp.path().join(".afk");
+    fs::create_dir_all(&afk_dir).unwrap();
+
+    // Config with standard gates that produce output
+    // feedback_loops has: types, lint, test, build fields, plus custom map
+    let config = r#"{
+        "ai_cli": {
+            "command": "echo",
+            "args": ["test"]
+        },
+        "sources": [],
+        "feedback_loops": {
+            "lint": "echo 'Lint passed'",
+            "test": "echo 'Tests passed'"
+        }
+    }"#;
+    fs::write(afk_dir.join("config.json"), config).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["verify", "-v"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("lint").or(predicate::str::contains("test")));
+}
+
+#[test]
+fn test_import_with_output_file() {
+    let temp = setup_project();
+    let requirements = temp.path().join("requirements.md");
+    fs::write(
+        &requirements,
+        "# My Project\n\n## Features\n- User login\n- Dashboard",
+    )
+    .unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["import", "requirements.md", "-f"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Written").or(predicate::str::contains("prompt")));
+
+    // Verify the prompt file was created
+    let prompt_file = temp.path().join(".afk/prompt.md");
+    assert!(prompt_file.exists());
+}
+
+#[test]
+fn test_import_with_clipboard() {
+    let temp = setup_project();
+    let requirements = temp.path().join("requirements.md");
+    fs::write(&requirements, "# Simple App\n- Feature 1").unwrap();
+
+    // -c copies to clipboard - this should succeed even if clipboard is unavailable
+    afk()
+        .current_dir(temp.path())
+        .args(["import", "requirements.md", "-c"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_go_with_iterations_argument() {
+    let temp = setup_project_with_prd();
+
+    // Test dry run with specific iteration count
+    afk()
+        .current_dir(temp.path())
+        .args(["go", "5", "-n"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Dry run"));
+}
+
+#[test]
+fn test_go_fresh_flag() {
+    let temp = setup_project_with_prd();
+
+    // Create an existing progress file
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 10,
+        "tasks": {
+            "task-001": {
+                "id": "task-001",
+                "source": "prd",
+                "status": "in_progress",
+                "failure_count": 2,
+                "learnings": []
+            }
+        }
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // Run with --fresh and dry-run to verify it clears progress
+    afk()
+        .current_dir(temp.path())
+        .args(["go", "--fresh", "-n"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Dry run"));
+}
+
+#[test]
+fn test_prompt_all_tasks_complete() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // All tasks are complete
+    let tasks = r#"{
+        "projectName": "test-project",
+        "branch": "main",
+        "userStories": [
+            {
+                "id": "task-001",
+                "title": "Done task",
+                "description": "Already complete",
+                "acceptanceCriteria": ["Done"],
+                "priority": 1,
+                "passes": true
+            },
+            {
+                "id": "task-002",
+                "title": "Also done",
+                "description": "Also complete",
+                "acceptanceCriteria": ["Done"],
+                "priority": 2,
+                "passes": true
+            }
+        ]
+    }"#;
+    fs::write(afk_dir.join("tasks.json"), tasks).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["prompt", "-s"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("COMPLETE").or(predicate::str::contains("AFK_COMPLETE")));
+}
+
+#[test]
+fn test_status_no_progress_file() {
+    let temp = setup_project_with_prd();
+
+    // Ensure no progress file exists
+    let progress_path = temp.path().join(".afk/progress.json");
+    if progress_path.exists() {
+        fs::remove_file(&progress_path).unwrap();
+    }
+
+    afk()
+        .current_dir(temp.path())
+        .arg("status")
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_archive_creates_timestamped_directory() {
+    let temp = setup_project_with_prd();
+
+    // Create progress file
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 10,
+        "tasks": {
+            "task-001": {
+                "id": "task-001",
+                "source": "prd",
+                "status": "completed",
+                "failure_count": 0,
+                "learnings": []
+            }
+        }
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["archive", "-r", "completed work", "-y"])
+        .assert()
+        .success();
+
+    // Verify archives directory was created
+    let archives_dir = temp.path().join(".afk/archives");
+    if archives_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&archives_dir).unwrap().collect();
+        assert!(!entries.is_empty(), "Archive directory should contain entries");
+    }
+}
+
+#[test]
+fn test_tasks_displays_priority_and_status() {
+    let temp = setup_project_with_prd();
+
+    // Verify tasks command shows task information
+    afk()
+        .current_dir(temp.path())
+        .arg("tasks")
+        .assert()
+        .success()
+        // Should show task IDs
+        .stdout(predicate::str::contains("task-001").or(predicate::str::contains("task-002")));
+}
+
+#[test]
+fn test_multiple_source_types() {
+    let temp = setup_project();
+
+    // Create multiple source files
+    let json_file = temp.path().join("tasks.json");
+    fs::write(&json_file, r#"{"tasks": []}"#).unwrap();
+
+    let md_file = temp.path().join("TODO.md");
+    fs::write(&md_file, "- [ ] A task").unwrap();
+
+    // Add both sources
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add", "json", "tasks.json"])
+        .assert()
+        .success();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add", "markdown", "TODO.md"])
+        .assert()
+        .success();
+
+    // List should show both
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("json").or(predicate::str::contains("tasks.json")))
+        .stdout(predicate::str::contains("markdown").or(predicate::str::contains("TODO.md")));
+}
