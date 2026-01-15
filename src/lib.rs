@@ -17,6 +17,7 @@ pub mod config;
 pub mod feedback;
 pub mod git;
 pub mod parser;
+pub mod path_matcher;
 pub mod prd;
 pub mod progress;
 pub mod prompt;

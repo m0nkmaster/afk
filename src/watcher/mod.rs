@@ -3,6 +3,7 @@
 //! This module uses the notify crate to watch for file changes
 //! during AI CLI execution for real-time feedback display.
 
+use crate::path_matcher::PathMatcher;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -32,27 +33,12 @@ pub struct FileChange {
     pub timestamp: SystemTime,
 }
 
-/// Default patterns to ignore when watching.
-pub const DEFAULT_IGNORE_PATTERNS: &[&str] = &[
-    ".git",
-    "__pycache__",
-    "node_modules",
-    ".venv",
-    ".afk",
-    "target",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "*.pyc",
-    "*.pyo",
-];
-
 /// File system watcher for detecting changes during AI CLI execution.
 pub struct FileWatcher {
     /// Root directory to watch.
     root: PathBuf,
-    /// Patterns to ignore.
-    ignore_patterns: Vec<String>,
+    /// Path matcher for ignore patterns.
+    matcher: PathMatcher,
     /// The actual watcher (wrapped in Option for stop/start).
     watcher: Option<RecommendedWatcher>,
     /// Receiver for events from the watcher.
@@ -68,10 +54,7 @@ impl FileWatcher {
     pub fn new(root: impl AsRef<Path>) -> Self {
         Self {
             root: root.as_ref().to_path_buf(),
-            ignore_patterns: DEFAULT_IGNORE_PATTERNS
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
+            matcher: PathMatcher::with_defaults(),
             watcher: None,
             receiver: None,
             changes: Arc::new(Mutex::new(VecDeque::new())),
@@ -83,7 +66,7 @@ impl FileWatcher {
     pub fn with_ignore_patterns(root: impl AsRef<Path>, patterns: Vec<String>) -> Self {
         Self {
             root: root.as_ref().to_path_buf(),
-            ignore_patterns: patterns,
+            matcher: PathMatcher::from_strings(patterns),
             watcher: None,
             receiver: None,
             changes: Arc::new(Mutex::new(VecDeque::new())),
@@ -93,28 +76,13 @@ impl FileWatcher {
 
     /// Add an ignore pattern.
     pub fn add_ignore_pattern(&mut self, pattern: &str) {
-        self.ignore_patterns.push(pattern.to_string());
+        self.matcher.add_pattern(pattern);
     }
 
-    /// Check if a path should be ignored (used in tests).
+    /// Check if a path should be ignored.
     #[cfg(test)]
     fn should_ignore(&self, path: &Path) -> bool {
-        let path_str = path.to_string_lossy();
-        for pattern in &self.ignore_patterns {
-            // Simple pattern matching
-            if let Some(suffix) = pattern.strip_prefix('*') {
-                // Extension pattern like *.pyc
-                if path_str.ends_with(suffix) {
-                    return true;
-                }
-            } else {
-                // Directory/path component match
-                if path_str.contains(pattern) {
-                    return true;
-                }
-            }
-        }
-        false
+        self.matcher.matches(path)
     }
 
     /// Start watching for file changes.
@@ -126,24 +94,14 @@ impl FileWatcher {
         // Use a bounded channel to prevent blocking when buffer is full
         let (tx, rx) = sync_channel(100);
         let changes = self.changes.clone();
-        let ignore_patterns = self.ignore_patterns.clone();
+        let matcher = self.matcher.clone();
 
         let mut watcher = RecommendedWatcher::new(
             move |result: Result<Event, notify::Error>| {
                 if let Ok(ref event) = result {
                     // Convert notify events to our FileChange format
                     for path in &event.paths {
-                        // Check if should ignore
-                        let path_str = path.to_string_lossy();
-                        let should_ignore = ignore_patterns.iter().any(|pattern| {
-                            if let Some(suffix) = pattern.strip_prefix('*') {
-                                path_str.ends_with(suffix)
-                            } else {
-                                path_str.contains(pattern)
-                            }
-                        });
-
-                        if should_ignore {
+                        if matcher.matches(path) {
                             continue;
                         }
 
@@ -251,27 +209,27 @@ mod tests {
     #[test]
     fn test_default_ignore_patterns() {
         let watcher = FileWatcher::new("/tmp");
-        assert!(watcher.ignore_patterns.contains(&".git".to_string()));
-        assert!(watcher
-            .ignore_patterns
-            .contains(&"node_modules".to_string()));
-        assert!(watcher.ignore_patterns.contains(&".afk".to_string()));
+        let patterns = watcher.matcher.patterns();
+        assert!(patterns.contains(&".git".to_string()));
+        assert!(patterns.contains(&"node_modules".to_string()));
+        assert!(patterns.contains(&".afk".to_string()));
     }
 
     #[test]
     fn test_with_custom_ignore_patterns() {
         let patterns = vec!["custom".to_string(), "pattern".to_string()];
         let watcher = FileWatcher::with_ignore_patterns("/tmp", patterns);
-        assert!(watcher.ignore_patterns.contains(&"custom".to_string()));
-        assert!(watcher.ignore_patterns.contains(&"pattern".to_string()));
-        assert!(!watcher.ignore_patterns.contains(&".git".to_string()));
+        let matcher_patterns = watcher.matcher.patterns();
+        assert!(matcher_patterns.contains(&"custom".to_string()));
+        assert!(matcher_patterns.contains(&"pattern".to_string()));
+        assert!(!matcher_patterns.contains(&".git".to_string()));
     }
 
     #[test]
     fn test_add_ignore_pattern() {
         let mut watcher = FileWatcher::new("/tmp");
         watcher.add_ignore_pattern("new_pattern");
-        assert!(watcher.ignore_patterns.contains(&"new_pattern".to_string()));
+        assert!(watcher.matcher.patterns().contains(&"new_pattern".to_string()));
     }
 
     #[test]
