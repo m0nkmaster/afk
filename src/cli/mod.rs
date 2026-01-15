@@ -8,6 +8,84 @@ pub mod output;
 pub mod update;
 
 use clap::{Args, Parser, Subcommand};
+use std::fmt;
+
+// ============================================================================
+// Exit codes and error types for testable command execution
+// ============================================================================
+
+/// Exit code for CLI commands.
+///
+/// Wraps a u8 exit code for returning from execute() methods instead of
+/// calling `std::process::exit()` directly. This improves testability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExitCode(pub u8);
+
+impl ExitCode {
+    /// Success exit code (0).
+    pub const SUCCESS: ExitCode = ExitCode(0);
+    /// Failure exit code (1).
+    pub const FAILURE: ExitCode = ExitCode(1);
+    /// User interrupt exit code (130 = 128 + SIGINT).
+    pub const INTERRUPT: ExitCode = ExitCode(130);
+}
+
+impl From<ExitCode> for std::process::ExitCode {
+    fn from(code: ExitCode) -> Self {
+        std::process::ExitCode::from(code.0)
+    }
+}
+
+/// Unified error type for CLI command execution.
+///
+/// Wraps command-specific errors and provides consistent error handling
+/// across all CLI commands.
+#[derive(Debug)]
+pub enum CliError {
+    /// General command error with message.
+    Command(String),
+    /// No task sources found (special case for `go` command).
+    NoSources,
+    /// Already initialised (special case for `init` command).
+    AlreadyInitialised,
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CliError::Command(msg) => write!(f, "{msg}"),
+            CliError::NoSources => write!(f, "No task sources found"),
+            CliError::AlreadyInitialised => write!(f, "Already initialised"),
+        }
+    }
+}
+
+impl std::error::Error for CliError {}
+
+/// Type alias for CLI command results.
+pub type CliResult = Result<ExitCode, CliError>;
+
+/// Handle a CLI result by printing errors and returning the appropriate exit code.
+///
+/// This centralises the error handling that was previously scattered across
+/// individual execute() methods.
+pub fn handle_result(result: CliResult) -> std::process::ExitCode {
+    match result {
+        Ok(code) => code.into(),
+        Err(CliError::NoSources) => {
+            commands::go::print_no_sources_help();
+            std::process::ExitCode::from(1)
+        }
+        Err(CliError::AlreadyInitialised) => {
+            eprintln!("\x1b[33mAlready initialised.\x1b[0m Use --force to reinitialise.");
+            std::process::ExitCode::from(0) // Not a failure, just informational
+        }
+        Err(CliError::Command(msg)) => {
+            eprintln!("\x1b[31mError:\x1b[0m {msg}");
+            std::process::ExitCode::from(1)
+        }
+    }
+}
 
 /// Autonomous AI coding loops - Ralph Wiggum style.
 ///
@@ -516,8 +594,8 @@ pub struct UseCommand {
 
 impl GoCommand {
     /// Execute the go command.
-    pub fn execute(&self) {
-        use commands::go::{print_no_sources_help, GoOptions};
+    pub fn execute(&self) -> CliResult {
+        use commands::go::GoOptions;
         use crate::runner::StopReason;
 
         let (iterations, source_path) = self.parse_args();
@@ -537,20 +615,14 @@ impl GoCommand {
         match commands::go::go(options) {
             Ok(outcome) => {
                 match outcome.stop_reason {
-                    StopReason::Complete => std::process::exit(0),
-                    StopReason::MaxIterations => std::process::exit(0),
-                    StopReason::UserInterrupt => std::process::exit(130),
-                    _ => std::process::exit(1),
+                    StopReason::Complete => Ok(ExitCode::SUCCESS),
+                    StopReason::MaxIterations => Ok(ExitCode::SUCCESS),
+                    StopReason::UserInterrupt => Ok(ExitCode::INTERRUPT),
+                    _ => Ok(ExitCode::FAILURE),
                 }
             }
-            Err(commands::go::GoCommandError::NoSources) => {
-                print_no_sources_help();
-                std::process::exit(1);
-            }
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+            Err(commands::go::GoCommandError::NoSources) => Err(CliError::NoSources),
+            Err(e) => Err(CliError::Command(e.to_string())),
         }
     }
 
@@ -571,7 +643,7 @@ impl GoCommand {
 
 impl InitCommand {
     /// Execute the init command.
-    pub fn execute(&self) {
+    pub fn execute(&self) -> CliResult {
         use commands::init::InitOptions;
 
         let options = InitOptions {
@@ -581,105 +653,94 @@ impl InitCommand {
         };
 
         match commands::init::init(options) {
-            Ok(()) => {}
+            Ok(()) => Ok(ExitCode::SUCCESS),
             Err(commands::init::InitCommandError::AlreadyInitialised) => {
-                eprintln!("\x1b[33mAlready initialised.\x1b[0m Use --force to reinitialise.");
+                Err(CliError::AlreadyInitialised)
             }
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+            Err(e) => Err(CliError::Command(e.to_string())),
         }
     }
 }
 
 impl StatusCommand {
     /// Execute the status command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::status::status(self.verbose) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::status::status(self.verbose)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl TaskCommand {
     /// Execute the task command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::task::task(&self.task_id) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::task::task(&self.task_id)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl SourceAddCommand {
     /// Execute the source add command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::source::source_add(&self.source_type, self.path.as_deref()) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::source::source_add(&self.source_type, self.path.as_deref())
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl SourceListCommand {
     /// Execute the source list command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::source::source_list() {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::source::source_list()
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl SourceRemoveCommand {
     /// Execute the source remove command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::source::source_remove(self.index) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::source::source_remove(self.index)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ImportCommand {
     /// Execute the import command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::import::import(
+    pub fn execute(&self) -> CliResult {
+        commands::import::import(
             &self.input_file,
             &self.output,
             self.copy,
             self.file,
             self.stdout,
-        ) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+        )
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl TasksSyncCommand {
     /// Execute the tasks sync command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::import::tasks_sync() {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::import::tasks_sync()
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 /// Execute the tasks command (list tasks).
-pub fn execute_tasks(pending: bool, complete: bool, limit: usize) {
-    if let Err(e) = commands::import::tasks_show(pending, complete, limit) {
-        eprintln!("\x1b[31mError:\x1b[0m {e}");
-        std::process::exit(1);
-    }
+pub fn execute_tasks(pending: bool, complete: bool, limit: usize) -> CliResult {
+    commands::import::tasks_show(pending, complete, limit)
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| CliError::Command(e.to_string()))
 }
 
 impl PromptCommand {
     /// Execute the prompt command.
-    pub fn execute(&self) {
+    pub fn execute(&self) -> CliResult {
         use commands::prompt::PromptOptions;
 
         let options = PromptOptions {
@@ -690,111 +751,99 @@ impl PromptCommand {
             limit: self.limit,
         };
 
-        if let Err(e) = commands::prompt::prompt(options) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+        commands::prompt::prompt(options)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl VerifyCommand {
     /// Execute the verify command.
-    pub fn execute(&self) {
+    pub fn execute(&self) -> CliResult {
         match commands::verify::verify(self.verbose) {
             Ok(outcome) => {
                 if outcome.all_passed {
-                    std::process::exit(0);
+                    Ok(ExitCode::SUCCESS)
                 } else {
-                    std::process::exit(1);
+                    Ok(ExitCode::FAILURE)
                 }
             }
-            Err(e) => {
-                eprintln!("\x1b[31mError:\x1b[0m {e}");
-                std::process::exit(1);
-            }
+            Err(e) => Err(CliError::Command(e.to_string())),
         }
     }
 }
 
 impl DoneCommand {
     /// Execute the done command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::progress_cmd::done(&self.task_id, self.message.clone()) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::progress_cmd::done(&self.task_id, self.message.clone())
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl FailCommand {
     /// Execute the fail command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::progress_cmd::fail(&self.task_id, self.message.clone()) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::progress_cmd::fail(&self.task_id, self.message.clone())
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ResetCommand {
     /// Execute the reset command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::progress_cmd::reset(&self.task_id) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::progress_cmd::reset(&self.task_id)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 /// Execute the archive command (archive and clear session).
-pub fn execute_archive_now(reason: &str, yes: bool) {
-    if let Err(e) = commands::archive::archive_now(reason, yes) {
-        eprintln!("\x1b[31mError:\x1b[0m {e}");
-        std::process::exit(1);
-    }
+pub fn execute_archive_now(reason: &str, yes: bool) -> CliResult {
+    commands::archive::archive_now(reason, yes)
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| CliError::Command(e.to_string()))
 }
 
 /// Execute the archive list command.
-pub fn execute_archive_list() {
-    if let Err(e) = commands::archive::archive_list() {
-        eprintln!("\x1b[31mError:\x1b[0m {e}");
-        std::process::exit(1);
-    }
+pub fn execute_archive_list() -> CliResult {
+    commands::archive::archive_list()
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| CliError::Command(e.to_string()))
 }
 
 impl ConfigShowCommand {
     /// Execute the config show command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::config::config_show(self.section.as_deref()) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::config::config_show(self.section.as_deref())
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ConfigGetCommand {
     /// Execute the config get command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::config::config_get(&self.key) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::config::config_get(&self.key)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ConfigSetCommand {
     /// Execute the config set command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::config::config_set(&self.key, &self.value) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::config::config_set(&self.key, &self.value)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ConfigResetCommand {
     /// Execute the config reset command.
-    pub fn execute(&self) {
+    pub fn execute(&self) -> CliResult {
         use std::io::{self, Write};
 
         // Confirm unless --yes (for resetting all)
@@ -807,75 +856,68 @@ impl ConfigResetCommand {
                 let input = input.trim().to_lowercase();
                 if input == "n" || input == "no" {
                     println!("Cancelled.");
-                    return;
+                    return Ok(ExitCode::SUCCESS);
                 }
             }
         }
 
-        if let Err(e) = commands::config::config_reset(self.key.as_deref()) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+        commands::config::config_reset(self.key.as_deref())
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ConfigEditCommand {
     /// Execute the config edit command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::config::config_edit() {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::config::config_edit()
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ConfigExplainCommand {
     /// Execute the config explain command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::config::config_explain(self.key.as_deref()) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::config::config_explain(self.key.as_deref())
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl ConfigKeysCommand {
     /// Execute the config keys command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::config::config_keys() {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::config::config_keys()
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl UpdateCommand {
     /// Execute the update command.
-    pub fn execute(&self) {
-        if let Err(e) = update::execute_update(self.beta, self.check) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        update::execute_update(self.beta, self.check)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl CompletionsCommand {
     /// Execute the completions command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::completions::completions(&self.shell) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::completions::completions(&self.shell)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 
 impl UseCommand {
     /// Execute the use command.
-    pub fn execute(&self) {
-        if let Err(e) = commands::use_cli::use_ai_cli(self.cli.as_deref(), self.list) {
-            eprintln!("\x1b[31mError:\x1b[0m {e}");
-            std::process::exit(1);
-        }
+    pub fn execute(&self) -> CliResult {
+        commands::use_cli::use_ai_cli(self.cli.as_deref(), self.list)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
     }
 }
 

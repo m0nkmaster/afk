@@ -3,14 +3,15 @@
 //! This is the main entry point for the afk CLI tool.
 
 use afk::cli::{
-    ArchiveCommands, Cli, Commands, ConfigCommands, SourceCommands, TasksCommands, TasksSyncCommand,
+    handle_result, ArchiveCommands, Cli, CliResult, Commands, ConfigCommands, ExitCode,
+    SourceCommands, TasksCommands, TasksSyncCommand,
 };
 use clap::Parser;
 
-fn main() {
+fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
 
-    match cli.command {
+    let result: CliResult = match cli.command {
         None => {
             // No subcommand provided - show help
             println!("afk - Autonomous AI coding loops, Ralph Wiggum style.");
@@ -21,6 +22,7 @@ fn main() {
             println!("  afk go                 # Auto-detect, run 10 iterations");
             println!("  afk go 20              # Run 20 iterations");
             println!("  afk go TODO.md 5       # Use TODO.md, run 5 iterations");
+            Ok(ExitCode::SUCCESS)
         }
         Some(cmd) => match cmd {
             Commands::Go(c) => c.execute(),
@@ -45,25 +47,19 @@ fn main() {
                 limit,
             } => match command {
                 Some(TasksCommands::Sync(c)) => c.execute(),
-                None => {
-                    afk::cli::execute_tasks(pending, complete, limit);
-                }
+                None => afk::cli::execute_tasks(pending, complete, limit),
             },
             Commands::Sync => {
                 // Alias for `afk tasks sync`
-                TasksSyncCommand {}.execute();
+                TasksSyncCommand {}.execute()
             }
             Commands::Archive {
                 command,
                 reason,
                 yes,
             } => match command {
-                Some(ArchiveCommands::List) => {
-                    afk::cli::execute_archive_list();
-                }
-                None => {
-                    afk::cli::execute_archive_now(&reason, yes);
-                }
+                Some(ArchiveCommands::List) => afk::cli::execute_archive_list(),
+                None => afk::cli::execute_archive_now(&reason, yes),
             },
             Commands::Config(subcmd) => match subcmd {
                 ConfigCommands::Show(c) => c.execute(),
@@ -78,5 +74,7 @@ fn main() {
             Commands::Completions(c) => c.execute(),
             Commands::Use(c) => c.execute(),
         },
-    }
+    };
+
+    handle_result(result)
 }
