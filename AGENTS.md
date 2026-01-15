@@ -207,6 +207,31 @@ When `.afk/tasks.json` exists with tasks and no sources are configured, `afk go`
 5. Add `mod newsource;` to `sources/mod.rs`
 6. Write tests inline with `#[cfg(test)] mod tests`
 
+## Releasing
+
+Releases are automated via GitHub Actions. **Do NOT manually create releases.**
+
+**Release workflow:**
+
+```bash
+# 1. Bump version in Cargo.toml
+# 2. Commit the version bump
+git add Cargo.toml Cargo.lock
+git commit -m "release: X.Y.Z"
+
+# 3. Push and create tag
+git push
+git tag vX.Y.Z
+git push origin vX.Y.Z
+
+# 4. WAIT for the workflow to complete (~6 minutes)
+gh run watch  # Watch the release workflow progress
+```
+
+The release workflow builds binaries for all platforms and attaches them to the release. If you create the release manually with `gh release create`, users will see "no binary for this platform" until the workflow finishes.
+
+**NEVER run `gh release create`** — let the workflow handle it.
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
