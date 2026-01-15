@@ -328,17 +328,6 @@ pub fn config_keys() -> ConfigCommandResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[allow(dead_code)]
-    fn setup_temp_config() -> (TempDir, std::path::PathBuf) {
-        let temp = TempDir::new().unwrap();
-        let afk_dir = temp.path().join(".afk");
-        fs::create_dir_all(&afk_dir).unwrap();
-        let config_path = afk_dir.join("config.json");
-        (temp, config_path)
-    }
 
     #[test]
     fn test_config_get_valid_key() {

@@ -87,7 +87,7 @@ fn run_bd_ready_json() -> Result<Vec<UserStory>, BeadsError> {
             if e.kind() == std::io::ErrorKind::NotFound {
                 BeadsError::NotInstalled
             } else {
-                BeadsError::CommandFailed(e.to_string())
+                BeadsError::CommandFailed
             }
         })?;
 
@@ -120,7 +120,7 @@ fn run_bd_list_json(statuses: &[&str]) -> Result<Vec<UserStory>, BeadsError> {
             if e.kind() == std::io::ErrorKind::NotFound {
                 BeadsError::NotInstalled
             } else {
-                BeadsError::CommandFailed(e.to_string())
+                BeadsError::CommandFailed
             }
         })?;
 
@@ -206,7 +206,7 @@ fn parse_beads_text_output() -> Result<Vec<UserStory>, BeadsError> {
         if e.kind() == std::io::ErrorKind::NotFound {
             BeadsError::NotInstalled
         } else {
-            BeadsError::CommandFailed(e.to_string())
+            BeadsError::CommandFailed
         }
     })?;
 
@@ -370,10 +370,9 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
 
 /// Internal error type for beads operations.
 #[derive(Debug)]
-#[allow(dead_code)]
 enum BeadsError {
     NotInstalled,
-    CommandFailed(String),
+    CommandFailed,
     NonZeroExit,
     InvalidJson,
 }

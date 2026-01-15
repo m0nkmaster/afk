@@ -151,52 +151,6 @@ pub fn get_repo_root() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::process::Command as StdCommand;
-    use tempfile::TempDir;
-
-    #[allow(dead_code)]
-    fn setup_test_repo() -> TempDir {
-        let temp = TempDir::new().unwrap();
-
-        // Initialize git repo
-        StdCommand::new("git")
-            .args(["init"])
-            .current_dir(temp.path())
-            .output()
-            .unwrap();
-
-        // Configure git user for commits
-        StdCommand::new("git")
-            .args(["config", "user.email", "test@test.com"])
-            .current_dir(temp.path())
-            .output()
-            .unwrap();
-
-        StdCommand::new("git")
-            .args(["config", "user.name", "Test User"])
-            .current_dir(temp.path())
-            .output()
-            .unwrap();
-
-        // Create initial commit
-        let readme = temp.path().join("README.md");
-        fs::write(&readme, "# Test Repo").unwrap();
-
-        StdCommand::new("git")
-            .args(["add", "-A"])
-            .current_dir(temp.path())
-            .output()
-            .unwrap();
-
-        StdCommand::new("git")
-            .args(["commit", "-m", "Initial commit"])
-            .current_dir(temp.path())
-            .output()
-            .unwrap();
-
-        temp
-    }
 
     #[test]
     fn test_is_git_repo_true() {
@@ -255,5 +209,4 @@ mod tests {
 
     // Note: Tests that modify git state (create_branch, commit, etc.)
     // would need a temporary test repository to avoid affecting the real repo.
-    // The setup_test_repo helper is provided for such tests.
 }

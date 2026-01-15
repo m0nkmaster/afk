@@ -20,10 +20,6 @@ pub struct LoopController {
     output: OutputHandler,
     iteration_runner: IterationRunner,
     interrupted: Arc<AtomicBool>,
-    #[allow(dead_code)]
-    feedback_mode: FeedbackMode,
-    #[allow(dead_code)]
-    show_mascot: bool,
 }
 
 impl LoopController {
@@ -53,8 +49,6 @@ impl LoopController {
             output,
             iteration_runner,
             interrupted: Arc::new(AtomicBool::new(false)),
-            feedback_mode,
-            show_mascot,
         }
     }
 
@@ -68,8 +62,6 @@ impl LoopController {
             output,
             iteration_runner,
             interrupted: Arc::new(AtomicBool::new(false)),
-            feedback_mode: FeedbackMode::None,
-            show_mascot: true,
         }
     }
 
@@ -987,15 +979,6 @@ fn run_iteration_with_tui(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use tempfile::TempDir;
-
-    #[allow(dead_code)]
-    fn setup_test_env(temp: &TempDir) -> std::path::PathBuf {
-        let afk_dir = temp.path().join(".afk");
-        fs::create_dir_all(&afk_dir).unwrap();
-        afk_dir
-    }
 
     #[test]
     fn test_loop_controller_new() {

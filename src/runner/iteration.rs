@@ -9,7 +9,7 @@ use std::sync::mpsc::Sender;
 
 use crate::config::AfkConfig;
 use crate::parser::{StreamEvent, StreamJsonParser};
-use crate::prompt::{generate_prompt_with_root, PromptError};
+use crate::prompt::generate_prompt_with_root;
 use crate::tui::TuiEvent;
 
 use super::output_handler::OutputHandler;
@@ -57,20 +57,6 @@ impl IterationResult {
             output,
         }
     }
-}
-
-/// Error type for iteration operations.
-#[derive(Debug, thiserror::Error)]
-#[allow(dead_code)]
-pub enum IterationError {
-    #[error("Failed to generate prompt: {0}")]
-    PromptError(#[from] PromptError),
-    #[error("Failed to spawn AI CLI: {0}")]
-    SpawnError(#[from] std::io::Error),
-    #[error("AI CLI not found: {0}")]
-    NotFound(String),
-    #[error("Iteration timed out")]
-    Timeout,
 }
 
 /// Handles spawning AI CLI and streaming output.

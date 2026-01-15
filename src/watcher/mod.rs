@@ -93,8 +93,8 @@ impl FileWatcher {
         self.ignore_patterns.push(pattern.to_string());
     }
 
-    /// Check if a path should be ignored.
-    #[allow(dead_code)]
+    /// Check if a path should be ignored (used in tests).
+    #[cfg(test)]
     fn should_ignore(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy();
         for pattern in &self.ignore_patterns {

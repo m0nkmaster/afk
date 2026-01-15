@@ -58,10 +58,6 @@ impl Default for QualityGateResult {
     }
 }
 
-/// Default timeout for gates in seconds (5 minutes).
-#[allow(dead_code)]
-const DEFAULT_GATE_TIMEOUT_SECS: u64 = 300;
-
 /// Run all configured quality gates.
 ///
 /// # Arguments

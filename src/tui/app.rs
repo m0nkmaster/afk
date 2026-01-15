@@ -52,26 +52,11 @@ pub struct TuiStats {
     pub files_modified_set: HashSet<String>,
     /// Unique files that were created (deduplicated).
     pub files_created_set: HashSet<String>,
-    #[allow(dead_code)]
-    pub lines_added: u32,
-    #[allow(dead_code)]
-    pub lines_removed: u32,
     pub errors: u32,
     pub warnings: u32,
 }
 
 impl TuiStats {
-    /// Get count of files changed (modified, excluding reads).
-    #[allow(dead_code)]
-    pub fn files_changed(&self) -> u32 {
-        self.files_modified_set.len() as u32
-    }
-
-    /// Get count of files created.
-    pub fn files_created(&self) -> u32 {
-        self.files_created_set.len() as u32
-    }
-
     /// Get total unique files (created + modified, deduplicated).
     pub fn total_files(&self) -> u32 {
         let mut all_files = self.files_created_set.clone();
@@ -183,11 +168,6 @@ impl TuiState {
     /// Get elapsed time in seconds.
     pub fn elapsed_secs(&self) -> f64 {
         self.start_time.elapsed().as_secs_f64()
-    }
-
-    /// Get iteration elapsed time in seconds.
-    pub fn iteration_elapsed_secs(&self) -> f64 {
-        self.iteration_start.elapsed().as_secs_f64()
     }
 }
 
