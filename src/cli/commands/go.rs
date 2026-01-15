@@ -143,7 +143,7 @@ pub fn go(options: GoOptions) -> GoCommandResult {
             );
         } else {
             // Try to infer sources
-            let inferred = infer_sources();
+            let inferred = bootstrap_infer_sources(None);
             if inferred.is_empty() {
                 return Err(GoCommandError::NoSources);
             }
@@ -212,34 +212,6 @@ pub fn go(options: GoOptions) -> GoCommandResult {
     })
 }
 
-/// Infer sources from the current directory.
-pub fn infer_sources() -> Vec<SourceConfig> {
-    let mut sources = Vec::new();
-
-    // Check for TODO.md or similar
-    for name in ["TODO.md", "TASKS.md", "tasks.md", "todo.md"] {
-        if Path::new(name).exists() {
-            sources.push(SourceConfig::markdown(name));
-            break;
-        }
-    }
-
-    // Check for beads (bd command)
-    if std::process::Command::new("bd")
-        .arg("--version")
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
-    {
-        // Only add if .beads directory exists
-        if Path::new(".beads").exists() {
-            sources.push(SourceConfig::beads());
-        }
-    }
-
-    sources
-}
-
 /// Print helpful message when no sources are found.
 pub fn print_no_sources_help() {
     eprintln!("\x1b[33mNo task sources found.\x1b[0m");
@@ -253,15 +225,6 @@ pub fn print_no_sources_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_infer_sources_empty_dir() {
-        // In an empty directory with no .beads or TODO.md, should return empty
-        // This test relies on the fact we're in a test environment
-        let sources = infer_sources();
-        // May or may not find sources depending on test environment
-        assert!(sources.len() <= 2);
-    }
 
     #[test]
     fn test_go_command_error_display() {
