@@ -723,17 +723,219 @@ fn run_loop_with_tui_sender(
     }
 }
 
+/// Build and spawn the AI CLI command.
+///
+/// Constructs the command with the prompt and output format arguments,
+/// then spawns it as a child process with piped stdout/stderr.
+///
+/// Returns the spawned child process or an error result if spawn fails.
+fn build_ai_command(
+    config: &AfkConfig,
+    prompt: &str,
+    tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+) -> Result<std::process::Child, super::iteration::IterationResult> {
+    use crate::tui::TuiEvent;
+    use std::process::{Command, Stdio};
+
+    let mut cmd_parts = vec![config.ai_cli.command.clone()];
+    cmd_parts.extend(config.ai_cli.full_args());
+
+    if cmd_parts.is_empty() {
+        return Err(super::iteration::IterationResult::failure(
+            "No command specified",
+        ));
+    }
+
+    let command = &cmd_parts[0];
+    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
+
+    let _ = tx.send(TuiEvent::OutputLine(format!(
+        "$ {} {}",
+        command,
+        args.join(" ")
+    )));
+
+    let mut cmd = Command::new(command);
+    cmd.args(&args)
+        .arg(prompt)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    match cmd.spawn() {
+        Ok(child) => Ok(child),
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Err(super::iteration::IterationResult::failure(format!(
+                    "AI CLI not found: {}",
+                    command
+                )))
+            } else {
+                Err(super::iteration::IterationResult::failure(format!(
+                    "Failed to spawn AI CLI: {e}"
+                )))
+            }
+        }
+    }
+}
+
+/// Handle a parsed stream event and send appropriate TUI updates.
+///
+/// Processes different event types (messages, tool calls, results) and
+/// sends corresponding TUI events. Returns true if a completion signal
+/// was detected in the event.
+fn handle_stream_event(
+    event: &crate::parser::StreamEvent,
+    tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+) -> bool {
+    use crate::parser::{StreamEvent, ToolType};
+    use crate::tui::TuiEvent;
+
+    // Check for completion signal only in assistant messages
+    if let StreamEvent::AssistantMessage { ref text } = event {
+        if text.contains("<promise>COMPLETE</promise>")
+            || text.contains("AFK_COMPLETE")
+            || text.contains("AFK_STOP")
+        {
+            let _ = tx.send(TuiEvent::OutputLine(
+                "✓ Completion signal detected".to_string(),
+            ));
+            return true;
+        }
+    }
+
+    match event {
+        StreamEvent::AssistantMessage { text } => {
+            // Truncate long messages for display
+            let display_text = if text.len() > 200 {
+                format!("{}...", &text[..197])
+            } else {
+                text.clone()
+            };
+            let _ = tx.send(TuiEvent::OutputLine(display_text));
+        }
+        StreamEvent::ToolStarted {
+            tool_name,
+            tool_type,
+            path,
+        } => {
+            let path_str = path
+                .as_ref()
+                .map(|p| format!(" {}", p))
+                .unwrap_or_default();
+            let _ = tx.send(TuiEvent::OutputLine(format!("→ {}{}", tool_type, path_str)));
+            let _ = tx.send(TuiEvent::ToolCall(tool_name.clone()));
+        }
+        StreamEvent::ToolCompleted {
+            tool_type,
+            path,
+            success,
+            lines,
+            ..
+        } => {
+            let status = if *success { "✓" } else { "✗" };
+            let lines_str = lines
+                .map(|l| format!(" ({} lines)", l))
+                .unwrap_or_default();
+            let path_str = path
+                .as_ref()
+                .map(|p| format!(" {}", p))
+                .unwrap_or_default();
+            let _ = tx.send(TuiEvent::OutputLine(format!(
+                "{} {}{}{}",
+                status, tool_type, path_str, lines_str
+            )));
+
+            // Emit file change event for file operations
+            if let Some(p) = path {
+                let change_type = match tool_type {
+                    ToolType::Read => "read",
+                    ToolType::Write => "created",
+                    ToolType::Edit => "modified",
+                    ToolType::Delete => "deleted",
+                    _ => "modified",
+                };
+                let _ = tx.send(TuiEvent::FileChange {
+                    path: p.clone(),
+                    change_type: change_type.to_string(),
+                });
+            }
+        }
+        StreamEvent::Result {
+            success,
+            duration_ms,
+            ..
+        } => {
+            let status = if *success {
+                "✓ Complete"
+            } else {
+                "✗ Failed"
+            };
+            let duration_str = duration_ms
+                .map(|ms| format!(" ({:.1}s)", ms as f64 / 1000.0))
+                .unwrap_or_default();
+            let _ = tx.send(TuiEvent::OutputLine(format!("{}{}", status, duration_str)));
+        }
+        StreamEvent::Error { message } => {
+            let _ = tx.send(TuiEvent::Error(message.clone()));
+        }
+        StreamEvent::SystemInit { model, .. } => {
+            if let Some(m) = model {
+                let _ = tx.send(TuiEvent::OutputLine(format!("◉ Model: {}", m)));
+            }
+        }
+        StreamEvent::UserMessage { .. } | StreamEvent::Unknown { .. } => {
+            // Skip these
+        }
+    }
+
+    false
+}
+
+/// Wait for the AI CLI child process to complete.
+///
+/// Returns a success result if the process exits cleanly, or a failure
+/// result with the exit code if it fails.
+fn wait_for_completion(
+    mut child: std::process::Child,
+    output: String,
+) -> super::iteration::IterationResult {
+    match child.wait() {
+        Ok(status) => {
+            if !status.success() {
+                let exit_code = status.code().unwrap_or(-1);
+                super::iteration::IterationResult::failure_with_output(
+                    format!("AI CLI exited with code {exit_code}"),
+                    output,
+                )
+            } else {
+                super::iteration::IterationResult::success(output)
+            }
+        }
+        Err(e) => super::iteration::IterationResult::failure_with_output(
+            format!("Failed to wait for AI CLI: {e}"),
+            output,
+        ),
+    }
+}
+
+/// Check if a line contains a completion signal.
+fn contains_completion_signal(line: &str) -> bool {
+    line.contains("<promise>COMPLETE</promise>")
+        || line.contains("AFK_COMPLETE")
+        || line.contains("AFK_STOP")
+}
+
 /// Run a single iteration with TUI output.
 fn run_iteration_with_tui(
     config: &AfkConfig,
     _iteration: u32,
     tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
 ) -> super::iteration::IterationResult {
-    use crate::parser::{StreamEvent, StreamJsonParser, ToolType};
+    use crate::parser::StreamJsonParser;
     use crate::prompt::generate_prompt_with_root;
     use crate::tui::TuiEvent;
     use std::io::{BufRead, BufReader};
-    use std::process::{Command, Stdio};
 
     // Generate prompt
     let prompt = match generate_prompt_with_root(config, true, None, None) {
@@ -763,44 +965,10 @@ fn run_iteration_with_tui(
         };
     }
 
-    // Build command with output format args
-    let mut cmd_parts = vec![config.ai_cli.command.clone()];
-    cmd_parts.extend(config.ai_cli.full_args());
-
-    if cmd_parts.is_empty() {
-        return super::iteration::IterationResult::failure("No command specified");
-    }
-
-    let command = &cmd_parts[0];
-    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
-
-    let _ = tx.send(TuiEvent::OutputLine(format!(
-        "$ {} {}",
-        command,
-        args.join(" ")
-    )));
-
-    // Build and spawn command
-    let mut cmd = Command::new(command);
-    cmd.args(&args)
-        .arg(&prompt)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    let mut child = match cmd.spawn() {
+    // Build and spawn the AI CLI command
+    let mut child = match build_ai_command(config, &prompt, &tx) {
         Ok(child) => child,
-        Err(e) => {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                return super::iteration::IterationResult::failure(format!(
-                    "AI CLI not found: {}",
-                    command
-                ));
-            }
-            return super::iteration::IterationResult::failure(format!(
-                "Failed to spawn AI CLI: {e}"
-            ));
-        }
+        Err(result) => return result,
     };
 
     // Create NDJSON parser if using stream-json format
@@ -823,122 +991,15 @@ fn run_iteration_with_tui(
                     if let Some(ref mut parser) = stream_parser {
                         // NDJSON mode: parse and emit events
                         if let Some(event) = parser.parse_line(&line) {
-                            // Check for completion signal only in assistant messages
-                            // (not in user messages which may contain the prompt with examples)
-                            if let StreamEvent::AssistantMessage { ref text } = event {
-                                if text.contains("<promise>COMPLETE</promise>")
-                                    || text.contains("AFK_COMPLETE")
-                                    || text.contains("AFK_STOP")
-                                {
-                                    completion_detected = true;
-                                    let _ = tx.send(TuiEvent::OutputLine(
-                                        "✓ Completion signal detected".to_string(),
-                                    ));
-                                    let _ = child.kill();
-                                    break;
-                                }
-                            }
-
-                            match &event {
-                                StreamEvent::AssistantMessage { text } => {
-                                    // Truncate long messages for display
-                                    let display_text = if text.len() > 200 {
-                                        format!("{}...", &text[..197])
-                                    } else {
-                                        text.clone()
-                                    };
-                                    let _ = tx.send(TuiEvent::OutputLine(display_text));
-                                }
-                                StreamEvent::ToolStarted {
-                                    tool_name,
-                                    tool_type,
-                                    path,
-                                } => {
-                                    let path_str = path
-                                        .as_ref()
-                                        .map(|p| format!(" {}", p))
-                                        .unwrap_or_default();
-                                    let _ = tx.send(TuiEvent::OutputLine(format!(
-                                        "→ {}{}",
-                                        tool_type, path_str
-                                    )));
-                                    let _ = tx.send(TuiEvent::ToolCall(tool_name.clone()));
-                                }
-                                StreamEvent::ToolCompleted {
-                                    tool_type,
-                                    path,
-                                    success,
-                                    lines,
-                                    ..
-                                } => {
-                                    let status = if *success { "✓" } else { "✗" };
-                                    let lines_str = lines
-                                        .map(|l| format!(" ({} lines)", l))
-                                        .unwrap_or_default();
-                                    let path_str = path
-                                        .as_ref()
-                                        .map(|p| format!(" {}", p))
-                                        .unwrap_or_default();
-                                    let _ = tx.send(TuiEvent::OutputLine(format!(
-                                        "{} {}{}{}",
-                                        status, tool_type, path_str, lines_str
-                                    )));
-
-                                    // Emit file change event for file operations
-                                    if let Some(p) = path {
-                                        let change_type = match tool_type {
-                                            ToolType::Read => "read",
-                                            ToolType::Write => "created",
-                                            ToolType::Edit => "modified",
-                                            ToolType::Delete => "deleted",
-                                            _ => "modified",
-                                        };
-                                        let _ = tx.send(TuiEvent::FileChange {
-                                            path: p.clone(),
-                                            change_type: change_type.to_string(),
-                                        });
-                                    }
-                                }
-                                StreamEvent::Result {
-                                    success,
-                                    duration_ms,
-                                    ..
-                                } => {
-                                    let status = if *success {
-                                        "✓ Complete"
-                                    } else {
-                                        "✗ Failed"
-                                    };
-                                    let duration_str = duration_ms
-                                        .map(|ms| format!(" ({:.1}s)", ms as f64 / 1000.0))
-                                        .unwrap_or_default();
-                                    let _ = tx.send(TuiEvent::OutputLine(format!(
-                                        "{}{}",
-                                        status, duration_str
-                                    )));
-                                }
-                                StreamEvent::Error { message } => {
-                                    let _ = tx.send(TuiEvent::Error(message.clone()));
-                                }
-                                StreamEvent::SystemInit { model, .. } => {
-                                    if let Some(m) = model {
-                                        let _ = tx
-                                            .send(TuiEvent::OutputLine(format!("◉ Model: {}", m)));
-                                    }
-                                }
-                                StreamEvent::UserMessage { .. } | StreamEvent::Unknown { .. } => {
-                                    // Skip these
-                                }
+                            if handle_stream_event(&event, &tx) {
+                                completion_detected = true;
+                                let _ = child.kill();
+                                break;
                             }
                         } else {
                             // Parsing failed - fall back to raw line display
-                            // (CLI may not support stream-json)
-                            // Check raw line for completion signals in fallback mode
                             let _ = tx.send(TuiEvent::OutputLine(line.clone()));
-                            if line.contains("<promise>COMPLETE</promise>")
-                                || line.contains("AFK_COMPLETE")
-                                || line.contains("AFK_STOP")
-                            {
+                            if contains_completion_signal(&line) {
                                 completion_detected = true;
                                 let _ = tx.send(TuiEvent::OutputLine(
                                     "✓ Completion signal detected".to_string(),
@@ -957,10 +1018,7 @@ fn run_iteration_with_tui(
                         }
 
                         // Check for completion signal in plain text mode
-                        if line.contains("<promise>COMPLETE</promise>")
-                            || line.contains("AFK_COMPLETE")
-                            || line.contains("AFK_STOP")
-                        {
+                        if contains_completion_signal(&line) {
                             completion_detected = true;
                             let _ = tx.send(TuiEvent::OutputLine(
                                 "✓ Completion signal detected".to_string(),
@@ -986,23 +1044,7 @@ fn run_iteration_with_tui(
         return super::iteration::IterationResult::success(output);
     }
 
-    // Wait for process
-    match child.wait() {
-        Ok(status) => {
-            if !status.success() {
-                let exit_code = status.code().unwrap_or(-1);
-                return super::iteration::IterationResult::failure_with_output(
-                    format!("AI CLI exited with code {exit_code}"),
-                    output,
-                );
-            }
-            super::iteration::IterationResult::success(output)
-        }
-        Err(e) => super::iteration::IterationResult::failure_with_output(
-            format!("Failed to wait for AI CLI: {e}"),
-            output,
-        ),
-    }
+    wait_for_completion(child, output)
 }
 
 /// Sync completed tasks back to their sources.

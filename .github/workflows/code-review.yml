@@ -1,0 +1,260 @@
+name: AI Code Review
+
+# Trigger manually on demand
+on:
+  workflow_dispatch:
+
+env:
+  CODE_REVIEW_BRANCH: code/ai-review-${{ github.sha }}
+
+jobs:
+  review-code:
+    name: Rust Expert Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for existing code review PR
+        id: check-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list --state open --label "code-quality" --label "ai-review" --json number --jq '.[0].number // empty')
+          if [[ -n "$existing" ]]; then
+            echo "Existing code review PR found: #$existing"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Cursor agent CLI
+        if: steps.check-pr.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+          agent --version
+
+      - name: Create review branch
+        if: steps.check-pr.outputs.skip != 'true'
+        run: |
+          git checkout -b "$CODE_REVIEW_BRANCH"
+
+      - name: Run Rust expert review
+        if: steps.check-pr.outputs.skip != 'true'
+        id: review
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          if [[ -z "$CURSOR_API_KEY" ]]; then
+            echo "::warning::CURSOR_API_KEY not set. Skipping AI code review."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Run the Cursor agent with the review prompt
+          agent -p --force << 'PROMPT_EOF'
+          You are a principal Rust engineer. Massively respected. Opinionated. Direct. You do not make suggestions — you make changes.
+          
+          Review the entire src/ directory with a critical eye. This is your codebase now.
+          
+          ## Your standards
+          
+          **Idiomatic Rust**
+          - Prefer iterators over manual loops where cleaner
+          - Use pattern matching idiomatically
+          - Leverage the type system — if it can be a compile-time guarantee, it should be
+          - Enums over stringly-typed code
+          - Derive what can be derived
+          
+          **Error handling**
+          - Proper use of Result and Option
+          - The ? operator used consistently
+          - Error types that are meaningful, not stringly-typed
+          - No unwrap() or expect() without justification in production paths
+          
+          **Performance**
+          - Unnecessary allocations (String when &str would do, Vec when slice suffices)
+          - Clone where borrow would work
+          - Iterator chains that could be simplified
+          - Allocation in hot paths
+          
+          **API design**
+          - Public interfaces that are intuitive
+          - Functions that take ownership only when needed
+          - Builder patterns where appropriate
+          - Consistent naming (Rust conventions, not Java conventions)
+          
+          **Code hygiene**
+          - Dead code, unused imports, unused variables
+          - Overly complex functions that should be split
+          - Missing documentation on public items
+          - Inconsistent formatting or style
+          
+          **Safety**
+          - Any unsafe code must be justified and minimal
+          - Panic paths in library code
+          - Potential overflow or underflow
+          
+          ## Guidelines
+          
+          - **Be bold** — make the changes you believe in
+          - **Be concise** — no verbose refactors for marginal gains
+          - **Be principled** — every change should have a clear "why"
+          - **British English** — this project uses UK spelling in comments
+          - **Run cargo fmt** after making changes
+          
+          If the code is already excellent, make no changes. But that's rare.
+          
+          Do NOT commit any changes — just edit the files directly.
+          
+          ## IMPORTANT: Write your rationale
+          
+          After making changes, create a file at `/tmp/review-rationale.md` with a detailed explanation of what you changed and why. This will be included in the PR to teach the team.
+          
+          Structure it as:
+          
+          ```markdown
+          ## Summary
+          
+          One paragraph overview of what you found and your overall assessment.
+          
+          ## Changes
+          
+          For each significant change, explain:
+          
+          ### [Brief title of change]
+          
+          **What**: What you changed
+          **Why**: Why this matters — the principle behind it
+          **Learn**: What the team should take away for future code
+          
+          [Include a brief code snippet showing before/after if helpful]
+          ```
+          
+          Be opinionated. Be direct. Teach. If you changed it, you had a reason — share that reason.
+          PROMPT_EOF
+          
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Format code
+        if: steps.check-pr.outputs.skip != 'true' && steps.review.outputs.skip != 'true'
+        run: |
+          rustup update stable
+          cargo fmt
+
+      - name: Check for changes
+        if: steps.check-pr.outputs.skip != 'true' && steps.review.outputs.skip != 'true'
+        id: changes
+        run: |
+          if git diff --quiet; then
+            echo "No code changes made"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Code changes detected"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            
+            # Get summary of changes
+            changed_files=$(git diff --name-only | tr '\n' ', ' | sed 's/,$//')
+            echo "changed_files=$changed_files" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-pr.outputs.skip != 'true' && steps.review.outputs.skip != 'true' && steps.changes.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGED_FILES: ${{ steps.changes.outputs.changed_files }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Build a descriptive title from changed files
+          file_count=$(echo "${CHANGED_FILES}" | tr ',' '\n' | wc -l | tr -d ' ')
+          if [[ $file_count -eq 1 ]]; then
+            pr_title="refactor: improve ${CHANGED_FILES}"
+          else
+            first_file=$(echo "${CHANGED_FILES}" | cut -d',' -f1)
+            pr_title="refactor: improve ${first_file} and $((file_count - 1)) other file(s)"
+          fi
+          
+          git add -A
+          git commit -m "${pr_title}"
+          git push origin "$CODE_REVIEW_BRANCH"
+          
+          # Build file list for PR body
+          file_list=$(echo "${CHANGED_FILES}" | tr ',' '\n' | sed 's/^/- /')
+          
+          {
+            echo "## Rust Expert Code Review"
+            echo ""
+            echo "Automated review by an opinionated principal Rust engineer. These changes represent what the code *should* look like — with explanations to help the team learn."
+            echo ""
+            
+            # Include the expert's rationale if it exists
+            if [[ -f /tmp/review-rationale.md ]]; then
+              echo "---"
+              echo ""
+              cat /tmp/review-rationale.md
+              echo ""
+            fi
+            
+            echo "---"
+            echo ""
+            echo "### Files changed"
+            echo ""
+            echo "${file_list}"
+            echo ""
+            echo "### Before merging"
+            echo ""
+            echo "- [ ] Changes compile (\`cargo build\`)"
+            echo "- [ ] Tests pass (\`cargo test -- --test-threads=1\`)"
+            echo "- [ ] Clippy is happy (\`cargo clippy\`)"
+            echo "- [ ] You understand *why* each change was made"
+            echo ""
+            echo "---"
+            echo ""
+            echo "<sub>Triggered manually from [\`${COMMIT_SHA:0:7}\`](https://github.com/${{ github.repository }}/commit/${COMMIT_SHA}) · [Workflow](.github/workflows/code-review.yml)</sub>"
+          } > /tmp/pr-body.md
+          
+          # Create PR
+          gh pr create \
+            --title "${pr_title}" \
+            --body-file /tmp/pr-body.md \
+            --head "$CODE_REVIEW_BRANCH" \
+            --base main
+          
+          # Try to add labels (ignore failures if labels don't exist)
+          gh pr edit --add-label "code-quality" || true
+          gh pr edit --add-label "ai-review" || true
+          
+          echo "Pull request created successfully"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Rust Expert Review Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ steps.check-pr.outputs.skip }}" == "true" ]]; then
+            echo "Skipped: Existing code review PR is still open." >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ steps.review.outputs.skip }}" == "true" ]]; then
+            echo "Skipped: CURSOR_API_KEY not configured." >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ steps.changes.outputs.has_changes }}" == "true" ]]; then
+            echo "Created PR with code improvements and detailed rationale." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Files changed: ${{ steps.changes.outputs.changed_files }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            if [[ -f /tmp/review-rationale.md ]]; then
+              echo "### Expert's rationale" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              cat /tmp/review-rationale.md >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "No code changes needed. The code is already excellent." >> $GITHUB_STEP_SUMMARY
+          fi
