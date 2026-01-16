@@ -165,8 +165,6 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk use --list` | List available AI CLIs with install status |
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
-
-**Tip:** When you switch git branches, `afk go` detects the change and prompts to archive the previous session automatically.
 | `afk config show` | Show all config values |
 | `afk config get <key>` | Get a specific config value |
 | `afk config set <key> <value>` | Set a config value |
