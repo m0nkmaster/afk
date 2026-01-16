@@ -33,7 +33,7 @@ This means the AI never runs out of context, never gets confused by old attempts
 ### Learn More
 
 - 📰 [The Ralph Wiggum Technique](https://ghuntley.com/ralph/) by Geoffrey Huntley (the originator)
-- 🔧 [snarktank/ralph](https://github.com/snarktank/ralph) by Ryan Carson (early implementation)
+- 🔧 [snarktank/ralph](https://github.com/snarktank/ralph) by Ryan Carson (inspiration)
 - 📚 [Effective harnesses for long-running agents](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents) by Anthropic
 
 ## 🚀 Quick Start
