@@ -42,14 +42,7 @@ use crate::prd::UserStory;
 /// let tasks = aggregate_tasks(&sources);
 /// ```
 pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
-    let mut all_tasks: Vec<UserStory> = Vec::new();
-
-    for source in sources {
-        let tasks = load_from_source(source);
-        all_tasks.extend(tasks);
-    }
-
-    all_tasks
+    sources.iter().flat_map(load_from_source).collect()
 }
 
 /// Load tasks from a single source.

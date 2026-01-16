@@ -384,12 +384,16 @@ impl SessionProgress {
     /// Returns (pending, in_progress, completed, failed, skipped).
     #[must_use]
     pub fn get_task_counts(&self) -> (usize, usize, usize, usize, usize) {
-        let pending = self.get_pending_tasks().len();
-        let in_progress = self.get_in_progress_tasks().len();
-        let completed = self.get_completed_tasks().len();
-        let failed = self.get_failed_tasks().len();
-        let skipped = self.get_skipped_tasks().len();
-        (pending, in_progress, completed, failed, skipped)
+        self.tasks.values().fold(
+            (0, 0, 0, 0, 0),
+            |(pending, in_progress, completed, failed, skipped), task| match task.status {
+                TaskStatus::Pending => (pending + 1, in_progress, completed, failed, skipped),
+                TaskStatus::InProgress => (pending, in_progress + 1, completed, failed, skipped),
+                TaskStatus::Completed => (pending, in_progress, completed + 1, failed, skipped),
+                TaskStatus::Failed => (pending, in_progress, completed, failed + 1, skipped),
+                TaskStatus::Skipped => (pending, in_progress, completed, failed, skipped + 1),
+            },
+        )
     }
 }
 
