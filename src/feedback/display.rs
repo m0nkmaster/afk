@@ -3,12 +3,14 @@
 //! This module provides panel-based terminal displays for showing progress,
 //! activity metrics, and status information during autonomous loops.
 //!
-//! For simple inline spinners, see the [`super::spinner`] module.
+//! For simple inline spinners, see the `spinner` module.
+//! For celebration displays, see the `celebration` module.
 
 use std::io::{self, Write};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use super::art::{get_mascot, get_spinner_frame};
+use super::celebration::visible_len;
 use super::metrics::{ActivityState, IterationMetrics};
 
 /// Display mode for feedback.
@@ -282,8 +284,8 @@ impl FeedbackDisplay {
         }
 
         // Pad to panel width
-        let header_visible_len = self.visible_len(&header);
-        let padding = 77_usize.saturating_sub(header_visible_len);
+        let header_len = visible_len(&header);
+        let padding = 77_usize.saturating_sub(header_len);
         header.push_str(&" ".repeat(padding));
         header.push_str("\x1b[36m│\x1b[0m");
         lines.push(header);
@@ -461,28 +463,9 @@ impl FeedbackDisplay {
 
     /// Pad a line to the panel width.
     fn pad_line(&self, line: &str) -> String {
-        let visible_len = self.visible_len(line);
-        let padding = 77_usize.saturating_sub(visible_len);
+        let line_len = visible_len(line);
+        let padding = 77_usize.saturating_sub(line_len);
         format!("{}{}\x1b[36m│\x1b[0m", line, " ".repeat(padding))
-    }
-
-    /// Calculate visible length (excluding ANSI escape codes).
-    fn visible_len(&self, s: &str) -> usize {
-        // Strip ANSI escape codes
-        let mut len = 0;
-        let mut in_escape = false;
-        for c in s.chars() {
-            if c == '\x1b' {
-                in_escape = true;
-            } else if in_escape {
-                if c == 'm' {
-                    in_escape = false;
-                }
-            } else {
-                len += 1;
-            }
-        }
-        len
     }
 
     /// Truncate a file path to fit within max_length.
@@ -516,87 +499,22 @@ impl FeedbackDisplay {
     }
 
     // =========================================================================
-    // Celebration and feedback methods
+    // Celebration and feedback methods (delegated to celebration module)
     // =========================================================================
 
     /// Display visual feedback when quality gates fail.
     pub fn show_gates_failed(&self, failed_gates: &[String], continuing: bool) {
-        let mut msg = String::new();
-        msg.push_str("\x1b[33;1m⚠\x1b[0m ");
-        msg.push_str("\x1b[31;1mQuality gates failed:\x1b[0m ");
-        msg.push_str(&format!("\x1b[31m{}\x1b[0m", failed_gates.join(", ")));
-
-        if continuing {
-            msg.push_str(" \x1b[2m│\x1b[0m ");
-            msg.push_str("\x1b[33mContinuing...\x1b[0m");
-        }
-
-        println!("{}", msg);
+        super::celebration::show_gates_failed(failed_gates, continuing);
     }
 
     /// Display visual feedback when quality gates pass.
     pub fn show_gates_passed(&self, gates: &[String]) {
-        for gate in gates {
-            println!(
-                "  \x1b[32;1m✓\x1b[0m \x1b[32m{}\x1b[0m \x1b[2mpassed\x1b[0m",
-                gate
-            );
-            std::thread::sleep(Duration::from_millis(100));
-        }
+        super::celebration::show_gates_passed(gates);
     }
 
     /// Display a celebration when a task is completed.
     pub fn show_celebration(&self, task_id: &str) {
-        let celebration_art = get_mascot("celebration");
-
-        println!();
-        println!(
-            "\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
-        );
-        println!(
-            "\x1b[32m│\x1b[0m                          \x1b[32;1m🎉 Celebration 🎉\x1b[0m                               \x1b[32m│\x1b[0m"
-        );
-        println!(
-            "\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
-        );
-        println!(
-            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
-            "★ ".repeat(16),
-            " ".repeat(45 - 32)
-        );
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-
-        for line in celebration_art.lines() {
-            let padded = format!("\x1b[32m│\x1b[0m  \x1b[32;1m{}\x1b[0m", line);
-            let visible_len = self.visible_len(&padded);
-            let padding = 77_usize.saturating_sub(visible_len);
-            println!("{}{}\x1b[32m│\x1b[0m", padded, " ".repeat(padding));
-        }
-
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        let msg = format!(
-            "  \x1b[32;1m✓ Task Complete!\x1b[0m \x1b[36;1m{}\x1b[0m",
-            task_id
-        );
-        let msg_len = self.visible_len(&msg);
-        let msg_padding = 77_usize.saturating_sub(msg_len);
-        println!(
-            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
-            msg,
-            " ".repeat(msg_padding)
-        );
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        println!(
-            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
-            "★ ".repeat(16),
-            " ".repeat(45 - 32)
-        );
-        println!(
-            "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
-        );
-        println!();
-
-        std::thread::sleep(Duration::from_millis(500));
+        super::celebration::show_celebration(task_id);
     }
 
     /// Display a full celebration when the session is complete.
@@ -606,88 +524,7 @@ impl FeedbackDisplay {
         iterations: u32,
         duration_seconds: f64,
     ) {
-        let celebration_art = get_mascot("celebration");
-        let total_seconds = duration_seconds as u64;
-        let minutes = total_seconds / 60;
-        let seconds = total_seconds % 60;
-        let duration_str = format!("{}m {}s", minutes, seconds);
-
-        println!();
-        println!(
-            "\x1b[32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m"
-        );
-        println!(
-            "\x1b[32m│\x1b[0m                        \x1b[32;1m🎉 Session Complete 🎉\x1b[0m                             \x1b[32m│\x1b[0m"
-        );
-        println!(
-            "\x1b[32m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m"
-        );
-        println!(
-            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
-            "★ ".repeat(20),
-            " ".repeat(77 - 42)
-        );
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-
-        for line in celebration_art.lines() {
-            let padded = format!("\x1b[32m│\x1b[0m  \x1b[32;1m{}\x1b[0m", line);
-            let visible_len = self.visible_len(&padded);
-            let padding = 77_usize.saturating_sub(visible_len);
-            println!("{}{}\x1b[32m│\x1b[0m", padded, " ".repeat(padding));
-        }
-
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        println!(
-            "\x1b[32m│\x1b[0m  \x1b[32;1m✓ All Tasks Complete!\x1b[0m{}\x1b[32m│\x1b[0m",
-            " ".repeat(77 - 24)
-        );
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-
-        let stats1 = format!(
-            "  \x1b[2mTasks completed:\x1b[0m \x1b[36;1m{}\x1b[0m",
-            tasks_completed
-        );
-        let stats1_len = self.visible_len(&stats1);
-        println!(
-            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
-            stats1,
-            " ".repeat(77 - stats1_len)
-        );
-
-        let stats2 = format!(
-            "  \x1b[2mIterations:\x1b[0m \x1b[36;1m{}\x1b[0m",
-            iterations
-        );
-        let stats2_len = self.visible_len(&stats2);
-        println!(
-            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
-            stats2,
-            " ".repeat(77 - stats2_len)
-        );
-
-        let stats3 = format!(
-            "  \x1b[2mTotal time:\x1b[0m \x1b[36;1m{}\x1b[0m",
-            duration_str
-        );
-        let stats3_len = self.visible_len(&stats3);
-        println!(
-            "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
-            stats3,
-            " ".repeat(77 - stats3_len)
-        );
-
-        println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
-        println!(
-            "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
-            "★ ".repeat(20),
-            " ".repeat(77 - 42)
-        );
-        println!(
-            "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"
-        );
-        println!();
-
-        std::thread::sleep(Duration::from_millis(500));
+        super::celebration::show_session_complete(tasks_completed, iterations, duration_seconds);
     }
 }
 
@@ -754,18 +591,6 @@ mod tests {
         let display = FeedbackDisplay::new();
         // No start time
         assert_eq!(display.format_elapsed_time(), "");
-    }
-
-    #[test]
-    fn test_visible_len() {
-        let display = FeedbackDisplay::new();
-
-        // Plain text
-        assert_eq!(display.visible_len("hello"), 5);
-
-        // With ANSI codes
-        assert_eq!(display.visible_len("\x1b[31mred\x1b[0m"), 3);
-        assert_eq!(display.visible_len("\x1b[1;32mbold green\x1b[0m"), 10);
     }
 
     #[test]
