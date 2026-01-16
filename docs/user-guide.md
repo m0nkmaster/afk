@@ -292,7 +292,7 @@ All config lives in `.afk/config.json`:
 
 ```json
 {
-  "projectName": "my-project",
+  "project": "my-project",
   "userStories": [
     {
       "id": "auth-flow",
