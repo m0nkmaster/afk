@@ -1,0 +1,88 @@
+name: Documentation Validation
+
+# Trigger on push to main when docs or code changes
+# (code changes might invalidate documentation)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'scripts/validate-*.sh'
+      - '.lychee.toml'
+      - '.github/workflows/docs-review.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'CONTRIBUTING.md'
+      - 'scripts/validate-*.sh'
+      - '.lychee.toml'
+      - '.github/workflows/docs-review.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  link-check:
+    name: Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --config .lychee.toml
+            README.md
+            AGENTS.md
+            CONTRIBUTING.md
+            docs/**/*.md
+          fail: true
+
+  validate-examples:
+    name: Validate Code Examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Validate code examples
+        run: ./scripts/validate-examples.sh
+
+  validate-structure:
+    name: Validate Structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate AGENTS.md structure
+        run: ./scripts/validate-structure.sh
+
+  docs-success:
+    name: Docs Validation Success
+    needs: [link-check, validate-examples, validate-structure]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.link-check.result }}" != "success" || 
+                "${{ needs.validate-examples.result }}" != "success" || 
+                "${{ needs.validate-structure.result }}" != "success" ]]; then
+            echo "Some documentation validation jobs failed"
+            exit 1
+          fi
+          echo "All documentation validation jobs passed!"
