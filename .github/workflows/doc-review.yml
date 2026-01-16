@@ -72,6 +72,8 @@ jobs:
           
           - README.md
           - AGENTS.md  
+          - ROADMAP.md
+          - BUGS.md
           - CONTRIBUTING.md
           - docs/*.md
           
