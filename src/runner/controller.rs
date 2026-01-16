@@ -819,10 +819,7 @@ fn handle_stream_event(
             tool_type,
             path,
         } => {
-            let path_str = path
-                .as_ref()
-                .map(|p| format!(" {}", p))
-                .unwrap_or_default();
+            let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
             let _ = tx.send(TuiEvent::OutputLine(format!("→ {}{}", tool_type, path_str)));
             let _ = tx.send(TuiEvent::ToolCall(tool_name.clone()));
         }
@@ -834,13 +831,8 @@ fn handle_stream_event(
             ..
         } => {
             let status = if *success { "✓" } else { "✗" };
-            let lines_str = lines
-                .map(|l| format!(" ({} lines)", l))
-                .unwrap_or_default();
-            let path_str = path
-                .as_ref()
-                .map(|p| format!(" {}", p))
-                .unwrap_or_default();
+            let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
+            let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
             let _ = tx.send(TuiEvent::OutputLine(format!(
                 "{} {}{}{}",
                 status, tool_type, path_str, lines_str
@@ -1076,8 +1068,7 @@ fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
         // Sync completion back to the appropriate source
         if story.source == "beads" {
             crate::sources::close_beads_issue(&story.id);
-        } else if let Some(issue_number) =
-            crate::sources::parse_github_issue_number(&story.source)
+        } else if let Some(issue_number) = crate::sources::parse_github_issue_number(&story.source)
         {
             // Close GitHub issue (uses current repo context)
             crate::sources::close_github_issue(issue_number, None);

@@ -90,10 +90,7 @@ fn source_add_impl(
                     // Try to infer from git remote origin
                     match get_github_remote() {
                         Some(inferred) => {
-                            println!(
-                                "\x1b[2mInferred repo from git remote:\x1b[0m {}",
-                                inferred
-                            );
+                            println!("\x1b[2mInferred repo from git remote:\x1b[0m {}", inferred);
                             inferred
                         }
                         None => String::new(),

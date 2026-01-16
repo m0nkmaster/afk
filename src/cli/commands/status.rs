@@ -86,8 +86,7 @@ pub fn status(verbose: bool) -> StatusCommandResult {
 
     // Calculate task counts from PRD with session status overlays
     // This ensures counts are consistent with the Tasks section
-    let (pend, in_prog, comp, fail, skip) =
-        calculate_merged_task_counts(&prd, &progress);
+    let (pend, in_prog, comp, fail, skip) = calculate_merged_task_counts(&prd, &progress);
     if pend + in_prog + comp + fail + skip > 0 {
         println!(
             "  Tasks: {} pending, {} in-progress, {} complete, {} failed, {} skipped",

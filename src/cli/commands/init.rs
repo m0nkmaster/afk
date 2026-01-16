@@ -220,6 +220,9 @@ mod tests {
         std::env::set_current_dir(original_dir).unwrap();
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), InitCommandError::InsideAfkFolder));
+        assert!(matches!(
+            result.unwrap_err(),
+            InitCommandError::InsideAfkFolder
+        ));
     }
 }

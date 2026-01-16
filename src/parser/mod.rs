@@ -154,8 +154,9 @@ static CURSOR_FILE_DELETED: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^Deleted\s+(.+)$").expect("CURSOR_FILE_DELETED regex is valid"));
 
 // Aider patterns
-static AIDER_APPLIED_EDIT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Applied edit to (.+)").expect("AIDER_APPLIED_EDIT regex is valid"));
+static AIDER_APPLIED_EDIT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Applied edit to (.+)").expect("AIDER_APPLIED_EDIT regex is valid")
+});
 static AIDER_WROTE_FILE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^Wrote\s+(.+)$").expect("AIDER_WROTE_FILE regex is valid"));
 static AIDER_ADDED_TO_CHAT: LazyLock<Regex> = LazyLock::new(|| {
