@@ -141,7 +141,7 @@ cargo install --git https://github.com/m0nkmaster/afk
 |---------|-------------|
 | `afk import <file>` | Import requirements doc into .afk/tasks.json |
 | `afk sync` | Sync from configured sources (alias: `afk tasks sync`) |
-| `afk source add beads` | Add beads as task source |
+| `afk source add beads` | Add [beads](https://github.com/steveyegge/beads) as task source |
 | `afk source add markdown TODO.md` | Add markdown file source |
 | `afk source add github` | Add GitHub issues (current repo) |
 | `afk source add github owner/repo` | Add GitHub issues from specific repo |
