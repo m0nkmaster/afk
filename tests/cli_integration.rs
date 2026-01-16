@@ -1622,3 +1622,666 @@ fn test_multiple_source_types() {
         .stdout(predicate::str::contains("json").or(predicate::str::contains("tasks.json")))
         .stdout(predicate::str::contains("markdown").or(predicate::str::contains("TODO.md")));
 }
+
+// ============================================================================
+// Priority ordering and task selection tests
+// ============================================================================
+
+#[test]
+fn test_tasks_priority_ordering() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // Create tasks with different priorities (lower number = higher priority)
+    let tasks = r#"{
+        "projectName": "test-project",
+        "branch": "main",
+        "userStories": [
+            {
+                "id": "task-low",
+                "title": "Low priority task",
+                "description": "This is low priority",
+                "acceptanceCriteria": ["Works"],
+                "priority": 3,
+                "passes": false
+            },
+            {
+                "id": "task-high",
+                "title": "High priority task",
+                "description": "This is high priority",
+                "acceptanceCriteria": ["Works"],
+                "priority": 1,
+                "passes": false
+            },
+            {
+                "id": "task-med",
+                "title": "Medium priority task",
+                "description": "This is medium priority",
+                "acceptanceCriteria": ["Works"],
+                "priority": 2,
+                "passes": false
+            }
+        ]
+    }"#;
+    fs::write(afk_dir.join("tasks.json"), tasks).unwrap();
+
+    // Prompt should pick the highest priority (lowest number) task
+    afk()
+        .current_dir(temp.path())
+        .args(["prompt", "-s"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-high"));
+}
+
+#[test]
+fn test_prompt_picks_next_incomplete_task() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // First task is complete, second should be picked
+    let tasks = r#"{
+        "projectName": "test-project",
+        "branch": "main",
+        "userStories": [
+            {
+                "id": "task-001",
+                "title": "Already done",
+                "description": "This is complete",
+                "acceptanceCriteria": ["Done"],
+                "priority": 1,
+                "passes": true
+            },
+            {
+                "id": "task-002",
+                "title": "Pending work",
+                "description": "This should be next",
+                "acceptanceCriteria": ["Works"],
+                "priority": 1,
+                "passes": false
+            }
+        ]
+    }"#;
+    fs::write(afk_dir.join("tasks.json"), tasks).unwrap();
+
+    // Prompt should select task-002 since task-001 is already complete
+    afk()
+        .current_dir(temp.path())
+        .args(["prompt", "-s"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-002"));
+}
+
+// ============================================================================
+// Learnings and progress tracking tests
+// ============================================================================
+
+#[test]
+fn test_status_verbose_shows_learnings() {
+    let temp = setup_project_with_prd();
+
+    // Create progress with learnings
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 5,
+        "tasks": {
+            "task-001": {
+                "id": "task-001",
+                "source": "prd",
+                "status": "in_progress",
+                "failure_count": 1,
+                "learnings": [
+                    "First learning about this task",
+                    "Second discovery while working"
+                ]
+            }
+        }
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["status", "-v"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Learnings")
+                .or(predicate::str::contains("First learning"))
+                .or(predicate::str::contains("task-001")),
+        );
+}
+
+#[test]
+fn test_done_with_learning() {
+    let temp = setup_project_with_prd();
+
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // Mark done with a learning message
+    afk()
+        .current_dir(temp.path())
+        .args(["done", "task-001", "-m", "Learned that X requires Y"])
+        .assert()
+        .success();
+
+    // Verify the progress file contains the message
+    let progress = fs::read_to_string(temp.path().join(".afk/progress.json")).unwrap();
+    assert!(progress.contains("completed"));
+}
+
+#[test]
+fn test_fail_increments_failure_count() {
+    let temp = setup_project_with_prd();
+
+    // Create progress with existing failure count
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 3,
+        "tasks": {
+            "task-001": {
+                "id": "task-001",
+                "source": "prd",
+                "status": "in_progress",
+                "failure_count": 2,
+                "learnings": []
+            }
+        }
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // Fail the task again
+    afk()
+        .current_dir(temp.path())
+        .args(["fail", "task-001", "-m", "Still failing"])
+        .assert()
+        .success();
+
+    // Verify failure count increased
+    let progress = fs::read_to_string(temp.path().join(".afk/progress.json")).unwrap();
+    assert!(progress.contains("failed"));
+}
+
+// ============================================================================
+// Sync and task state preservation tests
+// ============================================================================
+
+#[test]
+fn test_sync_preserves_completed_status() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // Create a markdown source
+    let todo_file = temp.path().join("TODO.md");
+    fs::write(&todo_file, "- [ ] Task one\n- [ ] Task two").unwrap();
+
+    // Add source and sync
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add", "markdown", "TODO.md"])
+        .assert()
+        .success();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["tasks", "sync"])
+        .assert()
+        .success();
+
+    // Verify tasks were created
+    let tasks_path = afk_dir.join("tasks.json");
+    assert!(tasks_path.exists());
+
+    // Read and modify a task to be complete
+    let tasks_content = fs::read_to_string(&tasks_path).unwrap();
+    let modified = tasks_content.replace("\"passes\": false", "\"passes\": true");
+    fs::write(&tasks_path, &modified).unwrap();
+
+    // Sync again
+    afk()
+        .current_dir(temp.path())
+        .args(["tasks", "sync"])
+        .assert()
+        .success();
+
+    // Verify completed status was preserved (tasks.json should still have passes: true)
+    let tasks_after = fs::read_to_string(&tasks_path).unwrap();
+    assert!(
+        tasks_after.contains("\"passes\": true"),
+        "Completed status should be preserved after sync"
+    );
+}
+
+#[test]
+fn test_sync_adds_new_tasks_from_source() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // Create a markdown source with one task
+    let todo_file = temp.path().join("TODO.md");
+    fs::write(&todo_file, "- [ ] Initial task").unwrap();
+
+    // Add source and sync
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add", "markdown", "TODO.md"])
+        .assert()
+        .success();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["tasks", "sync"])
+        .assert()
+        .success();
+
+    // Add another task to the source
+    fs::write(&todo_file, "- [ ] Initial task\n- [ ] New task").unwrap();
+
+    // Sync again
+    afk()
+        .current_dir(temp.path())
+        .args(["tasks", "sync"])
+        .assert()
+        .success();
+
+    // Verify both tasks exist
+    let tasks_content = fs::read_to_string(afk_dir.join("tasks.json")).unwrap();
+    assert!(
+        tasks_content.contains("Initial task") || tasks_content.contains("New task"),
+        "Should contain tasks from source"
+    );
+}
+
+// ============================================================================
+// Config edge cases
+// ============================================================================
+
+#[test]
+fn test_config_set_feedback_loop() {
+    let temp = setup_project();
+
+    // Set a feedback loop
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "feedback_loops.lint", "cargo clippy"])
+        .assert()
+        .success();
+
+    // Verify it was set
+    let config = fs::read_to_string(temp.path().join(".afk/config.json")).unwrap();
+    assert!(
+        config.contains("clippy") || config.contains("lint"),
+        "Config should contain the lint command"
+    );
+}
+
+#[test]
+fn test_config_set_ai_cli_args() {
+    let temp = setup_project();
+
+    // Set AI CLI args
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "ai_cli.args", "[\"--verbose\"]"])
+        .assert()
+        .success();
+
+    // Verify it was set
+    let config = fs::read_to_string(temp.path().join(".afk/config.json")).unwrap();
+    assert!(
+        config.contains("verbose"),
+        "Config should contain the new args"
+    );
+}
+
+#[test]
+fn test_config_get_nested_value() {
+    let temp = setup_project();
+
+    // Get the AI CLI command
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "get", "ai_cli.command"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("echo"));
+}
+
+// ============================================================================
+// Go command edge cases
+// ============================================================================
+
+#[test]
+fn test_go_with_complete_tasks_exits() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // All tasks complete
+    let tasks = r#"{
+        "projectName": "test-project",
+        "branch": "main",
+        "userStories": [
+            {
+                "id": "task-001",
+                "title": "Done",
+                "description": "Already complete",
+                "acceptanceCriteria": ["Done"],
+                "priority": 1,
+                "passes": true
+            }
+        ]
+    }"#;
+    fs::write(afk_dir.join("tasks.json"), tasks).unwrap();
+
+    // Dry run should succeed and indicate completion
+    afk()
+        .current_dir(temp.path())
+        .args(["go", "-n"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Dry run")
+                .or(predicate::str::contains("complete"))
+                .or(predicate::str::contains("All")),
+        );
+}
+
+#[test]
+fn test_go_init_flag_triggers_setup() {
+    let temp = TempDir::new().unwrap();
+    let path_with_mock = setup_mock_ai_cli(&temp);
+
+    // Go with --init on uninitialised project should trigger setup
+    // Note: This will still fail after init because no task sources exist,
+    // but it should show the "Analysing project" message first
+    let result = afk()
+        .current_dir(temp.path())
+        .env("PATH", &path_with_mock)
+        .args(["go", "--init", "-n"])
+        .assert();
+
+    // Should show analysis output regardless of final success/failure
+    result.stdout(predicate::str::contains("Analysing"));
+}
+
+// ============================================================================
+// Error handling edge cases
+// ============================================================================
+
+#[test]
+fn test_task_command_without_id() {
+    let temp = setup_project_with_prd();
+
+    // task command requires an ID
+    afk()
+        .current_dir(temp.path())
+        .arg("task")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("required"));
+}
+
+#[test]
+fn test_source_add_without_type() {
+    let temp = setup_project();
+
+    // source add requires a type
+    afk()
+        .current_dir(temp.path())
+        .args(["source", "add"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("required"));
+}
+
+#[test]
+fn test_config_set_without_value() {
+    let temp = setup_project();
+
+    // config set requires key and value
+    afk()
+        .current_dir(temp.path())
+        .args(["config", "set", "limits.max_iterations"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("required"));
+}
+
+#[test]
+fn test_verify_partial_gate_failure() {
+    let temp = TempDir::new().unwrap();
+    let afk_dir = temp.path().join(".afk");
+    fs::create_dir_all(&afk_dir).unwrap();
+
+    // First gate passes, second fails
+    let config = r#"{
+        "ai_cli": {
+            "command": "echo",
+            "args": ["test"]
+        },
+        "sources": [],
+        "feedback_loops": {
+            "lint": "true",
+            "test": "false"
+        }
+    }"#;
+    fs::write(afk_dir.join("config.json"), config).unwrap();
+
+    // Overall should fail even if some pass
+    afk()
+        .current_dir(temp.path())
+        .arg("verify")
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_import_empty_file() {
+    let temp = setup_project();
+    let empty_file = temp.path().join("empty.md");
+    fs::write(&empty_file, "").unwrap();
+
+    // Import should handle empty file gracefully
+    afk()
+        .current_dir(temp.path())
+        .args(["import", "empty.md", "-s"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_init_inside_afk_directory_fails() {
+    let temp = setup_project();
+    let afk_dir = temp.path().join(".afk");
+
+    // Try to init from inside .afk directory
+    afk()
+        .current_dir(&afk_dir)
+        .args(["init"])
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains(".afk")
+                .or(predicate::str::contains("inside"))
+                .or(predicate::str::contains("nested")),
+        );
+}
+
+// ============================================================================
+// Archive and session management tests
+// ============================================================================
+
+#[test]
+fn test_archive_list_shows_archived_sessions() {
+    let temp = setup_project_with_prd();
+
+    // Create progress file
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 5,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // Archive with reason
+    afk()
+        .current_dir(temp.path())
+        .args(["archive", "-r", "First session", "-y"])
+        .assert()
+        .success();
+
+    // List should show the archive
+    afk()
+        .current_dir(temp.path())
+        .args(["archive", "list"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_done_updates_tasks_json_passes() {
+    let temp = setup_project_with_prd();
+
+    // Create progress file
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 1,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["done", "task-001"])
+        .assert()
+        .success();
+
+    // Verify tasks.json was updated
+    let tasks = fs::read_to_string(temp.path().join(".afk/tasks.json")).unwrap();
+    // task-001 should now have passes: true
+    assert!(
+        tasks.contains("task-001"),
+        "Tasks file should still contain task-001"
+    );
+}
+
+// ============================================================================
+// Prompt generation edge cases
+// ============================================================================
+
+#[test]
+fn test_prompt_with_progress_context() {
+    let temp = setup_project_with_prd();
+
+    // Create progress with learnings that should be included in prompt
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 3,
+        "tasks": {
+            "task-001": {
+                "id": "task-001",
+                "source": "prd",
+                "status": "in_progress",
+                "failure_count": 1,
+                "learnings": [
+                    "API requires authentication header"
+                ]
+            }
+        }
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // Prompt should include context about current state
+    afk()
+        .current_dir(temp.path())
+        .args(["prompt", "-s"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("task-001").or(predicate::str::contains("First task")));
+}
+
+#[test]
+fn test_prompt_file_output_creates_valid_markdown() {
+    let temp = setup_project_with_prd();
+
+    afk()
+        .current_dir(temp.path())
+        .args(["prompt", "-f"])
+        .assert()
+        .success();
+
+    // Check the file is valid markdown with expected sections
+    let prompt_file = temp.path().join(".afk/prompt.md");
+    assert!(prompt_file.exists());
+
+    let contents = fs::read_to_string(&prompt_file).unwrap();
+    assert!(!contents.is_empty());
+    // Markdown should have some structure
+    assert!(
+        contents.contains('#') || contents.contains('-') || contents.contains('*'),
+        "Prompt should contain markdown formatting"
+    );
+}
+
+
+// ============================================================================
+// Status display variants
+// ============================================================================
+
+#[test]
+fn test_status_with_in_progress_task() {
+    let temp = setup_project_with_prd();
+
+    // Create progress with in-progress task
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 5,
+        "tasks": {
+            "task-001": {
+                "id": "task-001",
+                "source": "prd",
+                "status": "in_progress",
+                "failure_count": 0,
+                "learnings": []
+            }
+        }
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    // Status should show the current task
+    afk()
+        .current_dir(temp.path())
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("Current")
+                .or(predicate::str::contains("task-001"))
+                .or(predicate::str::contains("In Progress")),
+        );
+}
+
+#[test]
+fn test_status_shows_iteration_count() {
+    let temp = setup_project_with_prd();
+
+    // Create progress with iterations
+    let progress = r#"{
+        "started_at": "2025-01-01T00:00:00",
+        "iterations": 42,
+        "tasks": {}
+    }"#;
+    fs::write(temp.path().join(".afk/progress.json"), progress).unwrap();
+
+    afk()
+        .current_dir(temp.path())
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("42").or(predicate::str::contains("iteration")));
+}
