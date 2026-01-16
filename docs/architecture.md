@@ -147,10 +147,8 @@ Sources implement a common pattern returning `Vec<UserStory>`:
 pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
     let mut all_tasks = Vec::new();
     for source in sources {
-        match load_from_source(source) {
-            Ok(tasks) => all_tasks.extend(tasks),
-            Err(e) => eprintln!("Warning: Failed to load from {:?}: {}", source.source_type, e),
-        }
+        let tasks = load_from_source(source);
+        all_tasks.extend(tasks);
     }
     all_tasks
 }
