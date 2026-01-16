@@ -1,6 +1,6 @@
 # AFK: A Laid-Back Way to Work with AI on Bigger Features
 
-The pace of maturity of AI coding tools right now is impossible to ignore. Even [Linus Torvalds is having a go](https://www.theregister.com/2026/01/13/linus_torvalds_vibe_coding/)! If the creator of Linux is experimenting with AI-assisted coding, if you're not already, it's time to pay attention.
+The speed at which AI coding tools are improving is impossible to ignore. Even [Linus Torvalds is having a go](https://www.theregister.com/2026/01/13/linus_torvalds_vibe_coding/)! If the creator of Linux is experimenting with AI-assisted coding, if you're not already, it's time to pay attention.
 
 I've been in the software industry for quite a while, and AI tooling has been a genuine game-changer for my productivity over the last couple of years. It's helped me branch out into different languages, ship side projects I'd been meaning to build for years, and explore ideas I wouldn't have tackled alone. My [synth-tools](https://github.com/m0nkmaster/synth-tools) project - a browser-based synthesiser - is a good example. Without AI assistance, that would still be on my "one day" list.
 
