@@ -153,7 +153,10 @@ pub static MASCOT_STATES: LazyLock<HashMap<&'static str, &'static str>> = LazyLo
 /// The spinner frame character(s) at the given index.
 /// Falls back to 'dots' spinner if name is unknown.
 pub fn get_spinner_frame(name: &str, index: usize) -> &'static str {
-    let frames = SPINNERS.get(name).or_else(|| SPINNERS.get("dots")).unwrap();
+    let frames = SPINNERS
+        .get(name)
+        .or_else(|| SPINNERS.get("dots"))
+        .expect("fallback 'dots' spinner must exist in SPINNERS");
     frames[index % frames.len()]
 }
 
@@ -171,7 +174,7 @@ pub fn get_mascot(state: &str) -> &'static str {
     MASCOT_STATES
         .get(state)
         .or_else(|| MASCOT_STATES.get("working"))
-        .unwrap()
+        .expect("fallback 'working' state must exist in MASCOT_STATES")
 }
 
 #[cfg(test)]

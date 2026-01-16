@@ -137,42 +137,52 @@ impl ParsedEvent {
 
 // Claude Code patterns
 static CLAUDE_TOOL_CALL: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Calling tool: (\w+)").unwrap());
+    LazyLock::new(|| Regex::new(r"Calling tool: (\w+)").expect("CLAUDE_TOOL_CALL regex is valid"));
 static CLAUDE_FILE_WRITE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Writing to: (.+)").unwrap());
-static CLAUDE_FILE_READ: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Reading: (.+)").unwrap());
+    LazyLock::new(|| Regex::new(r"Writing to: (.+)").expect("CLAUDE_FILE_WRITE regex is valid"));
+static CLAUDE_FILE_READ: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"Reading: (.+)").expect("CLAUDE_FILE_READ regex is valid"));
 
 // Cursor CLI patterns
-static CURSOR_TOOL_CALL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"⏺\s+(\w+)\(").unwrap());
+static CURSOR_TOOL_CALL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"⏺\s+(\w+)\(").expect("CURSOR_TOOL_CALL regex is valid"));
 static CURSOR_FILE_EDITED: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^Edited\s+(.+)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^Edited\s+(.+)$").expect("CURSOR_FILE_EDITED regex is valid"));
 static CURSOR_FILE_CREATED: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^Created\s+(.+)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^Created\s+(.+)$").expect("CURSOR_FILE_CREATED regex is valid"));
 static CURSOR_FILE_DELETED: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^Deleted\s+(.+)$").unwrap());
+    LazyLock::new(|| Regex::new(r"^Deleted\s+(.+)$").expect("CURSOR_FILE_DELETED regex is valid"));
 
 // Aider patterns
 static AIDER_APPLIED_EDIT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Applied edit to (.+)").unwrap());
-static AIDER_WROTE_FILE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^Wrote\s+(.+)$").unwrap());
-static AIDER_ADDED_TO_CHAT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Added (.+) to the chat").unwrap());
-static AIDER_COMMIT_MADE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"Commit ([a-f0-9]+)\s+(.+)").unwrap());
+    LazyLock::new(|| Regex::new(r"Applied edit to (.+)").expect("AIDER_APPLIED_EDIT regex is valid"));
+static AIDER_WROTE_FILE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^Wrote\s+(.+)$").expect("AIDER_WROTE_FILE regex is valid"));
+static AIDER_ADDED_TO_CHAT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Added (.+) to the chat").expect("AIDER_ADDED_TO_CHAT regex is valid")
+});
+static AIDER_COMMIT_MADE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Commit ([a-f0-9]+)\s+(.+)").expect("AIDER_COMMIT_MADE regex is valid")
+});
 
 // Error patterns
-static ERROR_PREFIX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:^|[\[\]\s])(?:Error|ERROR):\s*(.+)").unwrap());
-static EXCEPTION_PREFIX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?:^|[\s])Exception:\s*(.+)").unwrap());
-static TRACEBACK: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^Traceback \(most recent call last\):").unwrap());
+static ERROR_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|[\[\]\s])(?:Error|ERROR):\s*(.+)").expect("ERROR_PREFIX regex is valid")
+});
+static EXCEPTION_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[\s])Exception:\s*(.+)").expect("EXCEPTION_PREFIX regex is valid")
+});
+static TRACEBACK: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^Traceback \(most recent call last\):").expect("TRACEBACK regex is valid")
+});
 
 // Warning patterns
-static WARNING_PREFIX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:^|[\[\]\s])Warning:\s*(.+)").unwrap());
-static DEPRECATION_WARNING: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"DeprecationWarning:\s*(.+)").unwrap());
+static WARNING_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|[\[\]\s])Warning:\s*(.+)").expect("WARNING_PREFIX regex is valid")
+});
+static DEPRECATION_WARNING: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"DeprecationWarning:\s*(.+)").expect("DEPRECATION_WARNING regex is valid")
+});
 
 /// Parse AI CLI output to detect tool calls, file operations, and events.
 ///

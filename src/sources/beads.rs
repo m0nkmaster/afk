@@ -279,11 +279,12 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
     let section_pattern = Regex::new(
         r"(?i)(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
     )
-    .unwrap();
+    .expect("acceptance criteria section regex is valid");
 
     if let Some(captures) = section_pattern.captures(text) {
         if let Some(section) = captures.get(1) {
-            let item_pattern = Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").unwrap();
+            let item_pattern =
+                Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").expect("list item regex is valid");
             for line in section.as_str().lines() {
                 let line = line.trim();
                 if !line.is_empty() {
@@ -300,11 +301,12 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
     // Pattern 2: Look for markdown heading section
     let heading_pattern =
         Regex::new(r"(?i)##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)")
-            .unwrap();
+            .expect("markdown heading regex is valid");
 
     if let Some(captures) = heading_pattern.captures(text) {
         if let Some(section) = captures.get(1) {
-            let item_pattern = Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").unwrap();
+            let item_pattern =
+                Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").expect("list item regex is valid");
             for line in section.as_str().lines() {
                 let line = line.trim();
                 if !line.is_empty() {
@@ -319,7 +321,8 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
     }
 
     // Pattern 3: Look for unchecked checkbox items
-    let checkbox_pattern = Regex::new(r"[-*]\s*\[ \]\s*(.+)").unwrap();
+    let checkbox_pattern =
+        Regex::new(r"[-*]\s*\[ \]\s*(.+)").expect("checkbox pattern regex is valid");
     for captures in checkbox_pattern.captures_iter(text) {
         if let Some(item) = captures.get(1) {
             let cleaned = item.as_str().trim();

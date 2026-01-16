@@ -325,7 +325,12 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
         result.current_version, result.latest_version
     );
 
-    let exe_path = perform_update(result.download_url.as_ref().unwrap())?;
+    let exe_path = perform_update(
+        result
+            .download_url
+            .as_ref()
+            .expect("download_url must be Some when can_update() is true"),
+    )?;
 
     println!();
     println!(
