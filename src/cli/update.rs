@@ -59,6 +59,9 @@ pub enum UpdateError {
     /// File I/O error during update.
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
+    /// GitHub API rate limit exceeded.
+    #[error("GitHub API rate limit exceeded. Try again in an hour, or authenticate with: gh auth login")]
+    RateLimited,
     /// No release found on GitHub.
     #[error("No release found")]
     NoReleaseFound,
@@ -127,7 +130,20 @@ fn create_client() -> Result<Client, UpdateError> {
 fn get_latest_release(client: &Client, include_prerelease: bool) -> Result<Release, UpdateError> {
     let url = format!("{}/{}/releases", GITHUB_API_URL, GITHUB_REPO);
 
-    let response: Vec<Release> = client.get(&url).send()?.json()?;
+    let http_response = client.get(&url).send()?;
+
+    // Check for rate limiting before trying to parse
+    if http_response.status() == reqwest::StatusCode::FORBIDDEN {
+        // Check if it's a rate limit error
+        if let Ok(text) = http_response.text() {
+            if text.contains("rate limit") {
+                return Err(UpdateError::RateLimited);
+            }
+        }
+        return Err(UpdateError::NoReleaseFound);
+    }
+
+    let response: Vec<Release> = http_response.json()?;
 
     let platform_binary = get_platform_binary();
 
