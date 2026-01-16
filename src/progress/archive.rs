@@ -4,6 +4,7 @@
 //! including moving session files to timestamped archive directories.
 
 use crate::config::{ARCHIVE_DIR, PROGRESS_FILE, TASKS_FILE};
+use crate::git::get_current_branch;
 use crate::progress::{ProgressError, SessionProgress};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -76,16 +77,18 @@ pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
     }
 
     // Write metadata
-    let (pending, completed, iterations) = if let Some(ref p) = progress {
+    let (pending, completed, iterations, branch) = if let Some(ref p) = progress {
         let (pend, _, comp, _, _) = p.get_task_counts();
-        (pend, comp, p.iterations)
+        // Use stored branch if available, otherwise try to get current branch
+        let branch = p.last_branch.clone().or_else(get_current_branch);
+        (pend, comp, p.iterations, branch)
     } else {
-        (0, 0, 0)
+        (0, 0, 0, get_current_branch())
     };
 
     let metadata = ArchiveMetadata {
         archived_at: Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
-        branch: None, // afk no longer manages branches
+        branch,
         reason: reason.to_string(),
         iterations,
         tasks_completed: completed,
@@ -144,6 +147,51 @@ pub fn list_archives() -> Result<Vec<(String, ArchiveMetadata)>, ProgressError> 
     Ok(archives)
 }
 
+/// Result of branch change detection.
+#[derive(Debug, Clone)]
+pub struct BranchChangeInfo {
+    /// The branch stored in the previous session.
+    pub previous_branch: String,
+    /// The current git branch.
+    pub current_branch: String,
+}
+
+/// Check if the git branch has changed since the last session.
+///
+/// Returns `Some(BranchChangeInfo)` if a branch change is detected,
+/// `None` if no change or if there's no previous session/branch info.
+pub fn check_branch_change() -> Option<BranchChangeInfo> {
+    // Load existing progress
+    let progress = SessionProgress::load(None).ok()?;
+
+    // Get stored branch from previous session
+    let previous_branch = progress.last_branch.as_ref()?;
+
+    // Get current git branch
+    let current_branch = get_current_branch()?;
+
+    // Check if they differ
+    if previous_branch != &current_branch {
+        Some(BranchChangeInfo {
+            previous_branch: previous_branch.clone(),
+            current_branch,
+        })
+    } else {
+        None
+    }
+}
+
+/// Update the stored branch in the progress file.
+///
+/// This should be called after the user decides not to archive,
+/// or at the start of a new session.
+pub fn update_stored_branch() -> Result<(), ProgressError> {
+    let mut progress = SessionProgress::load(None)?;
+    progress.set_branch(get_current_branch());
+    progress.save(None)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,7 +201,7 @@ mod tests {
     fn test_archive_metadata_serialisation() {
         let metadata = ArchiveMetadata {
             archived_at: "2024-01-15T10:30:00.000000".to_string(),
-            branch: None, // afk no longer manages branches
+            branch: Some("feature/add-dark-mode".to_string()),
             reason: "completed".to_string(),
             iterations: 10,
             tasks_completed: 5,
@@ -170,7 +218,7 @@ mod tests {
         // Round-trip
         let parsed: ArchiveMetadata = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.archived_at, metadata.archived_at);
-        assert!(parsed.branch.is_none());
+        assert_eq!(parsed.branch, Some("feature/add-dark-mode".to_string()));
         assert_eq!(parsed.reason, metadata.reason);
         assert_eq!(parsed.iterations, metadata.iterations);
         assert_eq!(parsed.tasks_completed, metadata.tasks_completed);
@@ -213,5 +261,62 @@ mod tests {
 
         let archives = list_archives().unwrap();
         assert!(archives.is_empty());
+    }
+
+    #[test]
+    fn test_branch_change_info_struct() {
+        let info = BranchChangeInfo {
+            previous_branch: "main".to_string(),
+            current_branch: "feature/new-feature".to_string(),
+        };
+
+        assert_eq!(info.previous_branch, "main");
+        assert_eq!(info.current_branch, "feature/new-feature");
+    }
+
+    #[test]
+    fn test_check_branch_change_no_progress_file() {
+        // With no progress file, check_branch_change should return None
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        let result = check_branch_change();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_check_branch_change_no_stored_branch() {
+        // With progress file but no stored branch, should return None
+        let temp = TempDir::new().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        // Create progress file without last_branch
+        let afk_dir = temp.path().join(".afk");
+        std::fs::create_dir_all(&afk_dir).unwrap();
+        let progress = SessionProgress::new();
+        progress.save(None).unwrap();
+
+        let result = check_branch_change();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_archive_metadata_with_branch() {
+        let metadata = ArchiveMetadata {
+            archived_at: "2024-01-15T10:30:00.000000".to_string(),
+            branch: Some("feature/branch-archiving".to_string()),
+            reason: "branch_change".to_string(),
+            iterations: 3,
+            tasks_completed: 2,
+            tasks_pending: 1,
+        };
+
+        let json = serde_json::to_string_pretty(&metadata).unwrap();
+        assert!(json.contains("\"branch\": \"feature/branch-archiving\""));
+        assert!(json.contains("\"reason\": \"branch_change\""));
+
+        let parsed: ArchiveMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.branch, Some("feature/branch-archiving".to_string()));
+        assert_eq!(parsed.reason, "branch_change");
     }
 }

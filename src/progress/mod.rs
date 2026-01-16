@@ -6,7 +6,10 @@
 pub mod archive;
 pub mod limits;
 
-pub use archive::{archive_session, clear_session, list_archives, ArchiveMetadata};
+pub use archive::{
+    archive_session, check_branch_change, clear_session, list_archives, update_stored_branch,
+    ArchiveMetadata, BranchChangeInfo,
+};
 pub use limits::{
     check_limits, get_failure_count, should_skip_task, LimitCheckResult, LimitSignal,
 };
@@ -95,6 +98,10 @@ pub struct SessionProgress {
     /// Number of iterations completed.
     #[serde(default)]
     pub iterations: u32,
+    /// Git branch when the session was started.
+    /// Used to detect branch changes between runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_branch: Option<String>,
     /// Map of task ID to task progress.
     #[serde(default)]
     pub tasks: HashMap<String, TaskProgress>,
@@ -105,6 +112,7 @@ impl Default for SessionProgress {
         Self {
             started_at: default_started_at(),
             iterations: 0,
+            last_branch: None,
             tasks: HashMap::new(),
         }
     }
@@ -135,8 +143,19 @@ impl SessionProgress {
         Self {
             started_at: default_started_at(),
             iterations: 0,
+            last_branch: None,
             tasks: HashMap::new(),
         }
+    }
+
+    /// Set the last branch for this session.
+    pub fn set_branch(&mut self, branch: Option<String>) {
+        self.last_branch = branch;
+    }
+
+    /// Get the last branch for this session.
+    pub fn get_branch(&self) -> Option<&str> {
+        self.last_branch.as_deref()
     }
 
     /// Load progress from a file, or return a new session if file doesn't exist.
@@ -612,6 +631,7 @@ mod tests {
         let mut original = SessionProgress {
             started_at: "2024-01-01T09:00:00".to_string(),
             iterations: 15,
+            last_branch: None,
             tasks: HashMap::new(),
         };
         original.tasks.insert(
@@ -1174,6 +1194,7 @@ mod tests {
         let mut session = SessionProgress {
             started_at: "2024-01-01T10:00:00.000000".to_string(),
             iterations: 5,
+            last_branch: None,
             tasks: HashMap::new(),
         };
         session.tasks.insert(

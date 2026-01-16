@@ -3,6 +3,7 @@
 //! This module implements the `afk go` command for running the autonomous loop.
 
 use std::fs;
+use std::io::{self, Write};
 use std::path::Path;
 
 use crate::bootstrap::{
@@ -11,6 +12,7 @@ use crate::bootstrap::{
 };
 use crate::config::{AfkConfig, SourceConfig};
 use crate::prd::PrdDocument;
+use crate::progress::{archive_session, check_branch_change, update_stored_branch};
 use crate::runner::{run_loop_with_options, run_loop_with_tui, RunOptions, StopReason};
 
 /// Result type for go command operations.
@@ -89,6 +91,43 @@ pub fn go(options: GoOptions) -> GoCommandResult {
         if progress_path.exists() {
             fs::remove_file(&progress_path).map_err(GoCommandError::ClearProgressError)?;
             println!("\x1b[2mCleared session progress.\x1b[0m");
+        }
+    }
+
+    // Check for branch change (unless --fresh was used, which clears the session anyway)
+    if !options.fresh {
+        if let Some(change) = check_branch_change() {
+            println!();
+            println!(
+                "\x1b[33m⚠\x1b[0m  You're on branch \x1b[1m{}\x1b[0m but the last session was on \x1b[1m{}\x1b[0m.",
+                change.current_branch, change.previous_branch
+            );
+            print!("   Archive the previous session? [Y/n]: ");
+            let _ = io::stdout().flush();
+
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_ok() {
+                let input = input.trim().to_lowercase();
+                if input == "n" || input == "no" {
+                    // User declined - update stored branch and continue
+                    println!("\x1b[2m   Continuing on new branch without archiving.\x1b[0m");
+                    let _ = update_stored_branch();
+                } else {
+                    // User agreed (default) - archive the session
+                    match archive_session("branch_change") {
+                        Ok(Some(path)) => {
+                            println!("\x1b[32m✓\x1b[0m Session archived to: {}", path.display());
+                        }
+                        Ok(None) => {
+                            println!("\x1b[2m   Nothing to archive.\x1b[0m");
+                        }
+                        Err(e) => {
+                            eprintln!("\x1b[33m   Warning: Failed to archive: {e}\x1b[0m");
+                        }
+                    }
+                }
+            }
+            println!();
         }
     }
 
@@ -199,6 +238,9 @@ pub fn go(options: GoOptions) -> GoCommandResult {
         .with_resume(false)
         .with_feedback_mode(RunOptions::parse_feedback_mode(options.feedback.as_deref()))
         .with_mascot(!options.no_mascot);
+
+    // Store current branch in progress for next run's comparison
+    let _ = update_stored_branch();
 
     // Run the loop - use TUI if requested
     let result = if RunOptions::is_tui_mode(options.feedback.as_deref()) {
