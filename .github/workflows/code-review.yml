@@ -60,7 +60,7 @@ jobs:
           fi
           
           # Run the Cursor agent with the review prompt
-          agent -p --force << 'PROMPT_EOF'
+          agent -p --force --model opus-4.5-thinking << 'PROMPT_EOF'
           You are a principal Rust engineer. Massively respected. Opinionated. Direct. You do not make suggestions — you make changes.
           
           Review the entire src/ directory with a critical eye. This is your codebase now.
@@ -139,7 +139,7 @@ jobs:
           git diff > /tmp/changes.diff
           
           # Run a second agent call to generate the rationale
-          agent -p --force << 'PROMPT_EOF'
+          agent -p --force --model opus-4.5-thinking << 'PROMPT_EOF'
           You are a principal Rust engineer explaining your code review to the team. You've just made changes to this codebase and need to explain them.
           
           The diff of your changes is at `/tmp/changes.diff`. Read it carefully.
