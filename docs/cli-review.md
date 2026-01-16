@@ -105,7 +105,7 @@ Clearer name. Update description to clarify it shows "the prompt that will be se
 The unified entry point for running the loop.
 
 ```bash
-afk go                       # Run 10 iterations (default)
+afk go                       # Run with default limit (200 iterations)
 afk go 20                    # Run 20 iterations
 afk go -u, --until-complete  # Run until all tasks complete
 afk go -n, --dry-run         # Show what would happen
