@@ -808,7 +808,7 @@ impl VerifyCommand {
 impl DoneCommand {
     /// Execute the done command.
     pub fn execute(&self) -> CliResult {
-        commands::progress_cmd::done(&self.task_id, self.message.clone())
+        commands::progress_cmd::done(&self.task_id, self.message.as_deref())
             .map(|()| ExitCode::SUCCESS)
             .map_err(|e| CliError::Command(e.to_string()))
     }
@@ -817,7 +817,7 @@ impl DoneCommand {
 impl FailCommand {
     /// Execute the fail command.
     pub fn execute(&self) -> CliResult {
-        commands::progress_cmd::fail(&self.task_id, self.message.clone())
+        commands::progress_cmd::fail(&self.task_id, self.message.as_deref())
             .map(|()| ExitCode::SUCCESS)
             .map_err(|e| CliError::Command(e.to_string()))
     }

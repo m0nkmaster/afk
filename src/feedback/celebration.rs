@@ -7,6 +7,9 @@ use std::time::Duration;
 
 use super::art::get_mascot;
 
+/// Width of the celebration panel (characters inside the border).
+const PANEL_WIDTH: usize = 77;
+
 /// Calculate visible length of a string, excluding ANSI escape codes.
 pub fn visible_len(s: &str) -> usize {
     let mut len = 0;
@@ -75,23 +78,29 @@ pub fn show_celebration(task_id: &str) {
     for line in celebration_art.lines() {
         let padded = format!("\x1b[32m│\x1b[0m  \x1b[32;1m{}\x1b[0m", line);
         let padded_len = visible_len(&padded);
-        let padding = 77_usize.saturating_sub(padded_len);
+        let padding = PANEL_WIDTH.saturating_sub(padded_len);
         println!("{}{}\x1b[32m│\x1b[0m", padded, " ".repeat(padding));
     }
 
-    println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
+    println!(
+        "\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m",
+        " ".repeat(PANEL_WIDTH)
+    );
     let msg = format!(
         "  \x1b[32;1m✓ Task Complete!\x1b[0m \x1b[36;1m{}\x1b[0m",
         task_id
     );
     let msg_len = visible_len(&msg);
-    let msg_padding = 77_usize.saturating_sub(msg_len);
+    let msg_padding = PANEL_WIDTH.saturating_sub(msg_len);
     println!(
         "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
         msg,
         " ".repeat(msg_padding)
     );
-    println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
+    println!(
+        "\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m",
+        " ".repeat(PANEL_WIDTH)
+    );
     println!(
         "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
         "★ ".repeat(16),
@@ -126,23 +135,32 @@ pub fn show_session_complete(tasks_completed: u32, iterations: u32, duration_sec
     println!(
         "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
         "★ ".repeat(20),
-        " ".repeat(77 - 42)
+        " ".repeat(PANEL_WIDTH - 42)
     );
-    println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
+    println!(
+        "\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m",
+        " ".repeat(PANEL_WIDTH)
+    );
 
     for line in celebration_art.lines() {
         let padded = format!("\x1b[32m│\x1b[0m  \x1b[32;1m{}\x1b[0m", line);
         let padded_len = visible_len(&padded);
-        let padding = 77_usize.saturating_sub(padded_len);
+        let padding = PANEL_WIDTH.saturating_sub(padded_len);
         println!("{}{}\x1b[32m│\x1b[0m", padded, " ".repeat(padding));
     }
 
-    println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
+    println!(
+        "\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m",
+        " ".repeat(PANEL_WIDTH)
+    );
     println!(
         "\x1b[32m│\x1b[0m  \x1b[32;1m✓ All Tasks Complete!\x1b[0m{}\x1b[32m│\x1b[0m",
-        " ".repeat(77 - 24)
+        " ".repeat(PANEL_WIDTH - 24)
     );
-    println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
+    println!(
+        "\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m",
+        " ".repeat(PANEL_WIDTH)
+    );
 
     let stats1 = format!(
         "  \x1b[2mTasks completed:\x1b[0m \x1b[36;1m{}\x1b[0m",
@@ -152,7 +170,7 @@ pub fn show_session_complete(tasks_completed: u32, iterations: u32, duration_sec
     println!(
         "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
         stats1,
-        " ".repeat(77 - stats1_len)
+        " ".repeat(PANEL_WIDTH - stats1_len)
     );
 
     let stats2 = format!(
@@ -163,7 +181,7 @@ pub fn show_session_complete(tasks_completed: u32, iterations: u32, duration_sec
     println!(
         "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
         stats2,
-        " ".repeat(77 - stats2_len)
+        " ".repeat(PANEL_WIDTH - stats2_len)
     );
 
     let stats3 = format!(
@@ -174,14 +192,17 @@ pub fn show_session_complete(tasks_completed: u32, iterations: u32, duration_sec
     println!(
         "\x1b[32m│\x1b[0m{}{}\x1b[32m│\x1b[0m",
         stats3,
-        " ".repeat(77 - stats3_len)
+        " ".repeat(PANEL_WIDTH - stats3_len)
     );
 
-    println!("\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m", " ".repeat(77));
+    println!(
+        "\x1b[32m│\x1b[0m{}\x1b[32m│\x1b[0m",
+        " ".repeat(PANEL_WIDTH)
+    );
     println!(
         "\x1b[32m│\x1b[0m  \x1b[33;1m{}\x1b[0m{}\x1b[32m│\x1b[0m",
         "★ ".repeat(20),
-        " ".repeat(77 - 42)
+        " ".repeat(PANEL_WIDTH - 42)
     );
     println!(
         "\x1b[32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m"

@@ -66,7 +66,7 @@ pub fn split_path(path: &str) -> Result<(&str, &str), FieldError> {
 
 /// Format an optional string value for display.
 pub fn format_optional(value: &Option<String>) -> String {
-    value.clone().unwrap_or_else(|| "(not set)".to_string())
+    value.as_deref().unwrap_or("(not set)").to_owned()
 }
 
 /// Format a vector of strings for display.

@@ -21,12 +21,17 @@ pub enum ProgressCommandError {
 }
 
 /// Mark a task as complete.
-pub fn done(task_id: &str, message: Option<String>) -> ProgressCommandResult {
+pub fn done(task_id: &str, message: Option<&str>) -> ProgressCommandResult {
     // Load progress
     let mut progress = SessionProgress::load(None)?;
 
     // Mark task as completed in progress
-    progress.set_task_status(task_id, TaskStatus::Completed, "manual", message.clone());
+    progress.set_task_status(
+        task_id,
+        TaskStatus::Completed,
+        "manual",
+        message.map(ToOwned::to_owned),
+    );
 
     progress
         .save(None)
@@ -42,7 +47,7 @@ pub fn done(task_id: &str, message: Option<String>) -> ProgressCommandResult {
         "\x1b[32m✓\x1b[0m Task \x1b[1m{}\x1b[0m marked complete",
         task_id
     );
-    if let Some(ref msg) = message {
+    if let Some(msg) = message {
         println!("  \x1b[2m{msg}\x1b[0m");
     }
 
@@ -50,12 +55,17 @@ pub fn done(task_id: &str, message: Option<String>) -> ProgressCommandResult {
 }
 
 /// Mark a task as failed.
-pub fn fail(task_id: &str, message: Option<String>) -> ProgressCommandResult {
+pub fn fail(task_id: &str, message: Option<&str>) -> ProgressCommandResult {
     // Load progress
     let mut progress = SessionProgress::load(None)?;
 
     // Mark task as failed in progress
-    progress.set_task_status(task_id, TaskStatus::Failed, "manual", message.clone());
+    progress.set_task_status(
+        task_id,
+        TaskStatus::Failed,
+        "manual",
+        message.map(ToOwned::to_owned),
+    );
 
     progress
         .save(None)
@@ -68,7 +78,7 @@ pub fn fail(task_id: &str, message: Option<String>) -> ProgressCommandResult {
         "\x1b[31m✗\x1b[0m Task \x1b[1m{}\x1b[0m marked failed (attempt {count})",
         task_id
     );
-    if let Some(ref msg) = message {
+    if let Some(msg) = message {
         println!("  \x1b[2m{msg}\x1b[0m");
     }
 

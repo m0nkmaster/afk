@@ -13,6 +13,9 @@ use super::art::{get_mascot, get_spinner_frame};
 use super::celebration::visible_len;
 use super::metrics::{ActivityState, IterationMetrics};
 
+/// Width of the feedback panel (characters inside the border).
+const PANEL_WIDTH: usize = 77;
+
 /// Display mode for feedback.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DisplayMode {
@@ -285,7 +288,7 @@ impl FeedbackDisplay {
 
         // Pad to panel width
         let header_len = visible_len(&header);
-        let padding = 77_usize.saturating_sub(header_len);
+        let padding = PANEL_WIDTH.saturating_sub(header_len);
         header.push_str(&" ".repeat(padding));
         header.push_str("\x1b[36m│\x1b[0m");
         lines.push(header);
@@ -464,7 +467,7 @@ impl FeedbackDisplay {
     /// Pad a line to the panel width.
     fn pad_line(&self, line: &str) -> String {
         let line_len = visible_len(line);
-        let padding = 77_usize.saturating_sub(line_len);
+        let padding = PANEL_WIDTH.saturating_sub(line_len);
         format!("{}{}\x1b[36m│\x1b[0m", line, " ".repeat(padding))
     }
 
