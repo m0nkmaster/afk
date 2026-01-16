@@ -19,3 +19,7 @@ Track and report token consumption across iterations and sessions. Display cumul
 ### Estimated Completion
 
 Provide time and iteration estimates for completing remaining tasks based on historical performance data. Use metrics from past sessions to predict when the current task list might be finished, helping with planning and expectations.
+
+### Multi-Model Rotation
+
+Support configuring multiple AI models in config and rotating between them pseudo-randomly across iterations (equal distribution). Different models bring different strengths, biases, and problem-solving approaches — cycling through them helps avoid getting stuck in local optima and brings fresh perspectives to challenging tasks. A key differentiator for autonomous coding loops.
