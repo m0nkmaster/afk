@@ -19,7 +19,7 @@ fn main() -> std::process::ExitCode {
             println!("Run 'afk --help' for available commands.");
             println!();
             println!("Quick start:");
-            println!("  afk go                 # Auto-detect, run 10 iterations");
+            println!("  afk go                 # Auto-detect and run");
             println!("  afk go 20              # Run 20 iterations");
             println!("  afk go TODO.md 5       # Use TODO.md, run 5 iterations");
             Ok(ExitCode::SUCCESS)
