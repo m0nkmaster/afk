@@ -45,18 +45,8 @@ pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
     let mut all_tasks: Vec<UserStory> = Vec::new();
 
     for source in sources {
-        match load_from_source(source) {
-            Ok(tasks) => {
-                all_tasks.extend(tasks);
-            }
-            Err(e) => {
-                // Log error but continue with other sources
-                eprintln!(
-                    "Warning: Failed to load tasks from {:?} source: {}",
-                    source.source_type, e
-                );
-            }
-        }
+        let tasks = load_from_source(source);
+        all_tasks.extend(tasks);
     }
 
     all_tasks
@@ -64,34 +54,24 @@ pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
 
 /// Load tasks from a single source.
 ///
-/// Dispatches to the appropriate loader based on source type.
-fn load_from_source(source: &SourceConfig) -> Result<Vec<UserStory>, SourceError> {
+/// Dispatches to the appropriate loader based on source type. Each loader
+/// handles its own errors gracefully and returns an empty vector on failure.
+fn load_from_source(source: &SourceConfig) -> Vec<UserStory> {
     match source.source_type {
-        SourceType::Beads => Ok(load_beads_tasks()),
+        SourceType::Beads => load_beads_tasks(),
         SourceType::Json => {
             let path = source.path.as_deref();
-            Ok(load_json_tasks(path))
+            load_json_tasks(path)
         }
         SourceType::Markdown => {
             let path = source.path.as_deref();
-            Ok(load_markdown_tasks(path))
+            load_markdown_tasks(path)
         }
         SourceType::Github => {
             let repo = source.repo.as_deref();
-            Ok(load_github_tasks(repo, &source.labels))
+            load_github_tasks(repo, &source.labels)
         }
     }
-}
-
-/// Error type for source loading operations.
-#[derive(Debug, thiserror::Error)]
-pub enum SourceError {
-    /// The specified source type is not implemented.
-    #[error("Source type '{0}' is not yet implemented")]
-    NotImplemented(String),
-    /// Failed to load tasks from the source.
-    #[error("Failed to load source: {0}")]
-    LoadError(String),
 }
 
 #[cfg(test)]
@@ -308,9 +288,8 @@ mod tests {
     #[test]
     fn test_load_from_source_beads() {
         let source = SourceConfig::beads();
-        let result = load_from_source(&source);
         // Beads loader may return empty if `bd` is not installed
-        assert!(result.is_ok());
+        let _tasks = load_from_source(&source);
     }
 
     #[test]
@@ -321,10 +300,8 @@ mod tests {
         fs::write(&json_path, json_content).unwrap();
 
         let source = SourceConfig::json(json_path.to_str().unwrap());
-        let result = load_from_source(&source);
+        let tasks = load_from_source(&source);
 
-        assert!(result.is_ok());
-        let tasks = result.unwrap();
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].id, "task-1");
     }
@@ -338,10 +315,8 @@ mod tests {
             repo: None,
             labels: Vec::new(),
         };
-        let result = load_from_source(&source);
-
-        // Should succeed even if no default files exist (returns empty)
-        assert!(result.is_ok());
+        // Should return empty if no default files exist
+        let _tasks = load_from_source(&source);
     }
 
     #[test]
@@ -352,32 +327,16 @@ mod tests {
         fs::write(&md_path, md_content).unwrap();
 
         let source = SourceConfig::markdown(md_path.to_str().unwrap());
-        let result = load_from_source(&source);
+        let tasks = load_from_source(&source);
 
-        assert!(result.is_ok());
-        let tasks = result.unwrap();
         assert_eq!(tasks.len(), 2);
     }
 
     #[test]
     fn test_load_from_source_github() {
         let source = SourceConfig::github("owner/repo", vec![]);
-        let result = load_from_source(&source);
-
-        // GitHub now returns Ok (may be empty if gh not available)
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_source_error_display() {
-        let err = SourceError::NotImplemented("github".to_string());
-        assert_eq!(
-            err.to_string(),
-            "Source type 'github' is not yet implemented"
-        );
-
-        let err = SourceError::LoadError("file not found".to_string());
-        assert_eq!(err.to_string(), "Failed to load source: file not found");
+        // GitHub loader returns empty if gh not available
+        let _tasks = load_from_source(&source);
     }
 
     #[test]

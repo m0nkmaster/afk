@@ -27,4 +27,4 @@ pub mod tui;
 pub mod watcher;
 
 // Re-export key types for convenience
-pub use sources::{aggregate_tasks, SourceError};
+pub use sources::aggregate_tasks;
