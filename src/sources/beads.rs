@@ -12,19 +12,25 @@ use std::process::Command;
 /// issues, but this caused tasks with soft dependencies to be missed.
 /// Falls back to text parsing if JSON output fails.
 /// Returns an empty vector if `bd` is not installed or times out.
+#[must_use]
 pub fn load_beads_tasks() -> Vec<UserStory> {
+    use std::collections::HashSet;
+
     let mut tasks = Vec::new();
+    let mut seen_ids: HashSet<String> = HashSet::new();
 
     // Get open issues (beads doesn't support comma-separated statuses)
     if let Ok(open_tasks) = run_bd_list_json("open") {
-        tasks.extend(open_tasks);
+        for task in open_tasks {
+            seen_ids.insert(task.id.clone());
+            tasks.push(task);
+        }
     }
 
-    // Get in_progress issues
+    // Get in_progress issues, deduplicating by ID
     if let Ok(in_progress_tasks) = run_bd_list_json("in_progress") {
-        // Deduplicate by ID
         for task in in_progress_tasks {
-            if !tasks.iter().any(|t| t.id == task.id) {
+            if seen_ids.insert(task.id.clone()) {
                 tasks.push(task);
             }
         }

@@ -286,6 +286,7 @@ impl PrdDocument {
     }
 
     /// Get stories that haven't passed yet, sorted by priority.
+    #[must_use]
     pub fn get_pending_stories(&self) -> Vec<&UserStory> {
         let mut pending: Vec<&UserStory> = self.user_stories.iter().filter(|s| !s.passes).collect();
         pending.sort_by_key(|s| s.priority);
@@ -293,11 +294,16 @@ impl PrdDocument {
     }
 
     /// Get the next story to work on (highest priority, not passed).
+    #[must_use]
     pub fn get_next_story(&self) -> Option<&UserStory> {
-        self.get_pending_stories().into_iter().next()
+        self.user_stories
+            .iter()
+            .filter(|s| !s.passes)
+            .min_by_key(|s| s.priority)
     }
 
     /// Check if all stories have passed.
+    #[must_use]
     pub fn all_stories_complete(&self) -> bool {
         if self.user_stories.is_empty() {
             return true;
@@ -319,6 +325,7 @@ impl PrdDocument {
     }
 
     /// Get a story by ID.
+    #[must_use]
     pub fn get_story(&self, story_id: &str) -> Option<&UserStory> {
         self.user_stories.iter().find(|s| s.id == story_id)
     }
@@ -329,6 +336,7 @@ impl PrdDocument {
     }
 
     /// Get counts of completed and total stories.
+    #[must_use]
     pub fn get_story_counts(&self) -> (usize, usize) {
         let completed = self.user_stories.iter().filter(|s| s.passes).count();
         let total = self.user_stories.len();
