@@ -191,8 +191,7 @@ impl LoopController {
     ) -> RunResult {
         let mut iterations_completed: u32 = 0;
         let mut tasks_completed: u32 = 0;
-        #[allow(unused_assignments)]
-        let mut stop_reason = StopReason::Complete;
+        let stop_reason;
 
         let timeout_minutes = timeout_override.unwrap_or(self.config.limits.timeout_minutes);
         let timeout_duration = std::time::Duration::from_secs(timeout_minutes as u64 * 60);
@@ -570,8 +569,7 @@ fn run_loop_with_tui_sender(
     // Main loop
     let mut iterations_completed: u32 = 0;
     let mut tasks_completed: u32 = 0;
-    #[allow(unused_assignments)]
-    let mut stop_reason = super::StopReason::Complete;
+    let stop_reason;
 
     let timeout_minutes = options
         .timeout_minutes
@@ -1044,36 +1042,30 @@ fn run_iteration_with_tui(
 /// Compares old and new PRD states to find tasks that changed from
 /// `passes: false` to `passes: true` and closes them in beads or GitHub.
 fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
-    use std::collections::HashMap;
+    use std::collections::HashSet;
 
-    // Build map of old task completion status
-    let old_passes: HashMap<&str, bool> = old_prd
+    // Collect IDs of previously completed tasks
+    let previously_complete: HashSet<&str> = old_prd
         .user_stories
         .iter()
-        .map(|s| (s.id.as_str(), s.passes))
+        .filter(|s| s.passes)
+        .map(|s| s.id.as_str())
         .collect();
 
-    // Find newly completed tasks
-    for story in &new_prd.user_stories {
-        if !story.passes {
-            continue;
-        }
-
-        // Check if it was not completed before
-        let was_complete = old_passes.get(story.id.as_str()).copied().unwrap_or(false);
-        if was_complete {
-            continue;
-        }
-
-        // Sync completion back to the appropriate source
-        if story.source == "beads" {
-            crate::sources::close_beads_issue(&story.id);
-        } else if let Some(issue_number) = crate::sources::parse_github_issue_number(&story.source)
-        {
-            // Close GitHub issue (uses current repo context)
-            crate::sources::close_github_issue(issue_number, None);
-        }
-    }
+    // Find and sync newly completed tasks
+    new_prd
+        .user_stories
+        .iter()
+        .filter(|s| s.passes && !previously_complete.contains(s.id.as_str()))
+        .for_each(|story| {
+            if story.source == "beads" {
+                crate::sources::close_beads_issue(&story.id);
+            } else if let Some(issue_number) =
+                crate::sources::parse_github_issue_number(&story.source)
+            {
+                crate::sources::close_github_issue(issue_number, None);
+            }
+        });
 }
 
 #[cfg(test)]

@@ -261,55 +261,26 @@ impl AiCliConfig {
 
     /// Get the output format arguments for the detected CLI.
     fn get_output_format_args(&self) -> Vec<String> {
-        let cmd_lower = self.command.to_lowercase();
-        let mut args = Vec::new();
+        if self.output_format == AiOutputFormat::Text {
+            return Vec::new();
+        }
 
-        // Cursor CLI format
-        if cmd_lower.contains("cursor") {
+        let cmd_lower = self.command.to_lowercase();
+        let mut args = vec![
+            "--output-format".to_string(),
             match self.output_format {
-                AiOutputFormat::Text => {}
-                AiOutputFormat::Json => {
-                    args.push("--output-format".to_string());
-                    args.push("json".to_string());
-                }
-                AiOutputFormat::StreamJson => {
-                    args.push("--output-format".to_string());
-                    args.push("stream-json".to_string());
-                    if self.stream_partial {
-                        args.push("--stream-partial-output".to_string());
-                    }
-                }
-            }
-        }
-        // Claude CLI format
-        else if cmd_lower.contains("claude") {
-            match self.output_format {
-                AiOutputFormat::Text => {}
-                AiOutputFormat::Json => {
-                    args.push("--output-format".to_string());
-                    args.push("json".to_string());
-                }
-                AiOutputFormat::StreamJson => {
-                    args.push("--output-format".to_string());
-                    args.push("stream-json".to_string());
-                    if self.stream_partial {
-                        args.push("--include-partial-messages".to_string());
-                    }
-                }
-            }
-        }
-        // Unknown CLI - try generic format (may not work)
-        else {
-            match self.output_format {
-                AiOutputFormat::Text => {}
-                AiOutputFormat::Json => {
-                    args.push("--output-format".to_string());
-                    args.push("json".to_string());
-                }
-                AiOutputFormat::StreamJson => {
-                    args.push("--output-format".to_string());
-                    args.push("stream-json".to_string());
-                }
+                AiOutputFormat::Json => "json".to_string(),
+                AiOutputFormat::StreamJson => "stream-json".to_string(),
+                AiOutputFormat::Text => unreachable!(),
+            },
+        ];
+
+        // Add partial streaming flag for stream-json mode
+        if self.output_format == AiOutputFormat::StreamJson && self.stream_partial {
+            if cmd_lower.contains("cursor") {
+                args.push("--stream-partial-output".to_string());
+            } else if cmd_lower.contains("claude") {
+                args.push("--include-partial-messages".to_string());
             }
         }
 
@@ -317,6 +288,7 @@ impl AiCliConfig {
     }
 
     /// Check if this CLI is configured for NDJSON streaming.
+    #[must_use]
     pub fn uses_stream_json(&self) -> bool {
         self.output_format == AiOutputFormat::StreamJson
     }

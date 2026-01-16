@@ -218,7 +218,6 @@ impl SessionProgress {
             .entry(task_id.to_string())
             .or_insert_with(|| TaskProgress::new(task_id, source));
 
-        task.status = status.clone();
         task.message = message;
 
         match status {
@@ -233,10 +232,10 @@ impl SessionProgress {
             TaskStatus::Failed => {
                 task.failure_count += 1;
             }
-            _ => {}
+            TaskStatus::Pending | TaskStatus::Skipped => {}
         }
 
-        // Return the task reference directly from entry() rather than re-fetching
+        task.status = status;
         task
     }
 
@@ -284,6 +283,7 @@ impl SessionProgress {
     ///
     /// Returns true if there are tasks and all are either completed or skipped.
     /// Returns false if there are no tasks.
+    #[must_use]
     pub fn is_complete(&self) -> bool {
         if self.tasks.is_empty() {
             return false;
@@ -363,6 +363,7 @@ impl SessionProgress {
     /// Get task counts by status.
     ///
     /// Returns (pending, in_progress, completed, failed, skipped).
+    #[must_use]
     pub fn get_task_counts(&self) -> (usize, usize, usize, usize, usize) {
         let pending = self.get_pending_tasks().len();
         let in_progress = self.get_in_progress_tasks().len();
