@@ -148,6 +148,56 @@ pub fn get_repo_root() -> Option<String> {
     }
 }
 
+/// Get the GitHub repository in `owner/repo` format from the remote origin.
+///
+/// Parses common GitHub remote URL formats:
+/// - `git@github.com:owner/repo.git`
+/// - `https://github.com/owner/repo.git`
+/// - `https://github.com/owner/repo`
+///
+/// # Returns
+///
+/// The repository in `owner/repo` format, or None if not a GitHub remote.
+pub fn get_github_remote() -> Option<String> {
+    let output = Command::new("git")
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    parse_github_url(&url)
+}
+
+/// Parse a GitHub URL into `owner/repo` format.
+///
+/// Supports SSH and HTTPS formats.
+fn parse_github_url(url: &str) -> Option<String> {
+    // SSH format: git@github.com:owner/repo.git
+    if let Some(rest) = url.strip_prefix("git@github.com:") {
+        let repo = rest.trim_end_matches(".git");
+        if repo.contains('/') && !repo.is_empty() {
+            return Some(repo.to_string());
+        }
+    }
+
+    // HTTPS format: https://github.com/owner/repo.git
+    if url.contains("github.com/") {
+        if let Some(idx) = url.find("github.com/") {
+            let rest = &url[idx + 11..]; // Skip "github.com/"
+            let repo = rest.trim_end_matches(".git").trim_end_matches('/');
+            if repo.contains('/') && !repo.is_empty() {
+                return Some(repo.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +254,63 @@ mod tests {
         assert!(root.is_some());
         if let Some(r) = root {
             assert!(r.contains("afk"));
+        }
+    }
+
+    #[test]
+    fn test_parse_github_url_ssh() {
+        assert_eq!(
+            parse_github_url("git@github.com:owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+        assert_eq!(
+            parse_github_url("git@github.com:some-user/my-project.git"),
+            Some("some-user/my-project".to_string())
+        );
+        assert_eq!(
+            parse_github_url("git@github.com:owner/repo"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_github_url_https() {
+        assert_eq!(
+            parse_github_url("https://github.com/owner/repo.git"),
+            Some("owner/repo".to_string())
+        );
+        assert_eq!(
+            parse_github_url("https://github.com/owner/repo"),
+            Some("owner/repo".to_string())
+        );
+        assert_eq!(
+            parse_github_url("https://github.com/some-user/my-project.git"),
+            Some("some-user/my-project".to_string())
+        );
+        assert_eq!(
+            parse_github_url("https://github.com/owner/repo/"),
+            Some("owner/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_github_url_invalid() {
+        // Not GitHub URLs
+        assert!(parse_github_url("git@gitlab.com:owner/repo.git").is_none());
+        assert!(parse_github_url("https://gitlab.com/owner/repo").is_none());
+        assert!(parse_github_url("not a url").is_none());
+        assert!(parse_github_url("").is_none());
+    }
+
+    #[test]
+    fn test_get_github_remote_returns_result() {
+        // This test just verifies the function runs
+        // In the afk repo, it should return Some value with the repo
+        let remote = get_github_remote();
+        // If running in the afk repo, we should get a result
+        // (may be None in CI environments without git remote)
+        if let Some(r) = remote {
+            assert!(r.contains('/'), "Remote should be in owner/repo format");
         }
     }
 

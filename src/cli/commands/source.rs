@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use crate::config::{AfkConfig, SourceConfig, SourceType};
+use crate::git::get_github_remote;
 
 /// Result type for source command operations.
 pub type SourceCommandResult = Result<(), SourceCommandError>;
@@ -82,10 +83,24 @@ fn source_add_impl(
         SourceType::Json => SourceConfig::json(path.unwrap_or(".afk/tasks.json")),
         SourceType::Markdown => SourceConfig::markdown(path.unwrap_or("TODO.md")),
         SourceType::Github => {
-            // GitHub requires special handling - repo and labels
-            // For now, create with empty values; user would typically use
-            // a more complex CLI or edit config directly
-            SourceConfig::github(path.unwrap_or(""), vec![])
+            // GitHub source: use provided repo or infer from git remote
+            let repo = match path {
+                Some(r) if !r.is_empty() => r.to_string(),
+                _ => {
+                    // Try to infer from git remote origin
+                    match get_github_remote() {
+                        Some(inferred) => {
+                            println!(
+                                "\x1b[2mInferred repo from git remote:\x1b[0m {}",
+                                inferred
+                            );
+                            inferred
+                        }
+                        None => String::new(),
+                    }
+                }
+            };
+            SourceConfig::github(&repo, vec![])
         }
     };
 
@@ -565,5 +580,47 @@ mod tests {
         assert_eq!(config.sources[0].source_type, SourceType::Beads);
         assert_eq!(config.sources[1].source_type, SourceType::Github);
         assert_eq!(config.sources[1].repo, Some("owner/repo2".to_string()));
+    }
+
+    #[test]
+    fn test_source_add_github_with_explicit_repo() {
+        let (_temp, config_path) = setup_temp_config();
+
+        // Add GitHub source with explicit repo - should use provided value
+        source_add_impl("github", Some("explicit/repo"), Some(&config_path)).unwrap();
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 1);
+        assert_eq!(config.sources[0].source_type, SourceType::Github);
+        assert_eq!(config.sources[0].repo, Some("explicit/repo".to_string()));
+    }
+
+    #[test]
+    fn test_source_add_github_empty_repo_tries_inference() {
+        let (_temp, config_path) = setup_temp_config();
+
+        // Add GitHub source with empty string - should attempt inference
+        // (will get empty string if not in a git repo with GitHub remote)
+        let result = source_add_impl("github", Some(""), Some(&config_path));
+        assert!(result.is_ok());
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 1);
+        assert_eq!(config.sources[0].source_type, SourceType::Github);
+        // The repo may be inferred or empty depending on test environment
+    }
+
+    #[test]
+    fn test_source_add_github_none_repo_tries_inference() {
+        let (_temp, config_path) = setup_temp_config();
+
+        // Add GitHub source with None - should attempt inference
+        let result = source_add_impl("github", None, Some(&config_path));
+        assert!(result.is_ok());
+
+        let config = AfkConfig::load(Some(&config_path)).unwrap();
+        assert_eq!(config.sources.len(), 1);
+        assert_eq!(config.sources[0].source_type, SourceType::Github);
+        // The repo may be inferred from the current git remote if available
     }
 }
