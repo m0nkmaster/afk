@@ -190,23 +190,47 @@ pub fn run_loop(config: &AfkConfig, iterations: Option<u32>, ...) -> LoopResult 
         // 3. Generate prompt
         let prompt = generate_prompt(config, false, None)?;
         
-        // 4. Spawn fresh AI CLI
-        let output = spawn_ai_cli(&config.ai_cli, &prompt)?;
+        // 4. Select model (if multi-model configured)
+        let model = config.ai_cli.select_model();  // Pseudo-random with equal distribution
         
-        // 5. Run quality gates
+        // 5. Spawn fresh AI CLI with selected model
+        let output = spawn_ai_cli(&config.ai_cli, &prompt, model)?;
+        
+        // 6. Run quality gates
         let gates = run_quality_gates(&config.feedback_loops)?;
         
-        // 6. Auto-commit if gates pass
+        // 7. Auto-commit if gates pass
         if gates.all_passed {
             git_commit(&story.id)?;
         }
         
-        // 7. Update progress
+        // 8. Update progress
         progress.iterations += 1;
         progress.save(None)?;
     }
 }
 ```
+
+### Multi-Model Rotation
+
+When `ai_cli.models` contains multiple entries, afk rotates between them:
+
+```rust
+impl AiCliConfig {
+    /// Select a model pseudo-randomly with equal distribution.
+    pub fn select_model(&self) -> Option<&str> {
+        if self.models.is_empty() { return None; }
+        if self.models.len() == 1 { return Some(&self.models[0]); }
+        
+        // Use nanosecond timing for pseudo-random selection
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let index = (nanos as usize) % self.models.len();
+        Some(&self.models[index])
+    }
+}
+```
+
+The selected model is passed via `--model <name>` to the AI CLI. This brings different perspectives to challenging tasks and helps avoid local optima.
 
 ### Quality Gates
 

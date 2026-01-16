@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Multi-model rotation** — Configure multiple AI models in `ai_cli.models` array; afk selects one pseudo-randomly each iteration with equal distribution, passing `--model <selected>` to the AI CLI. Brings different perspectives to avoid local optima.
+- **Branch change detection** — When you switch git branches and run `afk go`, prompts to archive the previous session
+- **Branch tracking in archives** — Archive metadata now includes the git branch name for better organisation
+
 ## [0.4.10] - 2026-01-14
 
 ### Changed
@@ -100,9 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Single static binary, no dependencies
 - ~580 unit and integration tests
 
-## [Unreleased]
-
-### Planned
+## [Planned]
 
 - Watch mode for continuous development
 - Plugin system for custom sources

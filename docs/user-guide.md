@@ -187,6 +187,8 @@ The AI reads these files directly and updates them as it works.
 | `afk archive` | Archive and clear session (ready for fresh work) |
 | `afk archive list` | List archived sessions |
 
+**Note:** When you switch git branches and run `afk go`, you'll be prompted to archive the previous session automatically.
+
 ### Config Commands
 
 | Command | Description |
@@ -234,7 +236,8 @@ All config lives in `.afk/config.json`:
   },
   "ai_cli": {
     "command": "claude",
-    "args": ["--dangerously-skip-permissions", "-p"]
+    "args": ["--dangerously-skip-permissions", "-p"],
+    "models": ["sonnet", "opus"]
   },
   "git": {
     "auto_commit": true,
@@ -353,6 +356,33 @@ afk use --list       # Show all known CLIs with install status
 
 **Note:** afk automatically appends streaming output flags (`--output-format stream-json`) for supported CLIs. The `args` above are the base configuration only. To disable streaming, set `"output_format": "text"` in your config.
 
+### Multi-Model Rotation
+
+Configure multiple models to rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches — cycling through them helps avoid getting stuck in local optima.
+
+```json
+{
+  "ai_cli": {
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p"],
+    "models": ["sonnet", "opus", "haiku"]
+  }
+}
+```
+
+When multiple models are configured:
+- afk selects one with equal probability each iteration
+- Passes `--model <selected>` to the AI CLI
+- Displays which model was selected in the TUI
+
+This works with any CLI that supports the `--model` flag (Claude Code, Cursor, Aider, Codex, etc.).
+
+You can also set models via the CLI:
+
+```bash
+afk config set ai_cli.models "sonnet, opus, haiku"
+```
+
 ### Completion Signals
 
 The AI can signal task completion by outputting:
@@ -434,6 +464,20 @@ afk go 10
 # When done, raise a PR as usual
 ```
 
+#### Branch Change Detection
+
+When you switch git branches and run `afk go`, it detects the change and prompts:
+
+```
+⚠  You're on branch main but the last session was on feature/add-auth.
+   Archive the previous session? [Y/n]:
+```
+
+- **Press Enter or Y** — Archives the previous session and starts fresh
+- **Press N** — Continues without archiving (updates stored branch)
+
+This keeps your work organised — each feature branch gets its own clean session, and old sessions are automatically archived when you switch context.
+
 ## Debugging
 
 ### Check Current State
@@ -485,14 +529,35 @@ ls .afk/archive/           # Previous sessions
 .afk/
 ├── config.json      # Configuration
 ├── tasks.json       # Current task list (source of truth)
-├── progress.json    # Session state (iterations, task status, per-task learnings)
+├── progress.json    # Session state (iterations, task status, per-task learnings, last branch)
 └── archive/         # Previous sessions
-    └── 2026-01-12_12-30-00_main_complete/
+    └── 20260112_123000/
         ├── progress.json
-        └── metadata.json
+        ├── tasks.json
+        └── metadata.json   # Includes branch name, reason, stats
 
 AGENTS.md            # Long-term project knowledge (at project root or in subfolders)
 ```
+
+### Archive Metadata
+
+Each archived session includes metadata:
+
+```json
+{
+  "archived_at": "2026-01-12T12:30:00.000000",
+  "branch": "feature/add-auth",
+  "reason": "branch_change",
+  "iterations": 5,
+  "tasks_completed": 3,
+  "tasks_pending": 2
+}
+```
+
+The `reason` field indicates why the session was archived:
+- `completed` — All tasks finished
+- `branch_change` — User switched git branches
+- `manual` — User ran `afk archive` manually
 
 ## Installation
 
