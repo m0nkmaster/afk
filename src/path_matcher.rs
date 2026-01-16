@@ -50,7 +50,7 @@ impl PathMatcher {
     /// Create a new PathMatcher from a slice of pattern strings.
     pub fn new(patterns: &[&str]) -> Self {
         Self {
-            patterns: patterns.iter().map(|s| (*s).to_string()).collect(),
+            patterns: patterns.iter().map(|&s| s.to_owned()).collect(),
         }
     }
 

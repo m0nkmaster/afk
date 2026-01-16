@@ -355,29 +355,20 @@ pub fn infer_config(root: Option<&Path>) -> AfkConfig {
 
 fn extract_cargo_name(root: &Path) -> Option<String> {
     let content = std::fs::read_to_string(root.join("Cargo.toml")).ok()?;
-    for line in content.lines() {
-        if line.starts_with("name") && line.contains('=') {
-            let parts: Vec<&str> = line.split('=').collect();
-            if parts.len() >= 2 {
-                return Some(parts[1].trim().trim_matches('"').to_string());
-            }
-        }
-    }
-    None
+    content
+        .lines()
+        .find(|line| line.starts_with("name") && line.contains('='))
+        .and_then(|line| line.split_once('='))
+        .map(|(_, value)| value.trim().trim_matches('"').to_owned())
 }
 
 fn extract_python_name(root: &Path) -> Option<String> {
-    if let Ok(content) = std::fs::read_to_string(root.join("pyproject.toml")) {
-        for line in content.lines() {
-            if line.starts_with("name") && line.contains('=') {
-                let parts: Vec<&str> = line.split('=').collect();
-                if parts.len() >= 2 {
-                    return Some(parts[1].trim().trim_matches('"').to_string());
-                }
-            }
-        }
-    }
-    None
+    let content = std::fs::read_to_string(root.join("pyproject.toml")).ok()?;
+    content
+        .lines()
+        .find(|line| line.starts_with("name") && line.contains('='))
+        .and_then(|line| line.split_once('='))
+        .map(|(_, value)| value.trim().trim_matches('"').to_owned())
 }
 
 fn extract_node_name(root: &Path) -> Option<String> {
@@ -390,16 +381,13 @@ fn extract_node_name(root: &Path) -> Option<String> {
 
 fn extract_go_name(root: &Path) -> Option<String> {
     let content = std::fs::read_to_string(root.join("go.mod")).ok()?;
-    let first_line = content.lines().next()?;
-    if first_line.starts_with("module") {
-        let parts: Vec<&str> = first_line.split_whitespace().collect();
-        if parts.len() >= 2 {
-            // Get the last segment of the module path
-            let module_path = parts[1];
-            return module_path.split('/').next_back().map(|s| s.to_string());
-        }
-    }
-    None
+    content
+        .lines()
+        .next()
+        .filter(|line| line.starts_with("module"))
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|module_path| module_path.rsplit('/').next())
+        .map(|s| s.to_owned())
 }
 
 fn file_contains(path: impl AsRef<Path>, pattern: &str) -> bool {
@@ -564,7 +552,7 @@ pub fn ensure_ai_cli_configured(
         AiCliSelectionResult::Selected(ai_cli) => {
             // Save the selection to config
             let mut new_config = config
-                .map(|c| c.clone())
+                .cloned()
                 .or_else(|| AfkConfig::load(None).ok())
                 .unwrap_or_default();
 
