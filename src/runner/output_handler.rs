@@ -41,7 +41,7 @@ impl FeedbackMode {
 /// Handles console output, completion signal detection, and feedback integration.
 pub struct OutputHandler {
     /// Completion signals to look for.
-    signals: Vec<String>,
+    signals: &'static [&'static str],
     /// Feedback display (optional).
     feedback_display: Option<FeedbackDisplay>,
     /// File watcher (optional).
@@ -70,7 +70,7 @@ impl OutputHandler {
     /// Create a new OutputHandler with default signals.
     pub fn new() -> Self {
         Self {
-            signals: COMPLETION_SIGNALS.iter().map(|s| s.to_string()).collect(),
+            signals: COMPLETION_SIGNALS,
             feedback_display: None,
             file_watcher: None,
             output_parser: OutputParser::new(),
@@ -86,7 +86,7 @@ impl OutputHandler {
     }
 
     /// Create with custom completion signals.
-    pub fn with_signals(signals: Vec<String>) -> Self {
+    pub fn with_signals(signals: &'static [&'static str]) -> Self {
         Self {
             signals,
             ..Self::new()
@@ -737,7 +737,8 @@ mod tests {
 
     #[test]
     fn test_output_handler_with_custom_signals() {
-        let handler = OutputHandler::with_signals(vec!["DONE".to_string()]);
+        static CUSTOM_SIGNALS: &[&str] = &["DONE"];
+        let handler = OutputHandler::with_signals(CUSTOM_SIGNALS);
         assert_eq!(handler.signals.len(), 1);
         assert!(handler.contains_completion_signal("DONE"));
     }

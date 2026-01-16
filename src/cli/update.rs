@@ -60,7 +60,9 @@ pub enum UpdateError {
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
     /// GitHub API rate limit exceeded.
-    #[error("GitHub API rate limit exceeded. Try again in an hour, or authenticate with: gh auth login")]
+    #[error(
+        "GitHub API rate limit exceeded. Try again in an hour, or authenticate with: gh auth login"
+    )]
     RateLimited,
     /// No release found on GitHub.
     #[error("No release found")]

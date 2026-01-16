@@ -5,6 +5,27 @@
 use crate::prd::UserStory;
 use regex::Regex;
 use std::process::Command;
+use std::sync::LazyLock;
+
+// Static regexes for acceptance criteria extraction (compiled once)
+static AC_SECTION_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
+    )
+    .expect("acceptance criteria section regex is valid")
+});
+
+static AC_HEADING_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)")
+        .expect("markdown heading regex is valid")
+});
+
+static AC_ITEM_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").expect("list item regex is valid")
+});
+
+static AC_CHECKBOX_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[-*]\s*\[ \]\s*(.+)").expect("checkbox pattern regex is valid"));
 
 /// Load tasks from beads.
 ///
@@ -282,19 +303,12 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
 
     // Pattern 1: Look for acceptance criteria section
     // Matches: "Acceptance Criteria:\n- item\n- item" or similar
-    let section_pattern = Regex::new(
-        r"(?i)(?:acceptance\s*criteria|ac|definition\s*of\s*done|dod|requirements?)[\s:]*\n((?:[-*\d.]+\s*.+\n?)+)",
-    )
-    .expect("acceptance criteria section regex is valid");
-
-    if let Some(captures) = section_pattern.captures(text) {
+    if let Some(captures) = AC_SECTION_PATTERN.captures(text) {
         if let Some(section) = captures.get(1) {
-            let item_pattern =
-                Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").expect("list item regex is valid");
             for line in section.as_str().lines() {
                 let line = line.trim();
                 if !line.is_empty() {
-                    let cleaned = item_pattern.replace(line, "").to_string();
+                    let cleaned = AC_ITEM_PATTERN.replace(line, "").to_string();
                     if !cleaned.is_empty() {
                         criteria.push(cleaned);
                     }
@@ -305,18 +319,12 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
     }
 
     // Pattern 2: Look for markdown heading section
-    let heading_pattern =
-        Regex::new(r"(?i)##\s*(?:acceptance\s*criteria|ac|dod)\s*\n((?:[-*\d.]+\s*.+\n?)+)")
-            .expect("markdown heading regex is valid");
-
-    if let Some(captures) = heading_pattern.captures(text) {
+    if let Some(captures) = AC_HEADING_PATTERN.captures(text) {
         if let Some(section) = captures.get(1) {
-            let item_pattern =
-                Regex::new(r"^[-*\d.]+\s*(?:\[[ x]\])?\s*").expect("list item regex is valid");
             for line in section.as_str().lines() {
                 let line = line.trim();
                 if !line.is_empty() {
-                    let cleaned = item_pattern.replace(line, "").to_string();
+                    let cleaned = AC_ITEM_PATTERN.replace(line, "").to_string();
                     if !cleaned.is_empty() {
                         criteria.push(cleaned);
                     }
@@ -327,9 +335,7 @@ fn extract_acceptance_criteria(text: &str) -> Vec<String> {
     }
 
     // Pattern 3: Look for unchecked checkbox items
-    let checkbox_pattern =
-        Regex::new(r"[-*]\s*\[ \]\s*(.+)").expect("checkbox pattern regex is valid");
-    for captures in checkbox_pattern.captures_iter(text) {
+    for captures in AC_CHECKBOX_PATTERN.captures_iter(text) {
         if let Some(item) = captures.get(1) {
             let cleaned = item.as_str().trim();
             if !cleaned.is_empty() {
