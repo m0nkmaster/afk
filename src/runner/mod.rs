@@ -3,10 +3,45 @@
 //! This module implements the Ralph Wiggum pattern for autonomous AI coding.
 //! Each iteration spawns a fresh AI CLI instance with clean context.
 
+use std::sync::OnceLock;
+
 mod controller;
 mod iteration;
 mod output_handler;
 mod quality_gates;
+
+/// Cached current working directory for path relativisation.
+static CWD: OnceLock<String> = OnceLock::new();
+
+/// Strip the current working directory from a path to make it relative.
+///
+/// If the path starts with the cwd, returns the relative portion.
+/// Otherwise returns the original path unchanged.
+pub fn make_path_relative(path: &str) -> &str {
+    let cwd = CWD.get_or_init(|| {
+        std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default()
+    });
+
+    if cwd.is_empty() {
+        return path;
+    }
+
+    // Try stripping cwd with trailing slash
+    let cwd_with_slash = format!("{}/", cwd);
+    if let Some(relative) = path.strip_prefix(&cwd_with_slash) {
+        return relative;
+    }
+
+    // Also try without trailing slash (for exact matches)
+    if let Some(relative) = path.strip_prefix(cwd.as_str()) {
+        // If there's a remaining slash, skip it
+        return relative.strip_prefix('/').unwrap_or(relative);
+    }
+
+    path
+}
 
 pub use controller::{run_loop, run_loop_with_options, run_loop_with_tui, LoopController};
 pub use iteration::{run_iteration, IterationResult, IterationRunner};
@@ -173,5 +208,33 @@ mod tests {
         assert_eq!(result.stop_reason, StopReason::Complete);
         assert_eq!(result.duration_seconds, 120.5);
         assert!(result.archived_to.is_none());
+    }
+
+    #[test]
+    fn test_make_path_relative_strips_cwd() {
+        // The function uses OnceLock so we can test the logic with known paths
+        let cwd = std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        if !cwd.is_empty() {
+            let abs_path = format!("{}/src/main.rs", cwd);
+            let result = make_path_relative(&abs_path);
+            assert_eq!(result, "src/main.rs");
+        }
+    }
+
+    #[test]
+    fn test_make_path_relative_preserves_relative_path() {
+        // Relative paths should be returned unchanged
+        let result = make_path_relative("src/main.rs");
+        assert_eq!(result, "src/main.rs");
+    }
+
+    #[test]
+    fn test_make_path_relative_preserves_different_absolute_path() {
+        // Paths outside cwd should be returned unchanged
+        let result = make_path_relative("/some/other/path/file.rs");
+        assert_eq!(result, "/some/other/path/file.rs");
     }
 }

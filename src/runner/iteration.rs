@@ -12,6 +12,7 @@ use crate::parser::{StreamEvent, StreamJsonParser};
 use crate::prompt::generate_prompt_with_root;
 use crate::tui::TuiEvent;
 
+use super::make_path_relative;
 use super::output_handler::OutputHandler;
 
 /// Result of a single iteration.
@@ -412,49 +413,55 @@ impl IterationRunner {
                 let tui_event = TuiEvent::OutputLine(text.clone());
                 (Some(display), Some(tui_event))
             }
-            StreamEvent::ToolStarted {
-                tool_name,
-                tool_type,
-                path,
-            } => {
-                let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
-                let display = format!("\x1b[33m→ {}{}\x1b[0m", tool_type, path_str);
-                let tui_event = TuiEvent::ToolCall(tool_name.clone());
-                (Some(display), Some(tui_event))
-            }
-            StreamEvent::ToolCompleted {
-                tool_type,
-                path,
-                success,
-                lines,
-                ..
-            } => {
-                let status = if *success { "✓" } else { "✗" };
-                let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
-                let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
-                let colour = if *success { "\x1b[32m" } else { "\x1b[31m" };
-                let display = format!(
-                    "{}{} {}{}{}\x1b[0m",
-                    colour, status, tool_type, path_str, lines_str
-                );
+        StreamEvent::ToolStarted {
+            tool_name,
+            tool_type,
+            path,
+        } => {
+            let path_str = path
+                .as_ref()
+                .map(|p| format!(" {}", make_path_relative(p)))
+                .unwrap_or_default();
+            let display = format!("\x1b[33m→ {}{}\x1b[0m", tool_type, path_str);
+            let tui_event = TuiEvent::ToolCall(tool_name.clone());
+            (Some(display), Some(tui_event))
+        }
+        StreamEvent::ToolCompleted {
+            tool_type,
+            path,
+            success,
+            lines,
+            ..
+        } => {
+            let status = if *success { "✓" } else { "✗" };
+            let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
+            let path_str = path
+                .as_ref()
+                .map(|p| format!(" {}", make_path_relative(p)))
+                .unwrap_or_default();
+            let colour = if *success { "\x1b[32m" } else { "\x1b[31m" };
+            let display = format!(
+                "{}{} {}{}{}\x1b[0m",
+                colour, status, tool_type, path_str, lines_str
+            );
 
-                // Emit file change event for file operations
-                let tui_event = path.as_ref().map(|p| {
-                    let change_type = match tool_type {
-                        crate::parser::ToolType::Read => "read",
-                        crate::parser::ToolType::Write => "created",
-                        crate::parser::ToolType::Edit => "modified",
-                        crate::parser::ToolType::Delete => "deleted",
-                        _ => "modified",
-                    };
-                    TuiEvent::FileChange {
-                        path: p.clone(),
-                        change_type: change_type.to_string(),
-                    }
-                });
+            // Emit file change event for file operations
+            let tui_event = path.as_ref().map(|p| {
+                let change_type = match tool_type {
+                    crate::parser::ToolType::Read => "read",
+                    crate::parser::ToolType::Write => "created",
+                    crate::parser::ToolType::Edit => "modified",
+                    crate::parser::ToolType::Delete => "deleted",
+                    _ => "modified",
+                };
+                TuiEvent::FileChange {
+                    path: make_path_relative(p).to_string(),
+                    change_type: change_type.to_string(),
+                }
+            });
 
-                (Some(display), tui_event)
-            }
+            (Some(display), tui_event)
+        }
             StreamEvent::Result {
                 success,
                 duration_ms,

@@ -11,6 +11,7 @@ use crate::config::AfkConfig;
 use crate::prd::{mark_story_in_progress, sync_prd_with_root, PrdDocument};
 
 use super::iteration::IterationRunner;
+use super::make_path_relative;
 use super::output_handler::{FeedbackMode, OutputHandler};
 use super::{RunOptions, RunResult, StopReason};
 
@@ -421,6 +422,10 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     let config_clone = config.clone();
     let options_clone = options.clone();
 
+    // Shared interrupt flag for graceful shutdown
+    let interrupted = Arc::new(AtomicBool::new(false));
+    let interrupted_runner = interrupted.clone();
+
     // Start file watcher in a separate thread
     let watcher_running = Arc::new(AtomicBool::new(true));
     let watcher_running_clone = watcher_running.clone();
@@ -437,8 +442,9 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
                         ChangeType::Modified => "modified",
                         ChangeType::Deleted => "deleted",
                     };
+                    let abs_path = change.path.to_string_lossy().to_string();
                     let _ = tx_watcher.send(TuiEvent::FileChange {
-                        path: change.path.to_string_lossy().to_string(),
+                        path: super::make_path_relative(&abs_path).to_string(),
                         change_type: change_type.to_string(),
                     });
                 }
@@ -448,13 +454,17 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     });
 
     // Spawn the runner in a background thread
-    let runner_handle =
-        thread::spawn(move || run_loop_with_tui_sender(&config_clone, options_clone, tx));
+    let runner_handle = thread::spawn(move || {
+        run_loop_with_tui_sender(&config_clone, options_clone, tx, interrupted_runner)
+    });
 
     // Run TUI in main thread (handles input and rendering)
     if let Err(e) = tui_app.run() {
         eprintln!("TUI error: {e}");
     }
+
+    // Signal runner to stop (user pressed Q or Esc)
+    interrupted.store(true, AtomicOrdering::SeqCst);
 
     // Stop file watcher
     watcher_running.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -463,7 +473,7 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     // Clean up TUI
     let _ = tui_app.cleanup();
 
-    // Wait for runner to finish
+    // Wait for runner to finish (should exit quickly now that interrupted is set)
     match runner_handle.join() {
         Ok(result) => result,
         Err(_) => RunResult {
@@ -481,6 +491,7 @@ fn run_loop_with_tui_sender(
     config: &AfkConfig,
     options: RunOptions,
     tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+    interrupted: Arc<AtomicBool>,
 ) -> RunResult {
     use crate::tui::TuiEvent;
 
@@ -577,6 +588,12 @@ fn run_loop_with_tui_sender(
     let timeout_duration = std::time::Duration::from_secs(timeout_minutes as u64 * 60);
 
     loop {
+        // Check for user interrupt (Q pressed in TUI)
+        if interrupted.load(Ordering::SeqCst) {
+            stop_reason = super::StopReason::UserInterrupt;
+            break;
+        }
+
         // Check timeout
         if start_time.elapsed() >= timeout_duration {
             stop_reason = super::StopReason::Timeout;
@@ -655,7 +672,7 @@ fn run_loop_with_tui_sender(
 
         // Run iteration with TUI output
         let iter_start = Instant::now();
-        let result = run_iteration_with_tui(config, iteration, tx.clone());
+        let result = run_iteration_with_tui(config, iteration, tx.clone(), interrupted.clone());
 
         iterations_completed += 1;
 
@@ -671,6 +688,9 @@ fn run_loop_with_tui_sender(
                     break;
                 } else if error == "AFK_LIMIT_REACHED" {
                     stop_reason = super::StopReason::MaxIterations;
+                    break;
+                } else if error == "User interrupted" {
+                    stop_reason = super::StopReason::UserInterrupt;
                     break;
                 } else {
                     let _ = tx.send(TuiEvent::Error(error.clone()));
@@ -838,7 +858,10 @@ fn handle_stream_event(
             tool_type,
             path,
         } => {
-            let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
+            let path_str = path
+                .as_ref()
+                .map(|p| format!(" {}", make_path_relative(p)))
+                .unwrap_or_default();
             let _ = tx.send(TuiEvent::OutputLine(format!("→ {}{}", tool_type, path_str)));
             let _ = tx.send(TuiEvent::ToolCall(tool_name.clone()));
         }
@@ -851,7 +874,10 @@ fn handle_stream_event(
         } => {
             let status = if *success { "✓" } else { "✗" };
             let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
-            let path_str = path.as_ref().map(|p| format!(" {}", p)).unwrap_or_default();
+            let path_str = path
+                .as_ref()
+                .map(|p| format!(" {}", make_path_relative(p)))
+                .unwrap_or_default();
             let _ = tx.send(TuiEvent::OutputLine(format!(
                 "{} {}{}{}",
                 status, tool_type, path_str, lines_str
@@ -867,7 +893,7 @@ fn handle_stream_event(
                     _ => "modified",
                 };
                 let _ = tx.send(TuiEvent::FileChange {
-                    path: p.clone(),
+                    path: make_path_relative(p).to_string(),
                     change_type: change_type.to_string(),
                 });
             }
@@ -942,6 +968,7 @@ fn run_iteration_with_tui(
     config: &AfkConfig,
     _iteration: u32,
     tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+    interrupted: Arc<AtomicBool>,
 ) -> super::iteration::IterationResult {
     use crate::parser::StreamJsonParser;
     use crate::prompt::generate_prompt_with_root;
@@ -992,10 +1019,18 @@ fn run_iteration_with_tui(
     // Stream stdout to TUI
     let mut output_buffer = Vec::new();
     let mut completion_detected = false;
+    let mut user_interrupted = false;
 
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
+            // Check for user interrupt (Q pressed in TUI)
+            if interrupted.load(Ordering::SeqCst) {
+                user_interrupted = true;
+                let _ = child.kill();
+                break;
+            }
+
             match line {
                 Ok(line) => {
                     // Parse and process based on output format
@@ -1050,6 +1085,16 @@ fn run_iteration_with_tui(
     }
 
     let output = output_buffer.concat();
+
+    if user_interrupted {
+        // User pressed Q in TUI - return gracefully
+        return super::iteration::IterationResult {
+            success: false,
+            task_id: None,
+            error: Some("User interrupted".to_string()),
+            output,
+        };
+    }
 
     if completion_detected {
         return super::iteration::IterationResult::success(output);
