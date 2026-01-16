@@ -1,5 +1,8 @@
 # afk 🛋️
 
+[![License](https://img.shields.io/github/license/m0nkmaster/afk)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/m0nkmaster/afk)](https://github.com/m0nkmaster/afk/releases)
+
 > Let the AI work while you're away from the keyboard!
 
 A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, spawning a **fresh agent instance** for each iteration - so context never overflows and the AI stays sharp.
