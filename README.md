@@ -2,33 +2,33 @@
 
 > Let the AI work while you're away from the keyboard!
 
-A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, spawning a **fresh agent instance** for each iteration — so context never overflows and the AI stays sharp.
+A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, spawning a **fresh agent instance** for each iteration - so context never overflows and the AI stays sharp.
 
 ## ✨ Why afk?
 
-AI coding agents are powerful, but they have a fatal flaw: **context window exhaustion**. The longer an AI works on a problem, the more context it accumulates — past attempts, dead ends, outdated information. Eventually, it becomes bloated and confused, making worse decisions the longer it runs.
+AI coding agents are powerful, but they have a fatal flaw: **context window exhaustion**. The longer an AI works on a problem, the more context it accumulates - past attempts, dead ends, outdated information. Eventually, it becomes bloated and confused, making worse decisions the longer it runs.
 
-**afk solves this with the Ralph Wiggum pattern** — a kanban-style approach where each task gets a fresh AI instance with clean context. Think of it like a well-organised team: each developer picks up one ticket, completes it, and moves on. No cognitive overload. No stale context.
+**afk solves this with the Ralph Wiggum pattern** - a kanban-style approach where each task gets a fresh AI instance with clean context. Think of it like a well-organised team: each developer picks up one ticket, completes it, and moves on. No cognitive overload. No stale context.
 
 The result? AI that can work autonomously for hours without degrading.
 
 ## 🧠 The Ralph Wiggum Pattern
 
-The technique is named after [Ralph Wiggum](https://en.wikipedia.org/wiki/Ralph_Wiggum) from *The Simpsons* — a character who approaches each moment with fresh-eyed obliviousness, unburdened by what came before.
+The technique is named after [Ralph Wiggum](https://en.wikipedia.org/wiki/Ralph_Wiggum) from *The Simpsons* - a character who approaches each moment with fresh-eyed obliviousness, unburdened by what came before.
 
 In AI terms, it works like this:
 
-1. **Fresh start every iteration** — Each loop spawns a brand new AI instance
-2. **One task at a time** — Kanban-style: pick up a task, complete it, move on
-3. **Memory through files, not context** — Progress persists via git commits, not the AI's memory
+1. **Fresh start every iteration** - Each loop spawns a brand new AI instance
+2. **One task at a time** - Kanban-style: pick up a task, complete it, move on
+3. **Memory through files, not context** - Progress persists via git commits, not the AI's memory
 
 This means the AI never runs out of context, never gets confused by old attempts, and can work indefinitely without degradation.
 
 ### How Memory Persists
 
-- 📝 **Git history** — Commits from previous iterations
-- 📋 **progress.json** — Task status and per-task learnings (short-term memory)
-- 📖 **AGENTS.md** — Project-wide conventions and patterns (long-term memory)
+- 📝 **Git history** - Commits from previous iterations
+- 📋 **progress.json** - Task status and per-task learnings (short-term memory)
+- 📖 **AGENTS.md** - Project-wide conventions and patterns (long-term memory)
 
 ### Learn More
 
@@ -93,7 +93,7 @@ curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install
 irm https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install.ps1 | iex
 ```
 
-Installs a standalone binary — no dependencies required. Updates with `afk update`.
+Installs a standalone binary - no dependencies required. Updates with `afk update`.
 
 ### From source
 
@@ -273,9 +273,9 @@ Each task **must complete in a single AI context window**. Tasks that are too la
 
 ## 📚 Documentation
 
-- **[docs/user-guide.md](docs/user-guide.md)** — Complete command reference and workflow examples
-- **[docs/architecture.md](docs/architecture.md)** — Technical overview for contributors
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute
+- **[docs/user-guide.md](docs/user-guide.md)** - Complete command reference and workflow examples
+- **[docs/architecture.md](docs/architecture.md)** - Technical overview for contributors
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
 
 ## 🙏 Inspired By
 

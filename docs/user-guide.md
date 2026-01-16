@@ -1,6 +1,6 @@
 # afk User Guide
 
-Complete reference for **afk** — autonomous AI coding loops, Ralph Wiggum style.
+Complete reference for **afk** - autonomous AI coding loops, Ralph Wiggum style.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ afk go 10                        # Run 10 iterations
 2. **If no tasks but sources detected** (TODO.md, beads, etc.) → syncs from those
 3. **If nothing found** → shows helpful error with next steps
 
-This means you can just drop a `tasks.json` in `.afk/` and run `afk go` — no configuration needed.
+This means you can just drop a `tasks.json` in `.afk/` and run `afk go` - no configuration needed.
 
 ## Core Concepts
 
@@ -358,7 +358,7 @@ afk use --list       # Show all known CLIs with install status
 
 ### Multi-Model Rotation
 
-Configure multiple models to rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches — cycling through them helps avoid getting stuck in local optima.
+Configure multiple models to rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches - cycling through them helps avoid getting stuck in local optima.
 
 ```json
 {
@@ -473,10 +473,10 @@ When you switch git branches and run `afk go`, it detects the change and prompts
    Archive the previous session? [Y/n]:
 ```
 
-- **Press Enter or Y** — Archives the previous session and starts fresh
-- **Press N** — Continues without archiving (updates stored branch)
+- **Press Enter or Y** - Archives the previous session and starts fresh
+- **Press N** - Continues without archiving (updates stored branch)
 
-This keeps your work organised — each feature branch gets its own clean session, and old sessions are automatically archived when you switch context.
+This keeps your work organised - each feature branch gets its own clean session, and old sessions are automatically archived when you switch context.
 
 ## Debugging
 
@@ -555,9 +555,9 @@ Each archived session includes metadata:
 ```
 
 The `reason` field indicates why the session was archived:
-- `completed` — All tasks finished
-- `branch_change` — User switched git branches
-- `manual` — User ran `afk archive` manually
+- `completed` - All tasks finished
+- `branch_change` - User switched git branches
+- `manual` - User ran `afk archive` manually
 
 ## Installation
 

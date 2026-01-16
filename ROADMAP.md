@@ -28,7 +28,7 @@ Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The T
 
 ### Multi-Model Rotation
 
-Configure multiple AI models in `.afk/config.json` and rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches — cycling through them helps avoid getting stuck in local optima.
+Configure multiple AI models in `.afk/config.json` and rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches - cycling through them helps avoid getting stuck in local optima.
 
 ```json
 {

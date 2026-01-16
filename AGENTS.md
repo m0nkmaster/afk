@@ -1,6 +1,6 @@
 # Agent Instructions
 
-**afk** — Autonomous AI coding loops, Ralph Wiggum style.
+**afk** - Autonomous AI coding loops, Ralph Wiggum style.
 
 ## Project Overview
 
@@ -75,8 +75,8 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 
 1. **Use tempfile** for temporary directories
 2. **Mock external calls** via Command patterns where appropriate
-3. **Test edge cases** — empty inputs, missing files, error conditions
-4. **Keep tests focused** — one behaviour per test
+3. **Test edge cases** - empty inputs, missing files, error conditions
+4. **Keep tests focused** - one behaviour per test
 
 ## Architecture
 
@@ -177,7 +177,7 @@ src/
 - **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
 - **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into tasks.json
 - **Prompts**: Tera templates, customisable via config
-- **Runner**: Implements Ralph Wiggum pattern — spawns fresh AI CLI each iteration
+- **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
 - **Archiving**: Sessions archived on completion, manually via `afk archive`, or when switching git branches (moves files to `.afk/archive/`, clears session)
@@ -221,7 +221,7 @@ afk import requirements.md  # Creates .afk/tasks.json
 afk go                          # Starts working through tasks
 ```
 
-When `.afk/tasks.json` exists with tasks and no sources are configured, `afk go` uses it directly as the source of truth — no configuration required.
+When `.afk/tasks.json` exists with tasks and no sources are configured, `afk go` uses it directly as the source of truth - no configuration required.
 
 ## Adding a New Task Source
 
@@ -255,7 +255,7 @@ gh run watch  # Watch the release workflow progress
 
 The release workflow builds binaries for all platforms and attaches them to the release. If you create the release manually with `gh release create`, users will see "no binary for this platform" until the workflow finishes.
 
-**NEVER run `gh release create`** — let the workflow handle it.
+**NEVER run `gh release create`** - let the workflow handle it.
 
 ## Landing the Plane (Session Completion)
 
@@ -263,22 +263,22 @@ The release workflow builds binaries for all platforms and attaches them to the 
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** — Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) — Tests, linters, builds
-3. **Update issue status** — Close finished work, update in-progress items
-4. **PUSH TO REMOTE** — This is MANDATORY:
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
    bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** — Clear stashes, prune remote branches
-6. **Verify** — All changes committed AND pushed
-7. **Hand off** — Provide context for next session
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 - Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing — that leaves work stranded locally
-- NEVER say "ready to push when you are" — YOU must push
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds

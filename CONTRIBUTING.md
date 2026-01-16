@@ -6,8 +6,8 @@ Thank you for your interest in contributing to afk! This document provides guide
 
 ### Prerequisites
 
-- **Rust 1.80+** — Install via [rustup](https://rustup.rs/)
-- **Git** — For version control
+- **Rust 1.80+** - Install via [rustup](https://rustup.rs/)
+- **Git** - For version control
 
 ### Getting Started
 
@@ -90,8 +90,8 @@ Tests are inline with modules using `#[cfg(test)] mod tests`. Guidelines:
 
 1. **Use tempfile** for temporary directories
 2. **Mock external calls** via Command patterns where appropriate
-3. **Test edge cases** — empty inputs, missing files, error conditions
-4. **Keep tests focused** — one behaviour per test
+3. **Test edge cases** - empty inputs, missing files, error conditions
+4. **Keep tests focused** - one behaviour per test
 
 ### Example Test
 

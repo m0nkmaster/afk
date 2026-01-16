@@ -9,41 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Multi-model rotation** — Configure multiple AI models in `ai_cli.models` array; afk selects one pseudo-randomly each iteration with equal distribution, passing `--model <selected>` to the AI CLI. Brings different perspectives to avoid local optima.
-- **Branch change detection** — When you switch git branches and run `afk go`, prompts to archive the previous session
-- **Branch tracking in archives** — Archive metadata now includes the git branch name for better organisation
+- **Multi-model rotation** - Configure multiple AI models in `ai_cli.models` array; afk selects one pseudo-randomly each iteration with equal distribution, passing `--model <selected>` to the AI CLI. Brings different perspectives to avoid local optima.
+- **Branch change detection** - When you switch git branches and run `afk go`, prompts to archive the previous session
+- **Branch tracking in archives** - Archive metadata now includes the git branch name for better organisation
 
 ## [0.4.10] - 2026-01-14
 
 ### Changed
 
-- **Simplified versioning** — Removed build timestamp from version string; version now comes directly from `Cargo.toml`
+- **Simplified versioning** - Removed build timestamp from version string; version now comes directly from `Cargo.toml`
 
 ## [0.4.8] - 2026-01-14
 
 ### Added
 
-- **Default iterations from config** — `afk go` now uses `config.limits.max_iterations` as default when no argument provided
+- **Default iterations from config** - `afk go` now uses `config.limits.max_iterations` as default when no argument provided
 
 ### Fixed
 
-- **Deduplicate file changes** — Parser now deduplicates file changes across absolute and relative paths
+- **Deduplicate file changes** - Parser now deduplicates file changes across absolute and relative paths
 
 ## [0.4.7] - 2026-01-14
 
 ### Changed
 
-- **CLI simplification** — `afk prd import` is now just `afk import`
+- **CLI simplification** - `afk prd import` is now just `afk import`
 - Removed the `prd` subcommand entirely for a cleaner interface
 
 ## [0.4.3] - 2026-01-14
 
 ### Added
 
-- **Real-time AI output** — Parse NDJSON stream-json from Cursor and Claude CLIs
-- **Unified stream parser** — Auto-detects CLI format and normalises events
-- **Live progress display** — Shows assistant messages, tool calls, and file changes as they happen
-- **Simplified TUI layout** — Compact header bar with stats, full-width scrollable output
+- **Real-time AI output** - Parse NDJSON stream-json from Cursor and Claude CLIs
+- **Unified stream parser** - Auto-detects CLI format and normalises events
+- **Live progress display** - Shows assistant messages, tool calls, and file changes as they happen
+- **Simplified TUI layout** - Compact header bar with stats, full-width scrollable output
 
 ### Changed
 
@@ -60,37 +60,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Complete Rust rewrite** — Native binary with no runtime dependencies
-- **Zero-config mode** — `afk go` auto-detects project type, AI CLI, and task sources
-- **Multiple task sources** — Beads, JSON PRD, Markdown checklists, GitHub issues
-- **Quality gates** — Configurable lint, test, typecheck, and build commands
-- **Session management** — Progress tracking, archiving, and resume support
-- **Self-update** — `afk update` downloads the latest release
-- **Shell completions** — Bash, Zsh, and Fish support via `afk completions`
+- **Complete Rust rewrite** - Native binary with no runtime dependencies
+- **Zero-config mode** - `afk go` auto-detects project type, AI CLI, and task sources
+- **Multiple task sources** - Beads, JSON PRD, Markdown checklists, GitHub issues
+- **Quality gates** - Configurable lint, test, typecheck, and build commands
+- **Session management** - Progress tracking, archiving, and resume support
+- **Self-update** - `afk update` downloads the latest release
+- **Shell completions** - Bash, Zsh, and Fish support via `afk completions`
 
 ### Commands
 
-- `afk go [N]` — Zero-config entry point, runs N iterations (default 10)
-- `afk go --init` — Re-run setup, then start loop
-- `afk go --fresh` — Clear session and start fresh
-- `afk init` — Analyse project and generate config
-- `afk status` — Show current configuration
-- `afk tasks` — List tasks from current PRD
-- `afk tasks sync` — Sync from all sources
-- `afk task <id>` — Show task details
-- `afk prompt` — Preview next prompt
-- `afk verify` — Run quality gates
-- `afk done <id>` — Mark task complete
-- `afk fail <id>` — Mark task failed
-- `afk reset <id>` — Reset stuck task
-- `afk import <file>` — Import requirements into JSON tasks
-- `afk sync` — Alias for `afk tasks sync`
-- `afk source add|list|remove` — Manage task sources
-- `afk config show|get|set|reset|edit|explain|keys` — Manage config
-- `afk archive` — Archive and clear current session
-- `afk archive list` — List archived sessions
-- `afk update` — Self-update to latest version
-- `afk completions <shell>` — Generate shell completions
+- `afk go [N]` - Zero-config entry point, runs N iterations (default 10)
+- `afk go --init` - Re-run setup, then start loop
+- `afk go --fresh` - Clear session and start fresh
+- `afk init` - Analyse project and generate config
+- `afk status` - Show current configuration
+- `afk tasks` - List tasks from current PRD
+- `afk tasks sync` - Sync from all sources
+- `afk task <id>` - Show task details
+- `afk prompt` - Preview next prompt
+- `afk verify` - Run quality gates
+- `afk done <id>` - Mark task complete
+- `afk fail <id>` - Mark task failed
+- `afk reset <id>` - Reset stuck task
+- `afk import <file>` - Import requirements into JSON tasks
+- `afk sync` - Alias for `afk tasks sync`
+- `afk source add|list|remove` - Manage task sources
+- `afk config show|get|set|reset|edit|explain|keys` - Manage config
+- `afk archive` - Archive and clear current session
+- `afk archive list` - List archived sessions
+- `afk update` - Self-update to latest version
+- `afk completions <shell>` - Generate shell completions
 
 ### Supported AI CLIs
 
