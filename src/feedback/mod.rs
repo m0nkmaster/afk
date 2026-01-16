@@ -5,10 +5,10 @@
 //!
 //! # Submodules
 //!
-//! - [`spinner`] - Inline spinners for showing progress during operations
-//! - [`display`] - Panel-based displays for iteration feedback
-//! - [`metrics`] - Metrics collection for iteration statistics
-//! - [`art`] - ASCII art assets (mascots, spinners, fireworks)
+//! - `spinner` - Inline spinners for showing progress during operations
+//! - `display` - Panel-based displays for iteration feedback
+//! - `metrics` - Metrics collection for iteration statistics
+//! - `art` - ASCII art assets (mascots, spinners, fireworks)
 
 mod art;
 mod display;

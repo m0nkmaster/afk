@@ -47,7 +47,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       # Validate rustdoc examples in source code compile correctly
-      - name: Validate code examples
+      - name: Validate rustdoc examples
         run: |
           # Build documentation with private items to catch all rustdoc issues
           # This validates:
@@ -62,6 +62,10 @@ jobs:
             grep "^warning:" doc-output.txt
             exit 1
           fi
+
+      # Validate CLI command examples in markdown documentation
+      - name: Validate CLI examples
+        run: ./scripts/validate-examples.sh
 
       # Check internal links using lychee
       - name: Check internal links

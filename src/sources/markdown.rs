@@ -12,12 +12,12 @@ use std::sync::LazyLock;
 const DEFAULT_PATHS: &[&str] = &["tasks.md", "TODO.md", "prd.md", ".afk/tasks.md"];
 
 /// Regex pattern for markdown checkboxes.
-/// Matches: - [ ] or - [x] or * [ ] or * [x] with optional leading whitespace.
+/// Matches: `- [ ]` or `- [x]` or `* [ ]` or `* [x]` with optional leading whitespace.
 static CHECKBOX_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[\s]*[-*]\s*\[([ xX])\]\s*(.+)$").expect("CHECKBOX_PATTERN regex is valid")
 });
 
-/// Regex pattern for priority tags like [HIGH], [LOW], [P0], etc.
+/// Regex pattern for priority tags like `[HIGH]`, `[LOW]`, `[P0]`, etc.
 static PRIORITY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^\[([A-Z0-9]+)\]\s*(.+)$").expect("PRIORITY_PATTERN regex is valid")
 });
