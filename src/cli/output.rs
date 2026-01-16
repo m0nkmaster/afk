@@ -49,7 +49,8 @@ pub fn output_prompt(
 
 /// Copy prompt to system clipboard.
 ///
-/// If clipboard access fails, falls back to stdout and returns an error.
+/// If clipboard access fails, falls back to stdout and returns success.
+/// This ensures the prompt is always delivered to the user.
 pub fn copy_to_clipboard(prompt: &str) -> Result<(), OutputError> {
     match arboard::Clipboard::new() {
         Ok(mut clipboard) => match clipboard.set_text(prompt.to_string()) {
@@ -62,14 +63,14 @@ pub fn copy_to_clipboard(prompt: &str) -> Result<(), OutputError> {
                 eprintln!("\x1b[31mFailed to copy to clipboard:\x1b[0m {e}");
                 eprintln!("\x1b[2mFalling back to stdout...\x1b[0m");
                 print_to_stdout(prompt);
-                Err(OutputError::ClipboardError(e.to_string()))
+                Ok(()) // Fallback succeeded
             }
         },
         Err(e) => {
             eprintln!("\x1b[31mFailed to access clipboard:\x1b[0m {e}");
             eprintln!("\x1b[2mFalling back to stdout...\x1b[0m");
             print_to_stdout(prompt);
-            Err(OutputError::ClipboardError(e.to_string()))
+            Ok(()) // Fallback succeeded
         }
     }
 }
