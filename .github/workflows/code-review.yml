@@ -112,32 +112,6 @@ jobs:
           If the code is already excellent, make no changes. But that's rare.
           
           Do NOT commit any changes — just edit the files directly.
-          
-          ## IMPORTANT: Write your rationale
-          
-          After making changes, create a file at `/tmp/review-rationale.md` with a detailed explanation of what you changed and why. This will be included in the PR to teach the team.
-          
-          Structure it as:
-          
-          ```markdown
-          ## Summary
-          
-          One paragraph overview of what you found and your overall assessment.
-          
-          ## Changes
-          
-          For each significant change, explain:
-          
-          ### [Brief title of change]
-          
-          **What**: What you changed
-          **Why**: Why this matters — the principle behind it
-          **Learn**: What the team should take away for future code
-          
-          [Include a brief code snippet showing before/after if helpful]
-          ```
-          
-          Be opinionated. Be direct. Teach. If you changed it, you had a reason — share that reason.
           PROMPT_EOF
           
           echo "skip=false" >> $GITHUB_OUTPUT
@@ -147,6 +121,89 @@ jobs:
         run: |
           rustup update stable
           cargo fmt
+
+      - name: Generate rationale
+        if: steps.check-pr.outputs.skip != 'true' && steps.review.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+        run: |
+          # Check if there are any changes to explain
+          if git diff --quiet; then
+            echo "No changes to explain"
+            exit 0
+          fi
+          
+          # Capture the diff for the agent to analyse
+          git diff > /tmp/changes.diff
+          
+          # Run a second agent call to generate the rationale
+          agent -p --force << 'PROMPT_EOF'
+          You are a principal Rust engineer explaining your code review to the team. You've just made changes to this codebase and need to explain them.
+          
+          The diff of your changes is at `/tmp/changes.diff`. Read it carefully.
+          
+          Create a file at `/tmp/review-rationale.md` that explains your changes. This is going in a pull request — it's your chance to teach the team.
+          
+          ## Required structure
+          
+          ```markdown
+          ## Summary
+          
+          [One paragraph: What did you find? What's your overall assessment of the code quality? Be direct and opinionated.]
+          
+          ## Changes
+          
+          ### [Change 1: Brief descriptive title]
+          
+          **File**: `path/to/file.rs`
+          
+          **What I changed**: [Specific description of the change]
+          
+          **Why this matters**: [The principle behind it — why is the new way better?]
+          
+          **The lesson**: [What the team should remember for future code]
+          
+          [Optional: Include a brief before/after code snippet if it helps illustrate the point]
+          
+          ### [Change 2: Brief descriptive title]
+          
+          ...repeat for each significant change...
+          ```
+          
+          ## Guidelines
+          
+          - Be specific — vague explanations don't teach anything
+          - Be opinionated — you made these changes for reasons, share them
+          - Group related changes if they share a theme
+          - Use British English
+          - If a change is trivial (formatting, imports), you can group those under "Housekeeping" at the end
+          
+          Read the diff. Write the rationale. Save it to `/tmp/review-rationale.md`.
+          PROMPT_EOF
+
+      - name: Ensure rationale exists
+        if: steps.check-pr.outputs.skip != 'true' && steps.review.outputs.skip != 'true'
+        run: |
+          # If the agent didn't create a rationale, generate a basic one from the diff
+          if [[ ! -f /tmp/review-rationale.md ]] || [[ ! -s /tmp/review-rationale.md ]]; then
+            echo "Rationale file missing or empty, generating from diff..."
+            
+            if ! git diff --quiet; then
+              {
+                echo "## Summary"
+                echo ""
+                echo "Code improvements made by automated review. See the diff for details."
+                echo ""
+                echo "## Files changed"
+                echo ""
+                git diff --stat | head -20
+                echo ""
+                echo "---"
+                echo ""
+                echo "*Detailed rationale was not generated. Review the diff directly.*"
+              } > /tmp/review-rationale.md
+            fi
+          fi
 
       - name: Check for changes
         if: steps.check-pr.outputs.skip != 'true' && steps.review.outputs.skip != 'true'
