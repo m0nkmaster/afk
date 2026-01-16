@@ -219,6 +219,11 @@ pub struct AiCliConfig {
     /// Whether to include partial/character-level streaming.
     #[serde(default)]
     pub stream_partial: bool,
+    /// List of models to rotate between. When multiple models are configured,
+    /// one is selected pseudo-randomly with equal distribution each iteration.
+    /// This brings different perspectives and avoids local optima.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub models: Vec<String>,
 }
 
 fn default_ai_command() -> String {
@@ -239,6 +244,7 @@ impl Default for AiCliConfig {
             args: default_ai_args(),
             output_format: AiOutputFormat::default(),
             stream_partial: false,
+            models: Vec::new(),
         }
     }
 }
@@ -247,8 +253,22 @@ impl AiCliConfig {
     /// Get the full command arguments including output format flags.
     ///
     /// This applies the appropriate streaming flags based on the detected CLI type.
+    /// If multiple models are configured, one is selected pseudo-randomly.
     pub fn full_args(&self) -> Vec<String> {
+        self.full_args_with_model(self.select_model())
+    }
+
+    /// Get the full command arguments with a specific model selection.
+    ///
+    /// This is useful when you want to control which model is used, or when
+    /// you've already selected a model and want to reuse it.
+    pub fn full_args_with_model(&self, model: Option<&str>) -> Vec<String> {
         let mut args = self.args.clone();
+
+        // Add model flag if a model is specified
+        if let Some(model_name) = model {
+            args.extend(self.get_model_args(model_name));
+        }
 
         // Only add output format args if using streaming
         if self.output_format != AiOutputFormat::Text {
@@ -257,6 +277,40 @@ impl AiCliConfig {
         }
 
         args
+    }
+
+    /// Select a model from the configured list using pseudo-random selection.
+    ///
+    /// Returns `None` if no models are configured, allowing the CLI to use its default.
+    /// When multiple models are configured, selects one with equal probability distribution.
+    #[must_use]
+    pub fn select_model(&self) -> Option<&str> {
+        if self.models.is_empty() {
+            return None;
+        }
+        if self.models.len() == 1 {
+            return Some(&self.models[0]);
+        }
+
+        // Use system time for pseudo-random selection with equal distribution
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+
+        let index = (nanos as usize) % self.models.len();
+        Some(&self.models[index])
+    }
+
+    /// Get the model flag arguments for the detected CLI.
+    fn get_model_args(&self, model: &str) -> Vec<String> {
+        // All supported CLIs use --model flag:
+        // - Claude Code: --model <alias|name>
+        // - Cursor CLI: --model <model-name>
+        // - Codex: --model
+        // - Aider: --model
+        vec!["--model".to_string(), model.to_string()]
     }
 
     /// Get the output format arguments for the detected CLI.
@@ -851,6 +905,7 @@ mod tests {
             args: vec!["--message".to_string()],
             output_format: AiOutputFormat::Text,
             stream_partial: false,
+            models: Vec::new(),
         };
         assert_eq!(config.command, "aider");
         assert_eq!(config.args, vec!["--message"]);
@@ -863,6 +918,7 @@ mod tests {
             args: vec!["--print".to_string()],
             output_format: AiOutputFormat::StreamJson,
             stream_partial: false,
+            models: Vec::new(),
         };
         let full_args = config.full_args();
         assert!(full_args.contains(&"--print".to_string()));
@@ -877,6 +933,7 @@ mod tests {
             args: vec!["--print".to_string()],
             output_format: AiOutputFormat::StreamJson,
             stream_partial: true,
+            models: Vec::new(),
         };
         let full_args = config.full_args();
         assert!(full_args.contains(&"--stream-partial-output".to_string()));
@@ -889,6 +946,7 @@ mod tests {
             args: vec!["-p".to_string()],
             output_format: AiOutputFormat::StreamJson,
             stream_partial: true,
+            models: Vec::new(),
         };
         let full_args = config.full_args();
         assert!(full_args.contains(&"--output-format".to_string()));
@@ -903,9 +961,139 @@ mod tests {
             args: vec!["-p".to_string()],
             output_format: AiOutputFormat::Text,
             stream_partial: false,
+            models: Vec::new(),
         };
         let full_args = config.full_args();
         assert_eq!(full_args, vec!["-p"]);
+    }
+
+    // ========================================================================
+    // Multi-model rotation tests
+    // ========================================================================
+
+    #[test]
+    fn test_ai_cli_select_model_empty() {
+        let config = AiCliConfig::default();
+        assert!(config.select_model().is_none());
+    }
+
+    #[test]
+    fn test_ai_cli_select_model_single() {
+        let config = AiCliConfig {
+            models: vec!["sonnet".to_string()],
+            ..Default::default()
+        };
+        assert_eq!(config.select_model(), Some("sonnet"));
+    }
+
+    #[test]
+    fn test_ai_cli_select_model_multiple_returns_valid() {
+        let config = AiCliConfig {
+            models: vec![
+                "sonnet".to_string(),
+                "opus".to_string(),
+                "haiku".to_string(),
+            ],
+            ..Default::default()
+        };
+        // Should return one of the configured models
+        let selected = config.select_model();
+        assert!(selected.is_some());
+        assert!(config.models.contains(&selected.unwrap().to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_with_model_includes_flag() {
+        let config = AiCliConfig {
+            command: "claude".to_string(),
+            args: vec!["-p".to_string()],
+            output_format: AiOutputFormat::Text,
+            stream_partial: false,
+            models: vec!["opus".to_string()],
+        };
+        let full_args = config.full_args();
+        // Should include --model flag
+        assert!(full_args.contains(&"--model".to_string()));
+        assert!(full_args.contains(&"opus".to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_with_model_preserves_order() {
+        let config = AiCliConfig {
+            command: "claude".to_string(),
+            args: vec!["-p".to_string()],
+            output_format: AiOutputFormat::Text,
+            stream_partial: false,
+            models: vec!["sonnet".to_string()],
+        };
+        let full_args = config.full_args();
+        // -p should come first (from args), then --model
+        assert_eq!(full_args[0], "-p");
+        assert_eq!(full_args[1], "--model");
+        assert_eq!(full_args[2], "sonnet");
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_with_model_explicit() {
+        let config = AiCliConfig {
+            command: "cursor".to_string(),
+            args: vec!["--print".to_string()],
+            output_format: AiOutputFormat::Text,
+            stream_partial: false,
+            models: Vec::new(),
+        };
+        // Explicitly pass a model
+        let full_args = config.full_args_with_model(Some("gpt-4"));
+        assert!(full_args.contains(&"--model".to_string()));
+        assert!(full_args.contains(&"gpt-4".to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_full_args_with_model_none() {
+        let config = AiCliConfig {
+            command: "claude".to_string(),
+            args: vec!["-p".to_string()],
+            output_format: AiOutputFormat::Text,
+            stream_partial: false,
+            models: Vec::new(),
+        };
+        // No model means no --model flag
+        let full_args = config.full_args_with_model(None);
+        assert!(!full_args.contains(&"--model".to_string()));
+    }
+
+    #[test]
+    fn test_ai_cli_models_serialisation() {
+        let config = AiCliConfig {
+            models: vec!["sonnet".to_string(), "opus".to_string()],
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains(r#""models":["sonnet","opus"]"#));
+
+        // Empty models should not be serialised
+        let empty_config = AiCliConfig::default();
+        let empty_json = serde_json::to_string(&empty_config).unwrap();
+        assert!(!empty_json.contains("models"));
+    }
+
+    #[test]
+    fn test_ai_cli_models_deserialisation() {
+        let json = r#"{
+            "command": "claude",
+            "args": ["-p"],
+            "models": ["sonnet", "opus", "haiku"]
+        }"#;
+        let config: AiCliConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.models, vec!["sonnet", "opus", "haiku"]);
+    }
+
+    #[test]
+    fn test_ai_cli_models_deserialisation_missing() {
+        // Models should default to empty if not present
+        let json = r#"{"command": "claude", "args": ["-p"]}"#;
+        let config: AiCliConfig = serde_json::from_str(json).unwrap();
+        assert!(config.models.is_empty());
     }
 
     #[test]

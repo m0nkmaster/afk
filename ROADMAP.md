@@ -20,6 +20,20 @@ Track and report token consumption across iterations and sessions. Display cumul
 
 Provide time and iteration estimates for completing remaining tasks based on historical performance data. Use metrics from past sessions to predict when the current task list might be finished, helping with planning and expectations.
 
+## Shipped
+
 ### Multi-Model Rotation
 
-Support configuring multiple AI models in config and rotating between them pseudo-randomly across iterations (equal distribution). Different models bring different strengths, biases, and problem-solving approaches — cycling through them helps avoid getting stuck in local optima and brings fresh perspectives to challenging tasks. A key differentiator for autonomous coding loops.
+Configure multiple AI models in `.afk/config.json` and rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches — cycling through them helps avoid getting stuck in local optima.
+
+```json
+{
+  "ai_cli": {
+    "command": "claude",
+    "args": ["--dangerously-skip-permissions", "-p"],
+    "models": ["sonnet", "opus", "haiku"]
+  }
+}
+```
+
+When multiple models are configured, afk selects one with equal probability each iteration and passes `--model <selected>` to the AI CLI.

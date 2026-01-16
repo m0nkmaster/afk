@@ -184,11 +184,30 @@ impl IterationRunner {
             };
         }
 
-        // Build command with output format args
+        // Select model upfront so we can display it
+        let selected_model = self.config.ai_cli.select_model().map(|s| s.to_string());
+
+        // Build command with output format args and selected model
         let mut cmd_parts = vec![self.config.ai_cli.command.clone()];
-        cmd_parts.extend(self.config.ai_cli.full_args());
+        cmd_parts.extend(
+            self.config
+                .ai_cli
+                .full_args_with_model(selected_model.as_deref()),
+        );
 
         self.output.iteration_header(iteration, self.max_iterations);
+
+        // Display model selection if multiple models configured
+        if self.config.ai_cli.models.len() > 1 {
+            if let Some(ref model) = selected_model {
+                self.output.info(&format!(
+                    "Model: {} (1 of {})",
+                    model,
+                    self.config.ai_cli.models.len()
+                ));
+            }
+        }
+
         self.output.command_info(&cmd_parts);
 
         // Send TUI iteration start event

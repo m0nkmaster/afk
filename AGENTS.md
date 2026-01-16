@@ -181,6 +181,7 @@ src/
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md
 - **Quality Gates**: Feedback loops (lint, test, types) run before auto-commit
 - **Archiving**: Sessions archived on completion or manually via `afk archive` (moves files to `.afk/archive/`, clears session)
+- **Multi-Model Rotation**: Configure multiple models in `ai_cli.models` array; afk selects one pseudo-randomly each iteration with equal distribution, passing `--model <selected>` to the AI CLI. Brings different perspectives to avoid local optima.
 
 ## Key Commands
 

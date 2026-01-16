@@ -118,6 +118,7 @@ impl ConfigField for AiCliConfig {
                 .to_string(),
             ),
             "stream_partial" => Some(self.stream_partial.to_string()),
+            "models" => Some(format_vec(&self.models)),
             _ => None,
         }
     }
@@ -153,12 +154,22 @@ impl ConfigField for AiCliConfig {
                 })?;
                 Ok(())
             }
+            "models" => {
+                self.models = parse_vec(value);
+                Ok(())
+            }
             _ => Err(FieldError::UnknownKey(key.into())),
         }
     }
 
     fn field_names() -> &'static [&'static str] {
-        &["command", "args", "output_format", "stream_partial"]
+        &[
+            "command",
+            "args",
+            "output_format",
+            "stream_partial",
+            "models",
+        ]
     }
 
     fn section_name() -> &'static str {

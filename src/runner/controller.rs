@@ -726,6 +726,9 @@ fn run_loop_with_tui_sender(
 /// Constructs the command with the prompt and output format arguments,
 /// then spawns it as a child process with piped stdout/stderr.
 ///
+/// If multiple models are configured, one is selected pseudo-randomly
+/// and displayed in the output.
+///
 /// Returns the spawned child process or an error result if spawn fails.
 fn build_ai_command(
     config: &AfkConfig,
@@ -735,8 +738,15 @@ fn build_ai_command(
     use crate::tui::TuiEvent;
     use std::process::{Command, Stdio};
 
+    // Select model upfront so we can display it
+    let selected_model = config.ai_cli.select_model().map(|s| s.to_string());
+
     let mut cmd_parts = vec![config.ai_cli.command.clone()];
-    cmd_parts.extend(config.ai_cli.full_args());
+    cmd_parts.extend(
+        config
+            .ai_cli
+            .full_args_with_model(selected_model.as_deref()),
+    );
 
     if cmd_parts.is_empty() {
         return Err(super::iteration::IterationResult::failure(
@@ -746,6 +756,17 @@ fn build_ai_command(
 
     let command = &cmd_parts[0];
     let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
+
+    // Display model selection if multiple models configured
+    if config.ai_cli.models.len() > 1 {
+        if let Some(ref model) = selected_model {
+            let _ = tx.send(TuiEvent::OutputLine(format!(
+                "🎲 Model: {} (1 of {})",
+                model,
+                config.ai_cli.models.len()
+            )));
+        }
+    }
 
     let _ = tx.send(TuiEvent::OutputLine(format!(
         "$ {} {}",
