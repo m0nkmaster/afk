@@ -267,24 +267,26 @@ mod tests {
     #[test]
     fn test_calculate_merged_task_counts_prd_only() {
         // Tasks in PRD but not tracked in progress
-        let mut prd = PrdDocument::default();
-        prd.user_stories = vec![
-            UserStory {
-                id: "task-1".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "task-2".to_string(),
-                passes: true,
-                ..Default::default()
-            },
-            UserStory {
-                id: "task-3".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-        ];
+        let prd = PrdDocument {
+            user_stories: vec![
+                UserStory {
+                    id: "task-1".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "task-2".to_string(),
+                    passes: true,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "task-3".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
         let progress = SessionProgress::default();
 
         let (pend, in_prog, comp, fail, skip) = calculate_merged_task_counts(&prd, &progress);
@@ -295,24 +297,26 @@ mod tests {
     #[test]
     fn test_calculate_merged_task_counts_with_progress_overlay() {
         // Tasks in PRD with session progress overlay
-        let mut prd = PrdDocument::default();
-        prd.user_stories = vec![
-            UserStory {
-                id: "task-1".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "task-2".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "task-3".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-        ];
+        let prd = PrdDocument {
+            user_stories: vec![
+                UserStory {
+                    id: "task-1".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "task-2".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "task-3".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
 
         let mut progress = SessionProgress::default();
         // task-1 is in_progress in session
@@ -327,39 +331,41 @@ mod tests {
 
     #[test]
     fn test_calculate_merged_task_counts_all_statuses() {
-        let mut prd = PrdDocument::default();
-        prd.user_stories = vec![
-            UserStory {
-                id: "pending-prd".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "completed-prd".to_string(),
-                passes: true,
-                ..Default::default()
-            },
-            UserStory {
-                id: "in-progress".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "failed".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "skipped".to_string(),
-                passes: false,
-                ..Default::default()
-            },
-            UserStory {
-                id: "completed-session".to_string(),
-                passes: false, // Not yet marked in PRD
-                ..Default::default()
-            },
-        ];
+        let prd = PrdDocument {
+            user_stories: vec![
+                UserStory {
+                    id: "pending-prd".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "completed-prd".to_string(),
+                    passes: true,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "in-progress".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "failed".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "skipped".to_string(),
+                    passes: false,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "completed-session".to_string(),
+                    passes: false, // Not yet marked in PRD
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
 
         let mut progress = SessionProgress::default();
 
