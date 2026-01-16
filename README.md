@@ -143,8 +143,12 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk sync` | Sync from configured sources (alias: `afk tasks sync`) |
 | `afk source add beads` | Add beads as task source |
 | `afk source add markdown TODO.md` | Add markdown file source |
+| `afk source add github` | Add GitHub issues (current repo) |
+| `afk source add github owner/repo` | Add GitHub issues from specific repo |
 | `afk source list` | List configured sources |
 | `afk source remove <index>` | Remove a source by index (1-based) |
+
+**GitHub source:** Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated. Fetches open issues and converts them to tasks. Priority is inferred from labels (P0/critical → 0, P1/high → 1, etc.).
 
 ### Quality & Debug
 
@@ -207,69 +211,22 @@ Each task **must complete in a single AI context window**. Tasks that are too la
 
 ## 🔄 How It Works
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│   📋 Load tasks from sources                                │
-│      (beads, json, markdown, github)                        │
-│                                                             │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│   ✅ All tasks complete? ──────────────────────▶ EXIT ✓     │
-│                                                             │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ No
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│   📝 Generate prompt with:                                  │
-│      • Next task                                            │
-│      • Context files                                        │
-│      • Session learnings                                    │
-│                                                             │
-└───────────────────────────┬─────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│   🧠 Spawn FRESH AI instance                  ◀─────────┐   │
-│      (clean context each time!)                         │   │
-│                                                         │   │
-└───────────────────────────┬─────────────────────────────│───┘
-                            │                             │
-                            ▼                             │
-┌─────────────────────────────────────────────────────────│───┐
-│                                                         │   │
-│   💻 AI implements task                                 │   │
-│      • Makes code changes                               │   │
-│      • Records learnings                                │   │
-│      • Updates AGENTS.md                                │   │
-│                                                         │   │
-└───────────────────────────┬─────────────────────────────│───┘
-                            │                             │
-                            ▼                             │
-┌─────────────────────────────────────────────────────────│───┐
-│                                                         │   │
-│   🧪 Run quality gates                                  │   │
-│      (lint, test, typecheck)                            │   │
-│                                                         │   │
-└───────────────────────────┬─────────────────────────────│───┘
-                            │                             │
-                    Pass?   │                             │
-                   ┌────────┴────────┐                    │
-                   │                 │                    │
-              Yes  ▼            No   ▼                    │
-         ┌─────────────┐    ┌─────────────┐              │
-         │ Auto-commit │    │ Skip commit │              │
-         └─────────────┘    └─────────────┘              │
-                   │                 │                    │
-                   └────────┬────────┘                    │
-                            │                             │
-                            └─────────────────────────────┘
-```
+**Each iteration:**
+
+1. **Load tasks** from configured sources (json, markdown, beads, github)
+2. **Check completion** — if all tasks done, exit
+3. **Generate prompt** with next task, context files, and session learnings
+4. **Spawn fresh AI** — a brand new CLI instance with clean context
+5. **AI works autonomously:**
+   - Implements the task
+   - Runs `afk verify` (quality gates: lint, test, typecheck)
+   - Fixes issues until verify passes
+   - Commits changes
+   - Marks task complete in `.afk/tasks.json`
+   - Records learnings
+6. **Loop** — repeat from step 1
+
+The key point: **afk is an orchestrator, not an AI itself**. It spawns your chosen AI CLI, gives it a task, and lets it work. Each iteration gets a fresh instance that reads state from files, does the work, and writes state back. No context accumulation, no degradation.
 
 ## 📚 Documentation
 
