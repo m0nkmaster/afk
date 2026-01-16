@@ -12,6 +12,7 @@ afk is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous A
 src/
 ├── main.rs          # Entry point, CLI dispatch
 ├── lib.rs           # Library exports
+├── path_matcher.rs  # Shared utility for ignore patterns
 ├── cli/             # CLI layer
 │   ├── mod.rs       # Clap CLI definitions
 │   ├── commands/    # Subcommand implementations
@@ -59,9 +60,10 @@ src/
 │   └── mod.rs       # Commit and archive operations
 ├── feedback/        # User feedback
 │   ├── mod.rs       # Module exports
-│   ├── metrics.rs   # Iteration metrics collection
-│   ├── display.rs   # Progress display
 │   ├── art.rs       # ASCII art mascots
+│   ├── celebration.rs # Task/session completion displays
+│   ├── display.rs   # Progress display
+│   ├── metrics.rs   # Iteration metrics collection
 │   └── spinner.rs   # Spinner animations
 ├── parser/          # Output parsing
 │   ├── mod.rs       # AI CLI output parsing (regex patterns)
