@@ -200,7 +200,8 @@ fn test_init_force_overwrites_existing() {
 
     // Build PATH with mock bin dir first
     let original_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = format!("{}:{}", mock_bin_dir.display(), original_path);
+    let path_sep = if cfg!(windows) { ";" } else { ":" };
+    let new_path = format!("{}{}{}", mock_bin_dir.display(), path_sep, original_path);
 
     afk()
         .current_dir(temp.path())
