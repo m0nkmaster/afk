@@ -46,10 +46,22 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # Placeholder for code example validation (afk-2.2)
+      # Validate rustdoc examples in source code compile correctly
       - name: Validate code examples
         run: |
-          echo "Code example validation will be added in afk-2.2"
+          # Build documentation with private items to catch all rustdoc issues
+          # This validates:
+          # - Code examples in doc comments compile
+          # - Internal documentation is correct
+          # - All doc links resolve
+          cargo doc --document-private-items --no-deps 2>&1 | tee doc-output.txt
+          
+          # Fail if there are any warnings (rustdoc warnings indicate broken examples)
+          if grep -q "^warning:" doc-output.txt; then
+            echo "::error::rustdoc warnings found - check code examples in doc comments"
+            grep "^warning:" doc-output.txt
+            exit 1
+          fi
 
       # Check internal links using lychee
       - name: Check internal links

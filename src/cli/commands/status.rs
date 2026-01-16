@@ -44,6 +44,27 @@ pub fn status(verbose: bool) -> StatusCommandResult {
         println!("  No tasks configured.");
     } else {
         println!("  Total: {total} ({completed} complete, {pending} pending)");
+
+        // Show current in-progress task(s)
+        let in_progress_tasks = progress.get_in_progress_tasks();
+        for task in &in_progress_tasks {
+            // Look up story details from PRD for title
+            let title = prd
+                .user_stories
+                .iter()
+                .find(|s| s.id == task.id)
+                .map(|s| {
+                    if s.title.len() > 50 {
+                        format!("{}...", &s.title[..47])
+                    } else {
+                        s.title.clone()
+                    }
+                })
+                .unwrap_or_else(|| "(unknown)".to_string());
+            println!("  Current: \x1b[33m{}\x1b[0m - {}", task.id, title);
+        }
+
+        // Show next pending task
         if let Some(next) = prd.get_next_story() {
             let title = if next.title.len() > 50 {
                 format!("{}...", &next.title[..47])
