@@ -43,6 +43,8 @@ jobs:
       - name: Create review branch
         if: steps.check-pr.outputs.skip != 'true'
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "$CODE_REVIEW_BRANCH"
 
       - name: Run Rust expert review
@@ -228,9 +230,6 @@ jobs:
           CHANGED_FILES: ${{ steps.changes.outputs.changed_files }}
           COMMIT_SHA: ${{ github.sha }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          
           # Build a descriptive title from changed files
           file_count=$(echo "${CHANGED_FILES}" | tr ',' '\n' | wc -l | tr -d ' ')
           if [[ $file_count -eq 1 ]]; then
