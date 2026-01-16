@@ -66,7 +66,7 @@ Clearer name. Update description to clarify it shows "the prompt that will be se
 | `go` | Run the loop (handles all run scenarios) |
 | `init` | Initialise/reconfigure project |
 | `status` | Show current state |
-| `list` | List tasks |
+| `tasks` | List tasks |
 | `task` | Show task details |
 | `prompt` | Preview what AI will see next |
 | `verify` | Run quality gates |
@@ -371,7 +371,7 @@ These commands remain as currently implemented:
 - [x] `status -v`: Include last 5 learnings
 
 ### Add Commands
-- [x] `list`: New command with `--limit`, `--pending`, `--complete` flags
+- [x] `tasks`: List command with `--limit`, `--pending`, `--complete` flags
 - [x] `task <id>`: New command to show task details
 - [x] `prompt`: Renamed from `next`
 

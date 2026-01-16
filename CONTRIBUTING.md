@@ -60,6 +60,7 @@ RUST_TEST_THREADS=1 cargo test
 src/
 ├── main.rs          # Entry point
 ├── lib.rs           # Library exports
+├── path_matcher.rs  # Shared utility for ignore patterns
 ├── cli/             # CLI commands and argument handling
 │   ├── mod.rs       # Clap CLI definitions
 │   ├── commands/    # Subcommand implementations
@@ -75,6 +76,7 @@ src/
 ├── feedback/        # Metrics and ASCII art
 ├── parser/          # AI CLI output parsing
 ├── watcher/         # File system monitoring
+├── tui/             # Terminal UI (ratatui)
 └── sources/         # Task source adapters
     ├── beads.rs     # Beads integration
     ├── json.rs      # JSON PRD files
