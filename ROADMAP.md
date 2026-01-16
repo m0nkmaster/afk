@@ -20,6 +20,10 @@ Track and report token consumption across iterations and sessions. Display cumul
 
 Provide time and iteration estimates for completing remaining tasks based on historical performance data. Use metrics from past sessions to predict when the current task list might be finished, helping with planning and expectations.
 
+### Feedback Mode Polish
+
+Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The TUI dashboard has received the most attention; the alternative modes need refinement for consistent styling, better progress indication, and a more polished user experience when running without the full terminal UI.
+
 ## Shipped
 
 ### Multi-Model Rotation
