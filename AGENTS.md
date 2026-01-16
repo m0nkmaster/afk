@@ -114,9 +114,10 @@ src/
 ├── feedback/
 │   ├── mod.rs           # Module exports
 │   ├── art.rs           # ASCII art spinners and mascots
-│   ├── display.rs       # Progress display
+│   ├── celebration.rs   # Task/session completion displays
+│   ├── display.rs       # Progress display panels
 │   ├── metrics.rs       # Iteration metrics collection
-│   └── spinner.rs       # Spinner animations
+│   └── spinner.rs       # Inline spinner animations
 ├── git/
 │   └── mod.rs           # Git operations (commit, archive)
 ├── parser/
