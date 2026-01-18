@@ -12,6 +12,8 @@ mod quality_gates;
 
 /// Cached current working directory for path relativisation.
 static CWD: OnceLock<String> = OnceLock::new();
+/// Cached cwd with trailing slash to avoid allocation on each call.
+static CWD_WITH_SLASH: OnceLock<String> = OnceLock::new();
 
 /// Strip the current working directory from a path to make it relative.
 ///
@@ -20,7 +22,7 @@ static CWD: OnceLock<String> = OnceLock::new();
 pub fn make_path_relative(path: &str) -> &str {
     let cwd = CWD.get_or_init(|| {
         std::env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
+            .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_default()
     });
 
@@ -28,19 +30,16 @@ pub fn make_path_relative(path: &str) -> &str {
         return path;
     }
 
-    // Try stripping cwd with trailing slash
-    let cwd_with_slash = format!("{}/", cwd);
-    if let Some(relative) = path.strip_prefix(&cwd_with_slash) {
+    // Try stripping cwd with trailing slash (cached to avoid allocation)
+    let cwd_with_slash = CWD_WITH_SLASH.get_or_init(|| format!("{cwd}/"));
+    if let Some(relative) = path.strip_prefix(cwd_with_slash.as_str()) {
         return relative;
     }
 
     // Also try without trailing slash (for exact matches)
-    if let Some(relative) = path.strip_prefix(cwd.as_str()) {
-        // If there's a remaining slash, skip it
-        return relative.strip_prefix('/').unwrap_or(relative);
-    }
-
-    path
+    path.strip_prefix(cwd.as_str())
+        .map(|relative| relative.strip_prefix('/').unwrap_or(relative))
+        .unwrap_or(path)
 }
 
 pub use controller::{run_loop, run_loop_with_options, run_loop_with_tui, LoopController};

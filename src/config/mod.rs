@@ -315,19 +315,14 @@ impl AiCliConfig {
 
     /// Get the output format arguments for the detected CLI.
     fn get_output_format_args(&self) -> Vec<String> {
-        if self.output_format == AiOutputFormat::Text {
-            return Vec::new();
-        }
+        let format_str = match self.output_format {
+            AiOutputFormat::Text => return Vec::new(),
+            AiOutputFormat::Json => "json",
+            AiOutputFormat::StreamJson => "stream-json",
+        };
 
         let cmd_lower = self.command.to_lowercase();
-        let mut args = vec![
-            "--output-format".to_string(),
-            match self.output_format {
-                AiOutputFormat::Json => "json".to_string(),
-                AiOutputFormat::StreamJson => "stream-json".to_string(),
-                AiOutputFormat::Text => unreachable!(),
-            },
-        ];
+        let mut args = vec!["--output-format".to_string(), format_str.to_string()];
 
         // Add partial streaming flag for stream-json mode
         if self.output_format == AiOutputFormat::StreamJson && self.stream_partial {

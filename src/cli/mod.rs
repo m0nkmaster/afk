@@ -730,36 +730,41 @@ impl TasksSyncCommand {
     pub fn execute(&self) -> CliResult {
         // If --reset, clear completed tasks and progress (keep pending)
         if self.reset {
-            use crate::prd::PrdDocument;
-            use crate::progress::clear_session;
-
-            // Load existing tasks and filter to only pending
-            if let Ok(mut prd) = PrdDocument::load(None) {
-                let original_count = prd.user_stories.len();
-                let completed_count = prd.user_stories.iter().filter(|s| s.passes).count();
-
-                // Keep only pending tasks
-                prd.user_stories.retain(|s| !s.passes);
-
-                if completed_count > 0 {
-                    let _ = prd.save(None);
-                    println!(
-                        "\x1b[32m✓\x1b[0m Cleared {} completed tasks (kept {} pending)",
-                        completed_count,
-                        original_count - completed_count
-                    );
-                }
-            }
-
-            // Clear session progress
-            if clear_session().is_ok() {
-                println!("\x1b[32m✓\x1b[0m Cleared session progress");
-            }
+            self.reset_completed_tasks();
         }
 
         commands::import::tasks_sync()
             .map(|()| ExitCode::SUCCESS)
             .map_err(|e| CliError::Command(e.to_string()))
+    }
+
+    /// Clear completed tasks and session progress, keeping pending tasks.
+    fn reset_completed_tasks(&self) {
+        use crate::prd::PrdDocument;
+        use crate::progress::clear_session;
+
+        // Load existing tasks and filter to only pending
+        if let Ok(mut prd) = PrdDocument::load(None) {
+            let original_count = prd.user_stories.len();
+            let completed_count = prd.user_stories.iter().filter(|s| s.passes).count();
+
+            // Keep only pending tasks
+            prd.user_stories.retain(|s| !s.passes);
+
+            if completed_count > 0 {
+                let _ = prd.save(None);
+                println!(
+                    "\x1b[32m✓\x1b[0m Cleared {} completed tasks (kept {} pending)",
+                    completed_count,
+                    original_count - completed_count
+                );
+            }
+        }
+
+        // Clear session progress
+        if clear_session().is_ok() {
+            println!("\x1b[32m✓\x1b[0m Cleared session progress");
+        }
     }
 }
 

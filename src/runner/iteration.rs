@@ -162,7 +162,7 @@ impl IterationRunner {
             None => match generate_prompt_with_root(&self.config, true, None, None) {
                 Ok(result) => result.prompt,
                 Err(e) => {
-                    return IterationResult::failure(format!("Failed to generate prompt: {e}"));
+                    return IterationResult::failure(format!("Failed to generate prompt: {e}"))
                 }
             },
         };

@@ -52,18 +52,9 @@ pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
 fn load_from_source(source: &SourceConfig) -> Vec<UserStory> {
     match source.source_type {
         SourceType::Beads => load_beads_tasks(),
-        SourceType::Json => {
-            let path = source.path.as_deref();
-            load_json_tasks(path)
-        }
-        SourceType::Markdown => {
-            let path = source.path.as_deref();
-            load_markdown_tasks(path)
-        }
-        SourceType::Github => {
-            let repo = source.repo.as_deref();
-            load_github_tasks(repo, &source.labels)
-        }
+        SourceType::Json => load_json_tasks(source.path.as_deref()),
+        SourceType::Markdown => load_markdown_tasks(source.path.as_deref()),
+        SourceType::Github => load_github_tasks(source.repo.as_deref(), &source.labels),
     }
 }
 

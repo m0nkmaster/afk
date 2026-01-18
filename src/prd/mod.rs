@@ -315,13 +315,13 @@ impl PrdDocument {
     ///
     /// Returns true if the story was found and updated.
     pub fn mark_story_complete(&mut self, story_id: &str) -> bool {
-        for story in &mut self.user_stories {
-            if story.id == story_id {
+        self.user_stories
+            .iter_mut()
+            .find(|s| s.id == story_id)
+            .map(|story| {
                 story.passes = true;
-                return true;
-            }
-        }
-        false
+            })
+            .is_some()
     }
 
     /// Get a story by ID.

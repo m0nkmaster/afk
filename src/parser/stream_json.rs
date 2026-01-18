@@ -459,19 +459,28 @@ fn extract_cursor_tool_result(tool_call: &Value) -> (bool, Option<u32>, Option<u
 }
 
 /// Classify a tool name into a ToolType.
+///
+/// Uses case-insensitive matching against known tool name patterns.
 fn classify_tool_name(name: &str) -> ToolType {
-    let lower = name.to_lowercase();
-    if lower.contains("read") {
+    // Match common tool names (case-insensitive)
+    let name_bytes = name.as_bytes();
+    let matches = |pattern: &[u8]| {
+        name_bytes
+            .windows(pattern.len())
+            .any(|w| w.eq_ignore_ascii_case(pattern))
+    };
+
+    if matches(b"read") {
         ToolType::Read
-    } else if lower.contains("write") {
+    } else if matches(b"write") {
         ToolType::Write
-    } else if lower.contains("edit") {
+    } else if matches(b"edit") {
         ToolType::Edit
-    } else if lower.contains("delete") || lower.contains("remove") {
+    } else if matches(b"delete") || matches(b"remove") {
         ToolType::Delete
-    } else if lower.contains("bash") || lower.contains("command") || lower.contains("exec") {
+    } else if matches(b"bash") || matches(b"command") || matches(b"exec") {
         ToolType::Command
-    } else if lower.contains("search") || lower.contains("grep") || lower.contains("glob") {
+    } else if matches(b"search") || matches(b"grep") || matches(b"glob") {
         ToolType::Search
     } else {
         ToolType::Other(name.to_string())

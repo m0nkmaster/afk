@@ -1111,27 +1111,25 @@ fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
     use std::collections::HashSet;
 
     // Collect IDs of previously completed tasks
-    let previously_complete: HashSet<&str> = old_prd
+    let previously_complete: HashSet<_> = old_prd
         .user_stories
         .iter()
-        .filter(|s| s.passes)
-        .map(|s| s.id.as_str())
+        .filter_map(|s| s.passes.then_some(s.id.as_str()))
         .collect();
 
     // Find and sync newly completed tasks
-    new_prd
+    for story in new_prd
         .user_stories
         .iter()
         .filter(|s| s.passes && !previously_complete.contains(s.id.as_str()))
-        .for_each(|story| {
-            if story.source == "beads" {
-                crate::sources::close_beads_issue(&story.id);
-            } else if let Some(issue_number) =
-                crate::sources::parse_github_issue_number(&story.source)
-            {
-                crate::sources::close_github_issue(issue_number, None);
-            }
-        });
+    {
+        if story.source == "beads" {
+            crate::sources::close_beads_issue(&story.id);
+        } else if let Some(issue_number) = crate::sources::parse_github_issue_number(&story.source)
+        {
+            crate::sources::close_github_issue(issue_number, None);
+        }
+    }
 }
 
 #[cfg(test)]

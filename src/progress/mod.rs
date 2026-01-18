@@ -118,8 +118,11 @@ impl Default for SessionProgress {
     }
 }
 
+/// ISO 8601 format string for timestamps.
+const ISO_8601_FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f";
+
 fn default_started_at() -> String {
-    Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string()
+    Utc::now().format(ISO_8601_FORMAT).to_string()
 }
 
 fn default_source() -> String {
@@ -230,7 +233,7 @@ impl SessionProgress {
         source: &str,
         message: Option<String>,
     ) -> &TaskProgress {
-        let now = Utc::now().format("%Y-%m-%dT%H:%M:%S%.6f").to_string();
+        let now = Utc::now().format(ISO_8601_FORMAT).to_string();
 
         let task = self
             .tasks
@@ -258,44 +261,34 @@ impl SessionProgress {
         task
     }
 
+    /// Get all tasks with a given status.
+    fn get_tasks_by_status(&self, status: TaskStatus) -> Vec<&TaskProgress> {
+        self.tasks.values().filter(|t| t.status == status).collect()
+    }
+
     /// Get all pending tasks.
     pub fn get_pending_tasks(&self) -> Vec<&TaskProgress> {
-        self.tasks
-            .values()
-            .filter(|t| t.status == TaskStatus::Pending)
-            .collect()
+        self.get_tasks_by_status(TaskStatus::Pending)
     }
 
     /// Get all completed tasks.
     pub fn get_completed_tasks(&self) -> Vec<&TaskProgress> {
-        self.tasks
-            .values()
-            .filter(|t| t.status == TaskStatus::Completed)
-            .collect()
+        self.get_tasks_by_status(TaskStatus::Completed)
     }
 
     /// Get all in-progress tasks.
     pub fn get_in_progress_tasks(&self) -> Vec<&TaskProgress> {
-        self.tasks
-            .values()
-            .filter(|t| t.status == TaskStatus::InProgress)
-            .collect()
+        self.get_tasks_by_status(TaskStatus::InProgress)
     }
 
     /// Get all failed tasks.
     pub fn get_failed_tasks(&self) -> Vec<&TaskProgress> {
-        self.tasks
-            .values()
-            .filter(|t| t.status == TaskStatus::Failed)
-            .collect()
+        self.get_tasks_by_status(TaskStatus::Failed)
     }
 
     /// Get all skipped tasks.
     pub fn get_skipped_tasks(&self) -> Vec<&TaskProgress> {
-        self.tasks
-            .values()
-            .filter(|t| t.status == TaskStatus::Skipped)
-            .collect()
+        self.get_tasks_by_status(TaskStatus::Skipped)
     }
 
     /// Check if all tasks are complete.
