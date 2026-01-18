@@ -14,3 +14,7 @@
 ## Init Command
 
 1. Don't allow `afk init` to run inside a .afk folder - show helpful error message
+
+## Performance
+
+1. Iterations can be 2-5 minutes which is unacceptable if the number of tasks are 30+
