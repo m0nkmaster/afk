@@ -16,7 +16,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 /// Types of events that can be detected in AI CLI output.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventType {
     /// A tool was invoked by the AI (e.g., write_file, execute_command).
     ToolCall,
@@ -49,7 +49,7 @@ pub struct ToolCallEvent {
 }
 
 /// Type of file change.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileChangeType {
     /// A new file was created.
     Created,

@@ -50,7 +50,7 @@ pub fn prompt(options: PromptOptions) -> PromptCommandResult {
     } else if options.copy {
         OutputMode::Clipboard
     } else {
-        config.output.default.clone()
+        config.output.default
     };
 
     // Output the prompt
