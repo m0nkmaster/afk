@@ -178,12 +178,15 @@ fn test_prompt_contains_quality_gates() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Check quality gates section
+    // Check quality checks section
     assert!(
-        stdout.contains("## Quality Gates"),
-        "Missing quality gates section"
+        stdout.contains("## Quality Checks"),
+        "Missing quality checks section"
     );
-    assert!(stdout.contains("afk verify"), "Missing verify command");
+    assert!(
+        stdout.contains("quality checks"),
+        "Missing quality checks mention"
+    );
 }
 
 #[test]
@@ -204,13 +207,10 @@ fn test_prompt_contains_learnings_section() {
         "Missing learnings section"
     );
     assert!(
-        stdout.contains("Short-term: `.afk/progress.json`"),
-        "Missing short-term section"
+        stdout.contains("Codebase Patterns"),
+        "Missing codebase patterns section"
     );
-    assert!(
-        stdout.contains("Long-term: `AGENTS.md`"),
-        "Missing long-term section"
-    );
+    assert!(stdout.contains("AGENTS.md"), "Missing AGENTS.md mention");
 }
 
 #[test]
@@ -269,9 +269,9 @@ fn test_prompt_mentions_acceptance_criteria() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Prompt mentions acceptance criteria in task instructions
+    // Prompt mentions acceptance criteria
     assert!(
-        stdout.contains("acceptanceCriteria"),
+        stdout.contains("acceptance criteria") || stdout.contains("acceptanceCriteria"),
         "Missing acceptance criteria mention"
     );
 }
@@ -378,10 +378,7 @@ fn test_prompt_with_configured_gates() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Check configured gates appear
-    assert!(
-        stdout.contains("Configured gates:"),
-        "Missing gates section"
-    );
+    assert!(stdout.contains("Configured gates"), "Missing gates section");
     assert!(
         stdout.contains("lint") && stdout.contains("cargo clippy"),
         "Missing lint gate"
@@ -503,10 +500,10 @@ fn test_prompt_bootstrap_includes_afk_commands() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 
-    // Bootstrap should include afk command reference
+    // Bootstrap should include autonomous loop section
     assert!(
-        stdout.contains("afk done") || stdout.contains("afk verify"),
-        "Bootstrap should include afk commands"
+        stdout.contains("Autonomous Loop") || stdout.contains("autonomously"),
+        "Bootstrap should indicate autonomous mode"
     );
 }
 

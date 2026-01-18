@@ -410,7 +410,7 @@ mod tests {
 
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
 
-        assert!(result.prompt.contains("Configured gates:"));
+        assert!(result.prompt.contains("Configured gates"));
         assert!(result.prompt.contains("lint: `cargo clippy`"));
         assert!(result.prompt.contains("test: `cargo test`"));
     }
@@ -432,7 +432,7 @@ mod tests {
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
 
-        assert!(result.prompt.contains("No gates configured"));
+        assert!(result.prompt.contains("Run whatever quality checks"));
     }
 
     #[test]

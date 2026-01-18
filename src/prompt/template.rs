@@ -7,139 +7,10 @@ use crate::config::AfkConfig;
 use std::fs;
 use std::path::Path;
 
-/// Default prompt template, mirroring the Python version exactly.
+/// Default prompt template loaded from `default.md`.
 ///
 /// Uses Tera template syntax (similar to Jinja2).
-pub const DEFAULT_TEMPLATE: &str = r#"# afk Autonomous Agent
-
-You are an autonomous coding agent working on a software project.
-
-## Your Task
-
-1. Read `.afk/progress.json` for session state and prior learnings
-2. Read `.afk/tasks.json` for the task list
-3. Check you're on the correct branch from PRD `branchName`. If not, check it out or create.
-4. Pick the **highest priority** user story where `passes: false`
-5. Implement that single user story according to its `acceptanceCriteria`
-6. Run `afk verify` to check quality gates (see below)
-7. If verify fails, fix the issues and run `afk verify` again until it passes
-8. Once verify passes, commit ALL changes with message: `feat: [Story ID] - [Story Title]`
-9. Update `.afk/tasks.json` to set `passes: true` for the completed story
-10. Record learnings (see below)
-
-## Key Files
-
-- `.afk/progress.json` - Session state with per-task learnings (short-term memory)
-- `.afk/tasks.json` - Task list with priorities and acceptance criteria
-- `AGENTS.md` - Project-wide conventions and patterns (long-term memory)
-{% for file in context_files -%}
-- `{{ file }}`
-{% endfor %}
-
-## Progress
-- Iteration: {{ iteration }}/{{ max_iterations }}
-- Completed: {{ completed_count }}/{{ total_count }} stories
-{% if next_story -%}
-- Next story: {{ next_story.id }} (priority {{ next_story.priority }})
-{% endif %}
-
-## Quality Gates
-
-**IMPORTANT**: Run `afk verify` before marking any story complete.
-Do NOT set `passes: true` until verify passes.
-
-```bash
-afk verify           # Run all quality gates
-afk verify --verbose # Show failure details
-```
-
-{% if feedback_loops -%}
-Configured gates:
-{% for name, cmd in feedback_loops -%}
-- {{ name }}: `{{ cmd }}`
-{% endfor %}
-{% else -%}
-No gates configured. Run whatever quality checks your project requires (typecheck, lint, test).
-{% endif %}
-
-## Recording Learnings
-
-As you work, record discoveries appropriately:
-
-### Short-term: `.afk/progress.json`
-
-Add task-specific learnings to the `learnings` array for that task's entry:
-- Gotchas specific to this task
-- Context needed for related work
-- Why certain approaches didn't work
-
-Example structure:
-```json
-{
-  "tasks": {
-    "auth-login": {
-      "id": "auth-login",
-      "source": "prd",
-      "status": "in_progress",
-      "learnings": [
-        "OAuth tokens stored in secure cookies, not localStorage",
-        "Must call refreshToken before API requests if >30min old"
-      ]
-    }
-  }
-}
-```
-
-Task fields:
-- `id`: Task identifier (must match the key)
-- `source`: Where the task came from (e.g. "prd", "beads", "github")
-- `status`: One of `pending`, `in_progress`, `completed`, `failed`, `skipped`
-- `learnings`: Array of strings with discoveries from this task
-
-### Long-term: `AGENTS.md`
-
-**Check and update `AGENTS.md` each iteration.** This is your long-term memory that persists across sessions. If it doesn't exist, create it.
-
-Add discoveries that would help a future AI work effectively:
-- Architectural patterns and conventions (e.g. "All API routes use kebab-case")
-- Non-obvious gotchas (e.g. "Tests must run single-threaded due to shared state")
-- Key commands or workflows specific to this project
-- Dependencies between modules or systems
-
-**Keep updates brief** — a single line or short paragraph per learning. Don't dump verbose explanations; write what a colleague would need to know.
-
-**Skip updates when:**
-- The information is already in AGENTS.md
-- It's task-specific context (use progress.json learnings instead)
-- It's obvious from code/comments
-
-For subfolder-specific concerns (e.g. `frontend/` has its own patterns), create a local `AGENTS.md` there.
-
-{% for instruction in custom_instructions -%}
-- {{ instruction }}
-{% endfor %}
-
-## Stop Condition
-
-After completing a user story, check if ALL stories have `passes: true` in `.afk/tasks.json`.
-
-If ALL stories are complete and passing, reply with:
-<promise>COMPLETE</promise>
-
-If there are still stories with `passes: false`, end your response normally.
-
-{% if bootstrap -%}
-## Autonomous Loop
-
-You are running autonomously. Work on ONE story per iteration.
-After completing this task, the loop will continue automatically.
-{% endif %}
-
-{% if stop_signal -%}
-## STOP
-{{ stop_signal }}
-{% endif %}
-"#;
+pub const DEFAULT_TEMPLATE: &str = include_str!("default.md");
 
 /// Get the template string based on config.
 ///
@@ -208,7 +79,7 @@ mod tests {
         assert!(DEFAULT_TEMPLATE.contains("## Your Task"));
         assert!(DEFAULT_TEMPLATE.contains("## Key Files"));
         assert!(DEFAULT_TEMPLATE.contains("## Progress"));
-        assert!(DEFAULT_TEMPLATE.contains("## Quality Gates"));
+        assert!(DEFAULT_TEMPLATE.contains("## Quality Checks"));
         assert!(DEFAULT_TEMPLATE.contains("## Recording Learnings"));
         assert!(DEFAULT_TEMPLATE.contains("## Stop Condition"));
         assert!(DEFAULT_TEMPLATE.contains("<promise>COMPLETE</promise>"));
@@ -377,7 +248,7 @@ mod tests {
         assert!(rendered.contains("Next story: story-001 (priority 1)"));
         assert!(rendered.contains("- `AGENTS.md`"));
         assert!(rendered.contains("- `README.md`"));
-        assert!(rendered.contains("Configured gates:"));
+        assert!(rendered.contains("Configured gates"));
         assert!(rendered.contains("- Use British English"));
         assert!(rendered.contains("- Always run tests"));
         assert!(rendered.contains("## Autonomous Loop"));
@@ -426,7 +297,7 @@ mod tests {
         context.insert("completed_count", &0);
         context.insert("total_count", &5);
         context.insert("context_files", &Vec::<String>::new());
-        // Pass empty HashMap for feedback_loops - should trigger "No gates configured" message
+        // Pass empty HashMap for feedback_loops - should trigger fallback message
         let empty_loops: HashMap<String, String> = HashMap::new();
         context.insert("feedback_loops", &empty_loops);
         context.insert("custom_instructions", &Vec::<String>::new());
@@ -442,6 +313,6 @@ mod tests {
         );
 
         let rendered = result.unwrap();
-        assert!(rendered.contains("No gates configured"));
+        assert!(rendered.contains("Run whatever quality checks"));
     }
 }
