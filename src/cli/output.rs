@@ -110,7 +110,7 @@ pub fn get_effective_mode(copy: bool, file: bool, stdout: bool, config: &AfkConf
         OutputMode::Stdout
     } else {
         // Use config default
-        config.output.default.clone()
+        config.output.default
     }
 }
 

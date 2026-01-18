@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Task status values.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     /// Task is waiting to be started.

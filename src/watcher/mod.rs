@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 /// Type of file change.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChangeType {
     /// A new file was created.
     Created,

@@ -26,7 +26,7 @@ pub const TASKS_FILE: &str = ".afk/tasks.json";
 pub const ARCHIVE_DIR: &str = ".afk/archive";
 
 /// Source types supported by afk.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SourceType {
     /// Beads (bd) issue tracker integration.
@@ -155,7 +155,7 @@ impl Default for LimitsConfig {
 }
 
 /// Output mode for prompts.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputMode {
     /// Copy prompt to clipboard.
@@ -192,7 +192,7 @@ impl Default for OutputConfig {
 }
 
 /// Output format for AI CLI streaming.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AiOutputFormat {
     /// Plain text output (default for backwards compatibility).
@@ -449,7 +449,7 @@ impl Default for ArchiveConfig {
 }
 
 /// Feedback display mode.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FeedbackMode {
     /// Full TUI with all panels (default).
