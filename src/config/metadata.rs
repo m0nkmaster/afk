@@ -124,6 +124,15 @@ pub static METADATA: &[KeyMetadata] = &[
         default: "(none)",
         examples: &["Always run tests", "Use British English, Follow TDD"],
     },
+    KeyMetadata {
+        key: "prompt.has_frontend",
+        description: "Enable browser testing instructions for UI stories. When true, prompts \
+                      include requirements for visual verification of frontend changes. \
+                      Auto-detected during init by checking for React, Vue, Svelte, Next.js, etc.",
+        value_type: "bool",
+        default: "false (auto-detected during init)",
+        examples: &["true", "false"],
+    },
     // git section
     KeyMetadata {
         key: "git.auto_commit",

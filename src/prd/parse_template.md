@@ -95,16 +95,26 @@ Each criterion must be something the agent can CHECK, not something vague.
 - "Handles edge cases"
 
 ### Always include as final criterion:
-```
-"Code compiles/builds successfully"
-```
+
+Choose the appropriate build check for your project:
+- **Compiled languages** (Rust, Go, C++): `"Code compiles/builds successfully"`
+- **TypeScript**: `"Typecheck passes (tsc --noEmit)"`
+- **Python with types**: `"Type check passes (mypy/pyright)"`
+- **Other**: Whatever build/check command the project uses
 
 For stories with testable logic, also include:
 ```
 "Tests pass"
 ```
 
-For stories that change user-facing output (UI, CLI, etc.), verify the output works as expected.
+### Verification by output type
+
+For stories that change user-facing output, include specific verification:
+
+- **Web UI**: `"Navigate to the page and visually verify changes in browser"`
+- **CLI output**: `"Run command and verify output format matches expected"`
+- **API endpoints**: `"Test endpoint and verify response structure"`
+- **File output**: `"Verify generated file contents are correct"`
 
 ---
 

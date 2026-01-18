@@ -184,6 +184,7 @@ impl ConfigField for PromptConfig {
             "custom_path" => Some(format_optional(&self.custom_path)),
             "context_files" => Some(format_vec(&self.context_files)),
             "instructions" => Some(format_vec(&self.instructions)),
+            "has_frontend" => Some(self.has_frontend.to_string()),
             _ => None,
         }
     }
@@ -210,12 +211,25 @@ impl ConfigField for PromptConfig {
                 self.instructions = parse_vec(value);
                 Ok(())
             }
+            "has_frontend" => {
+                self.has_frontend = parse_bool(value).map_err(|_| FieldError::InvalidValue {
+                    key: "has_frontend".into(),
+                    expected: "true/false, yes/no, 1/0, on/off".into(),
+                })?;
+                Ok(())
+            }
             _ => Err(FieldError::UnknownKey(key.into())),
         }
     }
 
     fn field_names() -> &'static [&'static str] {
-        &["template", "custom_path", "context_files", "instructions"]
+        &[
+            "template",
+            "custom_path",
+            "context_files",
+            "instructions",
+            "has_frontend",
+        ]
     }
 
     fn section_name() -> &'static str {

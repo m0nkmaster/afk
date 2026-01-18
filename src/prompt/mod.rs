@@ -166,6 +166,7 @@ pub fn generate_prompt_with_root(
     context.insert("custom_instructions", &config.prompt.instructions);
     context.insert("bootstrap", &bootstrap);
     context.insert("stop_signal", &stop_signal);
+    context.insert("has_frontend", &config.prompt.has_frontend);
 
     let prompt = tera.render("prompt", &context)?;
 

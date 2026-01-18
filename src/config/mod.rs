@@ -375,6 +375,9 @@ pub struct PromptConfig {
     /// Additional instructions to include.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub instructions: Vec<String>,
+    /// Whether this project has frontend/UI components requiring browser verification.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub has_frontend: bool,
 }
 
 fn default_template() -> String {
@@ -388,6 +391,7 @@ impl Default for PromptConfig {
             custom_path: None,
             context_files: Vec::new(),
             instructions: Vec::new(),
+            has_frontend: false,
         }
     }
 }
@@ -1138,6 +1142,7 @@ mod tests {
         assert!(config.custom_path.is_none());
         assert!(config.context_files.is_empty());
         assert!(config.instructions.is_empty());
+        assert!(!config.has_frontend);
     }
 
     #[test]
@@ -1150,6 +1155,7 @@ mod tests {
                 "Always run tests".to_string(),
                 "Use British English".to_string(),
             ],
+            has_frontend: true,
         };
         assert_eq!(config.template, "minimal");
         assert_eq!(config.custom_path, Some(".afk/prompt.jinja2".to_string()));
@@ -1158,6 +1164,7 @@ mod tests {
             config.instructions,
             vec!["Always run tests", "Use British English"]
         );
+        assert!(config.has_frontend);
     }
 
     #[test]

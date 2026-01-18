@@ -109,6 +109,7 @@ mod tests {
         assert!(DEFAULT_TEMPLATE.contains("{% if feedback_loops -%}"));
         assert!(DEFAULT_TEMPLATE.contains("{% if bootstrap -%}"));
         assert!(DEFAULT_TEMPLATE.contains("{% if stop_signal -%}"));
+        assert!(DEFAULT_TEMPLATE.contains("{% if has_frontend -%}"));
     }
 
     #[test]
@@ -186,6 +187,7 @@ mod tests {
         context.insert("bootstrap", &false);
         context.insert("next_story", &None::<()>);
         context.insert("stop_signal", &None::<String>);
+        context.insert("has_frontend", &false);
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -234,6 +236,7 @@ mod tests {
         context.insert("bootstrap", &true);
         context.insert("next_story", &next_story);
         context.insert("stop_signal", &None::<String>);
+        context.insert("has_frontend", &false);
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -273,6 +276,7 @@ mod tests {
             "stop_signal",
             &Some("AFK_COMPLETE - All stories have passes: true"),
         );
+        context.insert("has_frontend", &false);
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -304,6 +308,7 @@ mod tests {
         context.insert("bootstrap", &false);
         context.insert("next_story", &None::<()>);
         context.insert("stop_signal", &None::<String>);
+        context.insert("has_frontend", &false);
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -314,5 +319,65 @@ mod tests {
 
         let rendered = result.unwrap();
         assert!(rendered.contains("Run whatever quality checks"));
+    }
+
+    #[test]
+    fn test_template_renders_browser_testing_when_has_frontend() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let mut context = Context::new();
+        context.insert("iteration", &1);
+        context.insert("max_iterations", &10);
+        context.insert("completed_count", &0);
+        context.insert("total_count", &5);
+        context.insert("context_files", &Vec::<String>::new());
+        context.insert("feedback_loops", &HashMap::<String, String>::new());
+        context.insert("custom_instructions", &Vec::<String>::new());
+        context.insert("bootstrap", &false);
+        context.insert("next_story", &None::<()>);
+        context.insert("stop_signal", &None::<String>);
+        context.insert("has_frontend", &true);
+
+        let result = tera.render("prompt", &context);
+        assert!(
+            result.is_ok(),
+            "Template failed to render: {:?}",
+            result.err()
+        );
+
+        let rendered = result.unwrap();
+        assert!(rendered.contains("## Browser Testing"));
+        assert!(rendered.contains("Navigate to the relevant page"));
+        assert!(rendered.contains("frontend story is NOT complete until browser verification"));
+    }
+
+    #[test]
+    fn test_template_omits_browser_testing_when_not_frontend() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let mut context = Context::new();
+        context.insert("iteration", &1);
+        context.insert("max_iterations", &10);
+        context.insert("completed_count", &0);
+        context.insert("total_count", &5);
+        context.insert("context_files", &Vec::<String>::new());
+        context.insert("feedback_loops", &HashMap::<String, String>::new());
+        context.insert("custom_instructions", &Vec::<String>::new());
+        context.insert("bootstrap", &false);
+        context.insert("next_story", &None::<()>);
+        context.insert("stop_signal", &None::<String>);
+        context.insert("has_frontend", &false);
+
+        let result = tera.render("prompt", &context);
+        assert!(
+            result.is_ok(),
+            "Template failed to render: {:?}",
+            result.err()
+        );
+
+        let rendered = result.unwrap();
+        assert!(!rendered.contains("## Browser Testing"));
     }
 }

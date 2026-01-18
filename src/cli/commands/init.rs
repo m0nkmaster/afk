@@ -79,6 +79,9 @@ pub fn init(options: InitOptions) -> InitCommandResult {
     if let Some(ref pm) = analysis.package_manager {
         println!("  Package manager: {pm}");
     }
+    if analysis.has_frontend {
+        println!("  Frontend: \x1b[36mdetected\x1b[0m (browser testing enabled)");
+    }
 
     // Generate config
     let mut config = generate_config(&analysis);

@@ -38,7 +38,7 @@ src/
 │   ├── metadata.rs  # Config metadata and documentation
 │   └── validation.rs # Config validation
 ├── bootstrap/       # Project analysis
-│   └── mod.rs       # Project type detection, AI CLI detection
+│   └── mod.rs       # Project type detection, AI CLI detection, frontend detection
 ├── progress/        # Session tracking
 │   ├── mod.rs       # SessionProgress, TaskProgress models
 │   ├── limits.rs    # Iteration limits and constraints

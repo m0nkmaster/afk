@@ -103,6 +103,8 @@ pub struct ProjectAnalysis {
     pub has_linter: bool,
     /// Whether the project has types (type checking) configured.
     pub has_types: bool,
+    /// Whether the project has frontend/UI components requiring browser verification.
+    pub has_frontend: bool,
     /// Suggested feedback loop commands.
     pub suggested_feedback: FeedbackLoopsConfig,
 }
@@ -116,6 +118,7 @@ impl Default for ProjectAnalysis {
             has_tests: false,
             has_linter: false,
             has_types: false,
+            has_frontend: false,
             suggested_feedback: FeedbackLoopsConfig::default(),
         }
     }
@@ -229,6 +232,9 @@ pub fn analyse_project(root: Option<&Path>) -> ProjectAnalysis {
             || root.join("vitest.config.ts").exists()
             || root.join("vitest.config.js").exists();
 
+        // Detect frontend frameworks
+        analysis.has_frontend = detect_frontend(root);
+
         let pm = analysis.package_manager.clone().unwrap_or_default();
         let run_prefix = if pm == "npm" { "npm run" } else { &pm };
 
@@ -282,10 +288,17 @@ pub fn analyse_project(root: Option<&Path>) -> ProjectAnalysis {
 
 /// Generate a config from project analysis.
 pub fn generate_config(analysis: &ProjectAnalysis) -> AfkConfig {
-    AfkConfig {
+    let mut config = AfkConfig {
         feedback_loops: analysis.suggested_feedback.clone(),
         ..AfkConfig::default()
+    };
+
+    // Set frontend flag if detected
+    if analysis.has_frontend {
+        config.prompt.has_frontend = true;
     }
+
+    config
 }
 
 /// Infer sources from the current directory.
@@ -394,6 +407,80 @@ fn file_contains(path: impl AsRef<Path>, pattern: &str) -> bool {
     std::fs::read_to_string(path)
         .map(|content| content.contains(pattern))
         .unwrap_or(false)
+}
+
+/// Detect if a project has frontend/UI components.
+///
+/// Checks for:
+/// - Frontend framework dependencies in package.json
+/// - Framework-specific config files (next.config, vite.config, etc.)
+/// - Common frontend file patterns (.tsx, .jsx, .vue, .svelte)
+fn detect_frontend(root: &Path) -> bool {
+    // Check for framework config files
+    let config_files = [
+        "next.config.js",
+        "next.config.mjs",
+        "next.config.ts",
+        "vite.config.js",
+        "vite.config.ts",
+        "nuxt.config.js",
+        "nuxt.config.ts",
+        "angular.json",
+        "svelte.config.js",
+        "astro.config.mjs",
+        "remix.config.js",
+        "gatsby-config.js",
+    ];
+
+    for config in config_files {
+        if root.join(config).exists() {
+            return true;
+        }
+    }
+
+    // Check package.json for frontend dependencies
+    if let Ok(content) = std::fs::read_to_string(root.join("package.json")) {
+        let frontend_deps = [
+            "\"react\"",
+            "\"vue\"",
+            "\"svelte\"",
+            "\"@angular/core\"",
+            "\"next\"",
+            "\"nuxt\"",
+            "\"astro\"",
+            "\"solid-js\"",
+            "\"preact\"",
+            "\"@remix-run/react\"",
+            "\"gatsby\"",
+        ];
+
+        for dep in frontend_deps {
+            if content.contains(dep) {
+                return true;
+            }
+        }
+    }
+
+    // Check for common frontend directories
+    let frontend_dirs = ["src/components", "src/pages", "app", "pages", "components"];
+    for dir in frontend_dirs {
+        let dir_path = root.join(dir);
+        if dir_path.is_dir() {
+            // Check if directory contains .tsx, .jsx, .vue, or .svelte files
+            if let Ok(entries) = std::fs::read_dir(&dir_path) {
+                for entry in entries.flatten() {
+                    if let Some(ext) = entry.path().extension() {
+                        let ext_str = ext.to_string_lossy();
+                        if ["tsx", "jsx", "vue", "svelte"].contains(&ext_str.as_ref()) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    false
 }
 
 fn command_exists(cmd: &str) -> bool {
@@ -766,6 +853,52 @@ line-length = 100
         assert_eq!(analysis.project_type, ProjectType::Node);
         assert_eq!(analysis.name, Some("my-app".to_string()));
         assert!(analysis.has_types);
+        assert!(!analysis.has_frontend); // No frontend deps
+    }
+
+    #[test]
+    fn test_analyse_project_node_with_react() {
+        let temp = TempDir::new().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{"name": "my-app", "dependencies": {"react": "^18.0.0"}}"#,
+        )
+        .unwrap();
+
+        let analysis = analyse_project(Some(temp.path()));
+        assert_eq!(analysis.project_type, ProjectType::Node);
+        assert!(analysis.has_frontend);
+    }
+
+    #[test]
+    fn test_analyse_project_node_with_next_config() {
+        let temp = TempDir::new().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{"name": "my-app", "version": "1.0.0"}"#,
+        )
+        .unwrap();
+        fs::write(temp.path().join("next.config.js"), "module.exports = {}").unwrap();
+
+        let analysis = analyse_project(Some(temp.path()));
+        assert_eq!(analysis.project_type, ProjectType::Node);
+        assert!(analysis.has_frontend);
+    }
+
+    #[test]
+    fn test_analyse_project_node_with_tsx_files() {
+        let temp = TempDir::new().unwrap();
+        fs::write(
+            temp.path().join("package.json"),
+            r#"{"name": "my-app", "version": "1.0.0"}"#,
+        )
+        .unwrap();
+        fs::create_dir_all(temp.path().join("src/components")).unwrap();
+        fs::write(temp.path().join("src/components/Button.tsx"), "export {}").unwrap();
+
+        let analysis = analyse_project(Some(temp.path()));
+        assert_eq!(analysis.project_type, ProjectType::Node);
+        assert!(analysis.has_frontend);
     }
 
     #[test]
@@ -831,6 +964,7 @@ line-length = 100
             has_tests: true,
             has_linter: true,
             has_types: true,
+            has_frontend: false,
             suggested_feedback: FeedbackLoopsConfig {
                 types: Some("cargo check".to_string()),
                 lint: Some("cargo clippy".to_string()),
@@ -842,6 +976,24 @@ line-length = 100
 
         let config = generate_config(&analysis);
         assert_eq!(config.feedback_loops.types, Some("cargo check".to_string()));
+        assert!(!config.prompt.has_frontend);
+    }
+
+    #[test]
+    fn test_generate_config_with_frontend() {
+        let analysis = ProjectAnalysis {
+            project_type: ProjectType::Node,
+            name: Some("web-app".to_string()),
+            package_manager: Some("npm".to_string()),
+            has_tests: true,
+            has_linter: true,
+            has_types: true,
+            has_frontend: true,
+            suggested_feedback: FeedbackLoopsConfig::default(),
+        };
+
+        let config = generate_config(&analysis);
+        assert!(config.prompt.has_frontend);
     }
 
     // ========================================================================

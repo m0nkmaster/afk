@@ -239,6 +239,9 @@ All config lives in `.afk/config.json`:
     "args": ["--dangerously-skip-permissions", "-p"],
     "models": ["sonnet", "opus"]
   },
+  "prompt": {
+    "has_frontend": true
+  },
   "git": {
     "auto_commit": true,
     "commit_message_template": "afk: {task_id} - {message}"
@@ -288,6 +291,32 @@ All config lives in `.afk/config.json`:
 | `max_iterations` | Stop after N iterations | 200 |
 | `max_task_failures` | Skip task after N failures | 50 |
 | `timeout_minutes` | Stop after N minutes | 120 |
+
+#### Prompt
+
+```json
+{
+  "prompt": {
+    "has_frontend": true,
+    "context_files": ["AGENTS.md", "README.md"],
+    "instructions": ["Use British English", "Always run tests"]
+  }
+}
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `has_frontend` | Enable browser testing instructions for UI stories | Auto-detected |
+| `context_files` | Additional files to mention in prompts | `[]` |
+| `instructions` | Custom instructions appended to prompts | `[]` |
+| `custom_path` | Path to custom prompt template | `null` |
+
+**Frontend detection:** During `afk init`, afk auto-detects frontend projects by checking for:
+- Framework config files (next.config.js, vite.config.ts, etc.)
+- Frontend dependencies in package.json (react, vue, svelte, etc.)
+- Frontend file patterns (.tsx, .jsx, .vue, .svelte)
+
+When `has_frontend` is enabled, the prompt includes browser testing instructions requiring visual verification of UI changes.
 
 ## Task Sources
 

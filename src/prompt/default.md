@@ -47,6 +47,18 @@ Run whatever quality checks your project requires (build, lint, test, etc.).
 - Keep changes focused and minimal
 - Follow existing code patterns
 
+{% if has_frontend -%}
+## Browser Testing
+
+For stories that change UI, you MUST verify in the browser:
+
+1. Navigate to the relevant page
+2. Verify the UI changes work as expected
+3. Take a screenshot if helpful for the progress log
+
+A frontend story is NOT complete until browser verification passes.
+
+{% endif -%}
 ## Recording Learnings
 
 ### Codebase Patterns (Top of progress.json)
