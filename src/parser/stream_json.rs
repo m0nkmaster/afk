@@ -713,7 +713,10 @@ mod tests {
             .unwrap();
         match event {
             StreamEvent::UserMessage { text } => {
-                assert!(text.is_empty(), "Expected empty text for tool-use-only message");
+                assert!(
+                    text.is_empty(),
+                    "Expected empty text for tool-use-only message"
+                );
             }
             _ => panic!("Expected UserMessage"),
         }

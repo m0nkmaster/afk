@@ -329,6 +329,11 @@ impl AiCliConfig {
             },
         ];
 
+        // Claude CLI requires --verbose when using --output-format=stream-json with --print
+        if self.output_format == AiOutputFormat::StreamJson && cmd_lower.contains("claude") {
+            args.push("--verbose".to_string());
+        }
+
         // Add partial streaming flag for stream-json mode
         if self.output_format == AiOutputFormat::StreamJson && self.stream_partial {
             if cmd_lower.contains("cursor") {

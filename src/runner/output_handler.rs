@@ -579,30 +579,50 @@ impl OutputHandler {
         let duration_mins = duration_seconds / 60.0;
 
         // Determine colour based on outcome
-        let (border_colour, icon) = if tasks_completed > 0 || stop_reason.contains("complete") {
-            ("\x1b[32m", "✓") // Green for success
-        } else if stop_reason.contains("interrupt") {
-            ("\x1b[33m", "⚠") // Yellow for interrupt
+        // Check for failure conditions first to avoid showing success on partial completion
+        let is_error = stop_reason.contains("error")
+            || stop_reason.contains("Error")
+            || stop_reason.contains("Failed");
+        let is_interrupt = stop_reason.contains("interrupt");
+        let is_timeout = stop_reason.contains("timeout") || stop_reason.contains("Timeout");
+
+        let (border_colour, icon, title) = if is_error {
+            ("\x1b[31m", "✗", "Session Failed") // Red for errors
+        } else if is_interrupt {
+            ("\x1b[33m", "⚠", "Session Interrupted") // Yellow for interrupt
+        } else if is_timeout {
+            ("\x1b[33m", "⏱", "Session Timeout") // Yellow for timeout
+        } else if tasks_completed > 0 || stop_reason.contains("complete") {
+            ("\x1b[32m", "✓", "Session Complete") // Green for success
         } else {
-            ("\x1b[36m", "●") // Cyan for neutral
+            ("\x1b[36m", "●", "Session Ended") // Cyan for neutral
         };
+
+        // Only show celebration on actual success (not error/interrupt/timeout)
+        let show_celebration = !is_error && !is_interrupt && !is_timeout;
 
         println!();
         println!(
             "{}┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m",
             border_colour
         );
+        // Calculate padding for title line
+        let title_content = format!("{} {}", icon, title);
+        let title_padding = 75_usize.saturating_sub(title_content.chars().count());
         println!(
-            "{}│\x1b[0m  \x1b[1m{} Session Complete\x1b[0m                                                       {}│\x1b[0m",
-            border_colour, icon, border_colour
+            "{}│\x1b[0m  \x1b[1m{}\x1b[0m{}{}│\x1b[0m",
+            border_colour,
+            title_content,
+            " ".repeat(title_padding),
+            border_colour
         );
         println!(
             "{}├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m",
             border_colour
         );
 
-        // Show celebration mascot for successful completions
-        if self.show_mascot && tasks_completed > 0 {
+        // Show celebration mascot only for successful completions (not on error/interrupt/timeout)
+        if self.show_mascot && tasks_completed > 0 && show_celebration {
             let mascot = get_mascot("celebration");
             for line in mascot.lines() {
                 let padding = 77_usize.saturating_sub(line.chars().count() + 4);

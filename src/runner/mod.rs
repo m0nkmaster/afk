@@ -132,7 +132,7 @@ pub use quality_gates::{
 };
 
 /// Reasons for stopping the runner.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StopReason {
     /// All tasks completed successfully.
     Complete,
@@ -144,8 +144,8 @@ pub enum StopReason {
     NoTasks,
     /// User interrupted (Ctrl+C).
     UserInterrupt,
-    /// AI CLI error.
-    AiError,
+    /// AI CLI error with optional details.
+    AiError(Option<String>),
 }
 
 impl std::fmt::Display for StopReason {
@@ -156,7 +156,16 @@ impl std::fmt::Display for StopReason {
             StopReason::Timeout => write!(f, "Session timeout reached"),
             StopReason::NoTasks => write!(f, "No tasks available"),
             StopReason::UserInterrupt => write!(f, "User interrupted"),
-            StopReason::AiError => write!(f, "AI CLI error"),
+            StopReason::AiError(None) => write!(f, "AI CLI error"),
+            StopReason::AiError(Some(msg)) => {
+                // Truncate long messages for display
+                let truncated = if msg.len() > 60 {
+                    format!("{}...", &msg[..57])
+                } else {
+                    msg.clone()
+                };
+                write!(f, "AI CLI error: {}", truncated)
+            }
         }
     }
 }
@@ -190,7 +199,11 @@ mod tests {
         assert_eq!(StopReason::Timeout.to_string(), "Session timeout reached");
         assert_eq!(StopReason::NoTasks.to_string(), "No tasks available");
         assert_eq!(StopReason::UserInterrupt.to_string(), "User interrupted");
-        assert_eq!(StopReason::AiError.to_string(), "AI CLI error");
+        assert_eq!(StopReason::AiError(None).to_string(), "AI CLI error");
+        assert_eq!(
+            StopReason::AiError(Some("out of credits".to_string())).to_string(),
+            "AI CLI error: out of credits"
+        );
     }
 
     #[test]

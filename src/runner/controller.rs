@@ -111,11 +111,12 @@ impl LoopController {
         let prd = match sync_prd_with_root(&self.config, None, None) {
             Ok(prd) => prd,
             Err(e) => {
-                self.output.error(&format!("Failed to sync PRD: {e}"));
+                let error_msg = format!("Failed to sync PRD: {e}");
+                self.output.error(&error_msg);
                 return RunResult {
                     iterations_completed: 0,
                     tasks_completed: 0,
-                    stop_reason: StopReason::AiError,
+                    stop_reason: StopReason::AiError(Some(error_msg)),
                     duration_seconds: start_time.elapsed().as_secs_f64(),
                     archived_to: None,
                 };
@@ -288,7 +289,7 @@ impl LoopController {
                         break;
                     } else {
                         self.output.error(error);
-                        stop_reason = StopReason::AiError;
+                        stop_reason = StopReason::AiError(Some(error.clone()));
                         break;
                     }
                 }
@@ -479,7 +480,7 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
         Err(_) => RunResult {
             iterations_completed: 0,
             tasks_completed: 0,
-            stop_reason: super::StopReason::AiError,
+            stop_reason: super::StopReason::AiError(Some("Runner thread panicked".to_string())),
             duration_seconds: 0.0,
             archived_to: None,
         },
@@ -510,7 +511,8 @@ fn run_loop_with_tui_sender(
     let prd = match sync_prd_with_root(config, None, None) {
         Ok(prd) => prd,
         Err(e) => {
-            let _ = tx.send(TuiEvent::Error(format!("Failed to sync PRD: {e}")));
+            let error_msg = format!("Failed to sync PRD: {e}");
+            let _ = tx.send(TuiEvent::Error(error_msg.clone()));
             let _ = tx.send(TuiEvent::SessionComplete {
                 iterations: 0,
                 tasks: 0,
@@ -520,7 +522,7 @@ fn run_loop_with_tui_sender(
             return RunResult {
                 iterations_completed: 0,
                 tasks_completed: 0,
-                stop_reason: super::StopReason::AiError,
+                stop_reason: super::StopReason::AiError(Some(error_msg)),
                 duration_seconds: start_time.elapsed().as_secs_f64(),
                 archived_to: None,
             };
@@ -694,7 +696,7 @@ fn run_loop_with_tui_sender(
                     break;
                 } else {
                     let _ = tx.send(TuiEvent::Error(error.clone()));
-                    stop_reason = super::StopReason::AiError;
+                    stop_reason = super::StopReason::AiError(Some(error.clone()));
                     break;
                 }
             }
@@ -932,19 +934,36 @@ fn handle_stream_event(
 /// Wait for the AI CLI child process to complete.
 ///
 /// Returns a success result if the process exits cleanly, or a failure
-/// result with the exit code if it fails.
+/// result with the exit code and stderr content if it fails.
 fn wait_for_completion(
     mut child: std::process::Child,
     output: String,
 ) -> super::iteration::IterationResult {
+    use std::io::{BufRead, BufReader};
+
+    // Capture stderr before waiting
+    let stderr_output = if let Some(stderr) = child.stderr.take() {
+        let reader = BufReader::new(stderr);
+        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
+        lines.join("\n")
+    } else {
+        String::new()
+    };
+
     match child.wait() {
         Ok(status) => {
             if !status.success() {
                 let exit_code = status.code().unwrap_or(-1);
-                super::iteration::IterationResult::failure_with_output(
-                    format!("AI CLI exited with code {exit_code}"),
-                    output,
-                )
+                // Include full stderr in error message
+                let error_msg = if stderr_output.is_empty() {
+                    format!("AI CLI exited with code {exit_code}")
+                } else {
+                    format!(
+                        "AI CLI exited with code {exit_code}: {}",
+                        stderr_output.trim()
+                    )
+                };
+                super::iteration::IterationResult::failure_with_output(error_msg, output)
             } else {
                 super::iteration::IterationResult::success(output)
             }
