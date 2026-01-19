@@ -360,6 +360,8 @@ impl Default for StreamJsonParser {
 }
 
 /// Extract text content from a message object.
+/// Returns the extracted text, or an empty string if the message has no text
+/// (e.g., contains only tool_use references).
 fn extract_message_text(message: &Value) -> Option<String> {
     // Try content array format: {"content": [{"type": "text", "text": "..."}]}
     if let Some(content) = message.get("content") {
@@ -372,6 +374,11 @@ fn extract_message_text(message: &Value) -> Option<String> {
             }
             if !texts.is_empty() {
                 return Some(texts.join(""));
+            }
+            // Content array exists but has no text items (e.g., only tool_use)
+            // Return empty string to indicate we parsed successfully but found no text
+            if !arr.is_empty() {
+                return Some(String::new());
             }
         }
         // Also try content as string directly
@@ -693,6 +700,37 @@ mod tests {
                 assert_eq!(event_type, "future_event");
             }
             _ => panic!("Expected Unknown"),
+        }
+    }
+
+    #[test]
+    fn test_parse_user_message_with_tool_use_only() {
+        // User messages that only contain tool_use references (no text) should
+        // return a UserMessage with empty text, not None
+        let mut parser = StreamJsonParser::new(CliFormat::Claude);
+        let event = parser
+            .parse_line(r#"{"type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_123","type":"tool_result","content":"result"}]}}"#)
+            .unwrap();
+        match event {
+            StreamEvent::UserMessage { text } => {
+                assert!(text.is_empty(), "Expected empty text for tool-use-only message");
+            }
+            _ => panic!("Expected UserMessage"),
+        }
+    }
+
+    #[test]
+    fn test_parse_assistant_message_with_mixed_content() {
+        // Assistant messages with both text and tool_use should extract only the text
+        let mut parser = StreamJsonParser::new(CliFormat::Claude);
+        let event = parser
+            .parse_line(r#"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me help"},{"type":"tool_use","id":"abc"}]}}"#)
+            .unwrap();
+        match event {
+            StreamEvent::AssistantMessage { text } => {
+                assert_eq!(text, "Let me help");
+            }
+            _ => panic!("Expected AssistantMessage"),
         }
     }
 }

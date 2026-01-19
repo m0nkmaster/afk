@@ -316,14 +316,30 @@ impl IterationRunner {
                                         self.output.stream_line(&format!("{display}\n"));
                                     }
                                 } else {
-                                    // Parsing failed - display raw line as fallback
-                                    // In this case, check raw line for completion signals (plain text mode fallback)
-                                    self.output.stream_line(&format!("{line}\n"));
-                                    if self.output.contains_completion_signal(&line) {
-                                        completion_detected = true;
-                                        self.output.completion_detected();
-                                        let _ = child.kill();
-                                        break;
+                                    // Parsing returned None - check if it's valid JSON we should suppress
+                                    // vs plain text we should display
+                                    let is_json = line.trim_start().starts_with('{')
+                                        && line.trim_end().ends_with('}');
+
+                                    if is_json {
+                                        // Valid JSON but no displayable content - silently skip
+                                        // Still check for completion signals in case they're embedded
+                                        if self.output.contains_completion_signal(&line) {
+                                            completion_detected = true;
+                                            self.output.completion_detected();
+                                            let _ = child.kill();
+                                            break;
+                                        }
+                                    } else {
+                                        // Plain text output - display as-is (fallback for CLIs
+                                        // that don't support stream-json)
+                                        self.output.stream_line(&format!("{line}\n"));
+                                        if self.output.contains_completion_signal(&line) {
+                                            completion_detected = true;
+                                            self.output.completion_detected();
+                                            let _ = child.kill();
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -348,6 +364,15 @@ impl IterationRunner {
             }
         }
 
+        // Capture stderr before waiting for process
+        let stderr_output = if let Some(stderr) = child.stderr.take() {
+            let reader = BufReader::new(stderr);
+            let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
+            lines.join("\n")
+        } else {
+            String::new()
+        };
+
         // Show iteration summary with stats
         self.output.iteration_summary();
 
@@ -365,10 +390,20 @@ impl IterationRunner {
             Ok(status) => {
                 if !status.success() {
                     let exit_code = status.code().unwrap_or(-1);
-                    return IterationResult::failure_with_output(
-                        format!("AI CLI exited with code {exit_code}"),
-                        output,
-                    );
+                    // Include full stderr in error message
+                    let error_msg = if stderr_output.is_empty() {
+                        format!("AI CLI exited with code {exit_code}")
+                    } else {
+                        format!(
+                            "AI CLI exited with code {exit_code}\n\x1b[31m{}\x1b[0m",
+                            stderr_output.trim()
+                        )
+                    };
+                    // Display stderr prominently
+                    if !stderr_output.is_empty() {
+                        self.output.error(&error_msg);
+                    }
+                    return IterationResult::failure_with_output(error_msg, output);
                 }
                 IterationResult::success(output)
             }
@@ -403,6 +438,10 @@ impl IterationRunner {
                 (None, None)
             }
             StreamEvent::AssistantMessage { text } => {
+                // Skip empty messages (e.g., tool-use-only content blocks)
+                if text.is_empty() {
+                    return (None, None);
+                }
                 // Truncate very long messages for display
                 let display_text = if text.len() > 200 {
                     format!("{}...", &text[..197])
