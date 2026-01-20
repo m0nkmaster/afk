@@ -88,6 +88,7 @@ Sources define where tasks come from:
 | `json` | JSON PRD file |
 | `markdown` | Markdown checklist (TODO.md) |
 | `github` | GitHub issues via `gh` CLI |
+| `openspec` | OpenSpec change proposals |
 
 ### Quality Gates
 
@@ -365,6 +366,18 @@ Uses `bd ready` to get available work from your beads issue tracker.
 ### GitHub Issues
 
 Uses `gh issue list`. Requires GitHub CLI to be installed and authenticated.
+
+### OpenSpec
+
+Reads tasks from [OpenSpec](https://github.com/Fission-AI/OpenSpec) change proposals. Add to your config manually:
+
+```json
+{
+  "sources": [{"type": "openspec"}]
+}
+```
+
+Scans `openspec/changes/<change-id>/tasks.md` for unchecked items and enriches them with context from proposals and specs.
 
 ## AI CLI Support
 

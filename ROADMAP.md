@@ -30,12 +30,8 @@ Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The T
 
 **Implemented:** Uses `caffeinate -i` on macOS and `systemd-inhibit` on Linux. Enabled by default via `limits.prevent_sleep` config option.
 
-### OpenSpec Source Adapter
+### ~~OpenSpec Source Adapter~~ ✓
 
-Add [OpenSpec](https://github.com/Fission-AI/OpenSpec) as a task source, enabling afk to consume tasks from spec-driven development workflows. OpenSpec provides structured change proposals with formal requirements and scenarios—combining this with afk's autonomous execution creates a powerful workflow: use OpenSpec for planning and specification, then afk for implementation.
+~~Add [OpenSpec](https://github.com/Fission-AI/OpenSpec) as a task source, enabling afk to consume tasks from spec-driven development workflows.~~
 
-The adapter would:
-- Read tasks from `openspec/changes/<change-id>/tasks.md`
-- Inject spec context from `openspec/changes/<change-id>/specs/` into prompts
-- Optionally include the proposal and design docs for richer context
-- Mark tasks complete in the OpenSpec format (`- [x]`)
+**Implemented:** OpenSpec is now a supported task source. Add `{"type": "openspec"}` to your config sources to enable. The adapter reads tasks from `openspec/changes/<change-id>/tasks.md` and injects spec context into prompts.

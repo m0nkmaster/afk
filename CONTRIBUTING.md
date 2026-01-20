@@ -81,7 +81,8 @@ src/
     ├── beads.rs     # Beads integration
     ├── json.rs      # JSON PRD files
     ├── markdown.rs  # Markdown checklists
-    └── github.rs    # GitHub issues
+    ├── github.rs    # GitHub issues
+    └── openspec.rs  # OpenSpec change proposals
 ```
 
 ## Writing Tests
