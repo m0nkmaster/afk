@@ -254,6 +254,7 @@ impl AiCliConfig {
     ///
     /// This applies the appropriate streaming flags based on the detected CLI type.
     /// If multiple models are configured, one is selected pseudo-randomly.
+    #[must_use]
     pub fn full_args(&self) -> Vec<String> {
         self.full_args_with_model(self.select_model())
     }
@@ -262,18 +263,27 @@ impl AiCliConfig {
     ///
     /// This is useful when you want to control which model is used, or when
     /// you've already selected a model and want to reuse it.
+    #[must_use]
     pub fn full_args_with_model(&self, model: Option<&str>) -> Vec<String> {
-        let mut args = self.args.clone();
+        let model_args_len = model.map_or(0, |_| 2);
+        let format_args_len = if self.output_format != AiOutputFormat::Text {
+            3 // Approximate max
+        } else {
+            0
+        };
+
+        let mut args = Vec::with_capacity(self.args.len() + model_args_len + format_args_len);
+        args.extend(self.args.iter().cloned());
 
         // Add model flag if a model is specified
         if let Some(model_name) = model {
-            args.extend(self.get_model_args(model_name));
+            args.push("--model".to_string());
+            args.push(model_name.to_string());
         }
 
         // Only add output format args if using streaming
         if self.output_format != AiOutputFormat::Text {
-            let format_args = self.get_output_format_args();
-            args.extend(format_args);
+            args.extend(self.get_output_format_args());
         }
 
         args
@@ -301,16 +311,6 @@ impl AiCliConfig {
 
         let index = (nanos as usize) % self.models.len();
         Some(&self.models[index])
-    }
-
-    /// Get the model flag arguments for the detected CLI.
-    fn get_model_args(&self, model: &str) -> Vec<String> {
-        // All supported CLIs use --model flag:
-        // - Claude Code: --model <alias|name>
-        // - Cursor CLI: --model <model-name>
-        // - Codex: --model
-        // - Aider: --model
-        vec!["--model".to_string(), model.to_string()]
     }
 
     /// Get the output format arguments for the detected CLI.

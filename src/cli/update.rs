@@ -167,26 +167,24 @@ fn parse_version(version: &str) -> &str {
     version.strip_prefix('v').unwrap_or(version)
 }
 
+/// Parse a version part (major, minor, or patch) stripping any prerelease suffix.
+fn parse_version_part(part: Option<&str>) -> u32 {
+    part.and_then(|s| s.split('-').next())
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
+}
+
 /// Compare versions. Returns true if new_version > current_version.
 fn is_newer_version(current: &str, new: &str) -> bool {
     let current = parse_version(current);
     let new = parse_version(new);
 
-    // Simple semver comparison
-    let current_parts: Vec<&str> = current.split('.').collect();
-    let new_parts: Vec<&str> = new.split('.').collect();
+    let mut current_parts = current.split('.');
+    let mut new_parts = new.split('.');
 
-    for i in 0..3 {
-        let current_num: u32 = current_parts
-            .get(i)
-            .and_then(|s| s.split('-').next()) // Strip prerelease suffix
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let new_num: u32 = new_parts
-            .get(i)
-            .and_then(|s| s.split('-').next()) // Strip prerelease suffix
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
+    for _ in 0..3 {
+        let current_num = parse_version_part(current_parts.next());
+        let new_num = parse_version_part(new_parts.next());
 
         match new_num.cmp(&current_num) {
             std::cmp::Ordering::Greater => return true,
@@ -197,14 +195,7 @@ fn is_newer_version(current: &str, new: &str) -> bool {
 
     // Handle prerelease suffixes (rc, beta, etc.)
     // A release version is always newer than a prerelease of the same base version
-    let current_has_suffix = current.contains('-');
-    let new_has_suffix = new.contains('-');
-
-    if current_has_suffix && !new_has_suffix {
-        return true; // 1.0.0 > 1.0.0-rc1
-    }
-
-    false
+    current.contains('-') && !new.contains('-')
 }
 
 /// Check for available updates.

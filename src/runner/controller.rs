@@ -36,16 +36,12 @@ impl LoopController {
         show_mascot: bool,
     ) -> Self {
         let mut output = OutputHandler::with_feedback(feedback_mode, show_mascot);
-        output.set_feedback_mode(feedback_mode);
-        output.set_show_mascot(show_mascot);
         output.set_activity_thresholds(
             config.feedback.active_threshold_secs,
             config.feedback.thinking_threshold_secs,
         );
 
         let mut iter_output = OutputHandler::with_feedback(feedback_mode, show_mascot);
-        iter_output.set_feedback_mode(feedback_mode);
-        iter_output.set_show_mascot(show_mascot);
         iter_output.set_activity_thresholds(
             config.feedback.active_threshold_secs,
             config.feedback.thinking_threshold_secs,
@@ -1138,19 +1134,18 @@ fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
         .collect();
 
     // Find and sync newly completed tasks
-    new_prd
+    for story in new_prd
         .user_stories
         .iter()
         .filter(|s| s.passes && !previously_complete.contains(s.id.as_str()))
-        .for_each(|story| {
-            if story.source == "beads" {
-                crate::sources::close_beads_issue(&story.id);
-            } else if let Some(issue_number) =
-                crate::sources::parse_github_issue_number(&story.source)
-            {
-                crate::sources::close_github_issue(issue_number, None);
-            }
-        });
+    {
+        if story.source == "beads" {
+            crate::sources::close_beads_issue(&story.id);
+        } else if let Some(issue_number) = crate::sources::parse_github_issue_number(&story.source)
+        {
+            crate::sources::close_github_issue(issue_number, None);
+        }
+    }
 }
 
 #[cfg(test)]

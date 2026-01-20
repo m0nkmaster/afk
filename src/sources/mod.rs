@@ -41,6 +41,7 @@ use crate::prd::UserStory;
 /// ];
 /// let tasks = aggregate_tasks(&sources);
 /// ```
+#[must_use]
 pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
     sources.iter().flat_map(load_from_source).collect()
 }

@@ -341,32 +341,30 @@ impl SessionProgress {
     /// Learnings are returned in order they appear (most recent tasks first based on
     /// completion time, then learnings within each task).
     pub fn get_recent_learnings(&self, limit: usize) -> Vec<(String, String)> {
-        // Collect all (task_id, learning) pairs
-        let mut all_learnings: Vec<(String, String)> = self
+        // Sort tasks by completion time (most recent first)
+        let mut tasks_with_learnings: Vec<_> = self
             .tasks
             .iter()
+            .filter(|(_, task)| !task.learnings.is_empty())
+            .collect();
+
+        tasks_with_learnings.sort_by(|(_, a), (_, b)| match (&b.completed_at, &a.completed_at) {
+            (Some(b_time), Some(a_time)) => b_time.cmp(a_time),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        });
+
+        // Flatten learnings from sorted tasks, taking only what we need
+        tasks_with_learnings
+            .into_iter()
             .flat_map(|(id, task)| {
                 task.learnings
                     .iter()
                     .map(move |learning| (id.clone(), learning.clone()))
             })
-            .collect();
-
-        // Sort by task completion time (most recent first) if available
-        // For tasks without completion time, they go to the end
-        all_learnings.sort_by(|a, b| {
-            let a_time = self.tasks.get(&a.0).and_then(|t| t.completed_at.as_ref());
-            let b_time = self.tasks.get(&b.0).and_then(|t| t.completed_at.as_ref());
-            match (a_time, b_time) {
-                (Some(a), Some(b)) => b.cmp(a), // Descending (most recent first)
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => std::cmp::Ordering::Equal,
-            }
-        });
-
-        // Take the first N learnings
-        all_learnings.into_iter().take(limit).collect()
+            .take(limit)
+            .collect()
     }
 
     /// Add a commit hash to a task.

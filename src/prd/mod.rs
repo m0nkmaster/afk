@@ -289,7 +289,7 @@ impl PrdDocument {
     #[must_use]
     pub fn get_pending_stories(&self) -> Vec<&UserStory> {
         let mut pending: Vec<&UserStory> = self.user_stories.iter().filter(|s| !s.passes).collect();
-        pending.sort_by_key(|s| s.priority);
+        pending.sort_unstable_by_key(|s| s.priority);
         pending
     }
 
