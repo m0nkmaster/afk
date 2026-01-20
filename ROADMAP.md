@@ -24,20 +24,6 @@ Provide time and iteration estimates for completing remaining tasks based on his
 
 Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The TUI dashboard has received the most attention; the alternative modes need refinement for consistent styling, better progress indication, and a more polished user experience when running without the full terminal UI.
 
-## Shipped
+### Prevent sleep 
 
-### Multi-Model Rotation
-
-Configure multiple AI models in `.afk/config.json` and rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches - cycling through them helps avoid getting stuck in local optima.
-
-```json
-{
-  "ai_cli": {
-    "command": "claude",
-    "args": ["--dangerously-skip-permissions", "-p"],
-    "models": ["sonnet", "opus", "haiku"]
-  }
-}
-```
-
-When multiple models are configured, afk selects one with equal probability each iteration and passes `--model <selected>` to the AI CLI.
+Ability to stop the computer powering down if left for long periods of time. Utilise caffinate on mac and similar on other platforms.
