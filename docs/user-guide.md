@@ -291,6 +291,13 @@ All config lives in `.afk/config.json`:
 | `max_iterations` | Stop after N iterations | 200 |
 | `max_task_failures` | Skip task after N failures | 50 |
 | `timeout_minutes` | Stop after N minutes | 120 |
+| `prevent_sleep` | Prevent system sleep during sessions | true |
+
+**Sleep Prevention:** When enabled, afk prevents the system from sleeping during autonomous sessions using platform-specific tools:
+- **macOS**: Uses `caffeinate` to prevent idle sleep
+- **Linux**: Uses `systemd-inhibit` (or `gnome-session-inhibit` as fallback)
+
+This ensures long-running sessions aren't interrupted when you step away. The lock is automatically released when the session ends.
 
 #### Prompt
 

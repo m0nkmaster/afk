@@ -15,6 +15,7 @@ impl ConfigField for LimitsConfig {
             "max_iterations" => Some(self.max_iterations.to_string()),
             "max_task_failures" => Some(self.max_task_failures.to_string()),
             "timeout_minutes" => Some(self.timeout_minutes.to_string()),
+            "prevent_sleep" => Some(self.prevent_sleep.to_string()),
             _ => None,
         }
     }
@@ -42,12 +43,24 @@ impl ConfigField for LimitsConfig {
                 })?;
                 Ok(())
             }
+            "prevent_sleep" => {
+                self.prevent_sleep = parse_bool(value).map_err(|_| FieldError::InvalidValue {
+                    key: key.into(),
+                    expected: "true or false".into(),
+                })?;
+                Ok(())
+            }
             _ => Err(FieldError::UnknownKey(key.into())),
         }
     }
 
     fn field_names() -> &'static [&'static str] {
-        &["max_iterations", "max_task_failures", "timeout_minutes"]
+        &[
+            "max_iterations",
+            "max_task_failures",
+            "timeout_minutes",
+            "prevent_sleep",
+        ]
     }
 
     fn section_name() -> &'static str {

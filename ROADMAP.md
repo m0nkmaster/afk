@@ -24,9 +24,11 @@ Provide time and iteration estimates for completing remaining tasks based on his
 
 Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The TUI dashboard has received the most attention; the alternative modes need refinement for consistent styling, better progress indication, and a more polished user experience when running without the full terminal UI.
 
-### Prevent Sleep
+### ~~Prevent Sleep~~ ✓
 
-Ability to stop the computer powering down if left for long periods of time. Utilise `caffeinate` on macOS and similar on other platforms.
+~~Ability to stop the computer powering down if left for long periods of time. Utilise `caffeinate` on macOS and similar on other platforms.~~
+
+**Implemented:** Uses `caffeinate -i` on macOS and `systemd-inhibit` on Linux. Enabled by default via `limits.prevent_sleep` config option.
 
 ### OpenSpec Source Adapter
 

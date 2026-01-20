@@ -9,6 +9,9 @@ mod controller;
 mod iteration;
 mod output_handler;
 mod quality_gates;
+mod sleep_guard;
+
+pub use sleep_guard::SleepGuard;
 
 /// Cached current working directory for path relativisation.
 static CWD: OnceLock<String> = OnceLock::new();

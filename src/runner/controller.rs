@@ -346,6 +346,8 @@ impl LoopController {
 ///
 /// Convenience function that creates a LoopController and runs it with full options.
 pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResult {
+    use super::sleep_guard::SleepGuard;
+
     let mut controller =
         LoopController::with_feedback(config.clone(), options.feedback_mode, options.show_mascot);
 
@@ -361,6 +363,17 @@ pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResu
         // Non-fatal: just log and continue without handler
         eprintln!("\x1b[2mWarning: Could not set up Ctrl+C handler: {e}\x1b[0m");
     }
+
+    // Prevent system sleep during autonomous session (guard releases on drop)
+    let _sleep_guard = if config.limits.prevent_sleep {
+        let guard = SleepGuard::new();
+        if guard.is_active() {
+            eprintln!("\x1b[2mSleep prevention active ({})\x1b[0m", guard.method());
+        }
+        guard
+    } else {
+        SleepGuard::disabled()
+    };
 
     controller.run(
         options.max_iterations,
@@ -397,6 +410,7 @@ pub fn run_loop(
 /// Provides a rich, animated dashboard showing live AI output,
 /// statistics, and progress.
 pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
+    use super::sleep_guard::SleepGuard;
     use crate::tui::{TuiApp, TuiEvent};
     use crate::watcher::{ChangeType, FileWatcher};
     use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
@@ -410,6 +424,13 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
             eprintln!("Falling back to standard output...");
             return run_loop_with_options(config, options);
         }
+    };
+
+    // Prevent system sleep during autonomous session (guard releases on drop)
+    let _sleep_guard = if config.limits.prevent_sleep {
+        SleepGuard::new()
+    } else {
+        SleepGuard::disabled()
     };
 
     let tx = tui_app.sender();
