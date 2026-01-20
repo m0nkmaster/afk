@@ -26,4 +26,4 @@ Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The T
 
 ### Prevent sleep 
 
-Ability to stop the computer powering down if left for long periods of time. Utilise caffinate on mac and similar on other platforms.
+Ability to stop the computer powering down if left for long periods of time. Utilise `caffinate` on mac and similar on other platforms.
