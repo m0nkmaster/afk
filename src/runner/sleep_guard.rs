@@ -9,7 +9,10 @@
 //!
 //! The guard automatically releases the sleep lock when dropped.
 
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+use std::process::{Command, Stdio};
 
 /// A guard that prevents system sleep while held.
 ///
