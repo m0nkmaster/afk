@@ -148,10 +148,13 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk source add markdown TODO.md` | Add markdown file source |
 | `afk source add github` | Add GitHub issues (current repo) |
 | `afk source add github owner/repo` | Add GitHub issues from specific repo |
+| `afk source add openspec` | Add [OpenSpec](https://github.com/Fission-AI/OpenSpec) change proposals |
 | `afk source list` | List configured sources |
 | `afk source remove <index>` | Remove a source by index (1-based) |
 
 **GitHub source:** Requires the [GitHub CLI](https://cli.github.com/) (`gh`) to be installed and authenticated. Fetches open issues and converts them to tasks. Priority is inferred from labels (P0/critical → 0, P1/high → 1, etc.).
+
+**OpenSpec source:** Reads tasks from [OpenSpec](https://github.com/Fission-AI/OpenSpec) change proposals in `openspec/changes/<change-id>/tasks.md`. Enriches task context with spec deltas, proposals, and design docs - perfect for spec-driven development workflows.
 
 ### Quality & Debug
 

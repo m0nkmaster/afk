@@ -163,6 +163,7 @@ The AI reads these files directly and updates them as it works.
 | `afk source add json tasks.json` | Add JSON tasks file |
 | `afk source add markdown TODO.md` | Add markdown checklist |
 | `afk source add github` | Add GitHub issues |
+| `afk source add openspec` | Add OpenSpec change proposals |
 | `afk source list` | List configured sources |
 | `afk source remove 1` | Remove source by index |
 
@@ -264,7 +265,8 @@ All config lives in `.afk/config.json`:
     {"type": "beads"},
     {"type": "json", "path": "tasks.json"},
     {"type": "markdown", "path": "TODO.md"},
-    {"type": "github", "labels": ["afk"]}
+    {"type": "github", "labels": ["afk"]},
+    {"type": "openspec"}
   ]
 }
 ```
