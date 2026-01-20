@@ -24,6 +24,16 @@ Provide time and iteration estimates for completing remaining tasks based on his
 
 Clean up the non-TUI feedback modes (`--feedback full`, `minimal`, `off`). The TUI dashboard has received the most attention; the alternative modes need refinement for consistent styling, better progress indication, and a more polished user experience when running without the full terminal UI.
 
-### Prevent sleep 
+### Prevent Sleep
 
-Ability to stop the computer powering down if left for long periods of time. Utilise `caffinate` on mac and similar on other platforms.
+Ability to stop the computer powering down if left for long periods of time. Utilise `caffeinate` on macOS and similar on other platforms.
+
+### OpenSpec Source Adapter
+
+Add [OpenSpec](https://github.com/Fission-AI/OpenSpec) as a task source, enabling afk to consume tasks from spec-driven development workflows. OpenSpec provides structured change proposals with formal requirements and scenarios—combining this with afk's autonomous execution creates a powerful workflow: use OpenSpec for planning and specification, then afk for implementation.
+
+The adapter would:
+- Read tasks from `openspec/changes/<change-id>/tasks.md`
+- Inject spec context from `openspec/changes/<change-id>/specs/` into prompts
+- Optionally include the proposal and design docs for richer context
+- Mark tasks complete in the OpenSpec format (`- [x]`)
