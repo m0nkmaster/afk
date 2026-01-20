@@ -99,6 +99,7 @@ fn source_add_impl(
             };
             SourceConfig::github(&repo, vec![])
         }
+        SourceType::Openspec => SourceConfig::openspec(),
     };
 
     // GitHub source: only allow one - replace any existing
@@ -209,6 +210,7 @@ fn parse_source_type(s: &str) -> Result<SourceType, SourceCommandError> {
         "json" => Ok(SourceType::Json),
         "markdown" => Ok(SourceType::Markdown),
         "github" => Ok(SourceType::Github),
+        "openspec" => Ok(SourceType::Openspec),
         _ => Err(SourceCommandError::InvalidSourceType(s.to_string())),
     }
 }
@@ -220,6 +222,7 @@ fn source_type_to_str(st: &SourceType) -> &'static str {
         SourceType::Json => "json",
         SourceType::Markdown => "markdown",
         SourceType::Github => "github",
+        SourceType::Openspec => "openspec",
     }
 }
 

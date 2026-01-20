@@ -37,6 +37,8 @@ pub enum SourceType {
     Markdown,
     /// GitHub issues via gh CLI.
     Github,
+    /// OpenSpec change proposals with structured specs.
+    Openspec,
 }
 
 /// Configuration for a task source.
@@ -96,6 +98,19 @@ impl SourceConfig {
             labels,
         }
     }
+
+    /// Create a new OpenSpec source.
+    ///
+    /// Reads tasks from `openspec/changes/<change-id>/tasks.md` files
+    /// and includes spec context in the task descriptions.
+    pub fn openspec() -> Self {
+        Self {
+            source_type: SourceType::Openspec,
+            path: None,
+            repo: None,
+            labels: Vec::new(),
+        }
+    }
 }
 
 /// Configuration for feedback loop commands.
@@ -130,6 +145,10 @@ pub struct LimitsConfig {
     /// Maximum time in minutes before timeout.
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u32,
+    /// Prevent system sleep during autonomous sessions.
+    /// Uses `caffeinate` on macOS, `systemd-inhibit` on Linux.
+    #[serde(default = "default_true")]
+    pub prevent_sleep: bool,
 }
 
 fn default_max_iterations() -> u32 {
@@ -150,6 +169,7 @@ impl Default for LimitsConfig {
             max_iterations: default_max_iterations(),
             max_task_failures: default_max_task_failures(),
             timeout_minutes: default_timeout_minutes(),
+            prevent_sleep: default_true(),
         }
     }
 }
@@ -821,6 +841,25 @@ mod tests {
     }
 
     #[test]
+    fn test_source_config_openspec() {
+        let source = SourceConfig::openspec();
+        assert_eq!(source.source_type, SourceType::Openspec);
+        assert!(source.path.is_none());
+        assert!(source.repo.is_none());
+        assert!(source.labels.is_empty());
+    }
+
+    #[test]
+    fn test_source_type_openspec_serialisation() {
+        let source = SourceConfig::openspec();
+        let json = serde_json::to_string(&source).unwrap();
+        assert!(json.contains(r#""type":"openspec""#));
+
+        let parsed: SourceConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.source_type, SourceType::Openspec);
+    }
+
+    #[test]
     fn test_source_type_serialisation() {
         let source = SourceConfig::beads();
         let json = serde_json::to_string(&source).unwrap();
@@ -868,6 +907,7 @@ mod tests {
         assert_eq!(config.max_iterations, 200);
         assert_eq!(config.max_task_failures, 50);
         assert_eq!(config.timeout_minutes, 120);
+        assert!(config.prevent_sleep);
     }
 
     #[test]
@@ -876,10 +916,12 @@ mod tests {
             max_iterations: 5,
             max_task_failures: 1,
             timeout_minutes: 30,
+            prevent_sleep: false,
         };
         assert_eq!(config.max_iterations, 5);
         assert_eq!(config.max_task_failures, 1);
         assert_eq!(config.timeout_minutes, 30);
+        assert!(!config.prevent_sleep);
     }
 
     #[test]

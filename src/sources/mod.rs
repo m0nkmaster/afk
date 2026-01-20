@@ -1,16 +1,18 @@
 //! Task source adapters.
 //!
-//! This module aggregates tasks from various sources (beads, json, markdown, github).
+//! This module aggregates tasks from various sources (beads, json, markdown, github, openspec).
 
 pub mod beads;
 pub mod github;
 pub mod json;
 pub mod markdown;
+pub mod openspec;
 
 pub use beads::{close_beads_issue, load_beads_tasks, start_beads_issue};
 pub use github::{close_github_issue, load_github_tasks, parse_github_issue_number};
 pub use json::load_json_tasks;
 pub use markdown::load_markdown_tasks;
+pub use openspec::load_openspec_tasks;
 
 use crate::config::{SourceConfig, SourceType};
 use crate::prd::UserStory;
@@ -65,6 +67,7 @@ fn load_from_source(source: &SourceConfig) -> Vec<UserStory> {
             let repo = source.repo.as_deref();
             load_github_tasks(repo, &source.labels)
         }
+        SourceType::Openspec => load_openspec_tasks(),
     }
 }
 
@@ -183,6 +186,22 @@ mod tests {
         let tasks = aggregate_tasks(&sources);
         // GitHub source returns error, which is handled gracefully
         assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_tasks_with_openspec_source() {
+        // OpenSpec source should not panic even if openspec/ doesn't exist
+        let sources = vec![SourceConfig::openspec()];
+        let tasks = aggregate_tasks(&sources);
+        // Should return empty since we don't have openspec/ in test dir
+        assert!(tasks.is_empty());
+    }
+
+    #[test]
+    fn test_load_from_source_openspec() {
+        let source = SourceConfig::openspec();
+        // OpenSpec loader may return empty if openspec/ doesn't exist
+        let _tasks = load_from_source(&source);
     }
 
     #[test]

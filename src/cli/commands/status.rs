@@ -115,6 +115,7 @@ pub fn status(verbose: bool) -> StatusCommandResult {
                         source.repo.as_deref().unwrap_or("current repo")
                     )
                 }
+                crate::config::SourceType::Openspec => "openspec".to_string(),
             };
             println!("  {}. {}", i + 1, desc);
         }
