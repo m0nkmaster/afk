@@ -366,14 +366,14 @@ fn extract_message_text(message: &Value) -> Option<String> {
     // Try content array format: {"content": [{"type": "text", "text": "..."}]}
     if let Some(content) = message.get("content") {
         if let Some(arr) = content.as_array() {
-            let mut texts = Vec::new();
-            for item in arr {
-                if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                    texts.push(text);
-                }
-            }
-            if !texts.is_empty() {
-                return Some(texts.join(""));
+            // Build string directly without intermediate Vec
+            let combined: String = arr
+                .iter()
+                .filter_map(|item| item.get("text").and_then(|v| v.as_str()))
+                .collect();
+
+            if !combined.is_empty() {
+                return Some(combined);
             }
             // Content array exists but has no text items (e.g., only tool_use)
             // Return empty string to indicate we parsed successfully but found no text
