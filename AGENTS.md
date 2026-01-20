@@ -64,7 +64,7 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 | `bootstrap` | Project analysis and AI CLI detection |
 | `prompt` | Tera template rendering |
 | `prd` | PRD document parsing and management |
-| `sources` | All source adapters (beads, json, markdown, github) |
+| `sources` | All source adapters (beads, json, markdown, github, openspec) |
 | `parser` | Output parsing with regex patterns |
 | `feedback` | Metrics collection and ASCII art |
 | `watcher` | File system monitoring |
@@ -139,13 +139,15 @@ src/
 │   ├── controller.rs    # Loop lifecycle management
 │   ├── iteration.rs     # Single iteration execution
 │   ├── output_handler.rs # Console output
-│   └── quality_gates.rs # Lint, test, type checks
+│   ├── quality_gates.rs # Lint, test, type checks
+│   └── sleep_guard.rs   # System sleep prevention
 ├── sources/
 │   ├── mod.rs           # aggregate_tasks() dispatcher
 │   ├── beads.rs         # Beads (bd) integration
 │   ├── github.rs        # GitHub issues via gh CLI
 │   ├── json.rs          # JSON PRD files
-│   └── markdown.rs      # Markdown checklists
+│   ├── markdown.rs      # Markdown checklists
+│   └── openspec.rs      # OpenSpec change proposals
 ├── tui/
 │   ├── mod.rs           # Module exports
 │   ├── app.rs           # TUI application state
@@ -175,7 +177,7 @@ src/
 - **Tasks File**: `.afk/tasks.json` is the working task list; used directly if no sources configured
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations, task status, and per-task learnings (short-term memory)
 - **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
-- **Sources**: Pluggable adapters (beads, json, markdown, github) that sync into tasks.json
+- **Sources**: Pluggable adapters (beads, json, markdown, github, openspec) that sync into tasks.json
 - **Prompts**: Tera templates, customisable via config
 - **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md

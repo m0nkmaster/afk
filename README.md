@@ -216,7 +216,7 @@ Each task **must complete in a single AI context window**. Tasks that are too la
 
 **Each iteration:**
 
-1. **Load tasks** from configured sources (json, markdown, beads, github)
+1. **Load tasks** from configured sources (json, markdown, beads, github, openspec)
 2. **Check completion** — if all tasks done, exit
 3. **Generate prompt** with next task, context files, and session learnings
 4. **Spawn fresh AI** — a brand new CLI instance with clean context

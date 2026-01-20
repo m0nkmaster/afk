@@ -55,7 +55,8 @@ src/
 │   ├── controller.rs # Loop lifecycle management
 │   ├── iteration.rs  # Single iteration execution
 │   ├── output_handler.rs # Console output
-│   └── quality_gates.rs  # Lint, test, type checks
+│   ├── quality_gates.rs  # Lint, test, type checks
+│   └── sleep_guard.rs    # System sleep prevention
 ├── git/             # Git integration
 │   └── mod.rs       # Commit and archive operations
 ├── feedback/        # User feedback
@@ -79,7 +80,8 @@ src/
     ├── beads.rs     # Beads (bd) integration
     ├── json.rs      # JSON PRD files
     ├── markdown.rs  # Markdown checklists
-    └── github.rs    # GitHub issues via gh CLI
+    ├── github.rs    # GitHub issues via gh CLI
+    └── openspec.rs  # OpenSpec change proposals
 ```
 
 ## Key Dependencies
