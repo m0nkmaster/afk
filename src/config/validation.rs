@@ -3,7 +3,10 @@
 //! This module contains the `ConfigField` implementations for each config type,
 //! providing dynamic get/set access with validation for the `afk config` CLI.
 
-use super::field::{format_optional, format_vec, parse_bool, parse_vec, ConfigField, FieldError};
+use super::field::{
+    format_optional, format_vec, parse_bool_field, parse_f64_field, parse_u32_field,
+    parse_u64_field, parse_usize_field, parse_vec, ConfigField, FieldError,
+};
 use super::{
     AiCliConfig, AiOutputFormat, ArchiveConfig, FeedbackConfig, FeedbackLoopsConfig, FeedbackMode,
     GitConfig, LimitsConfig, OutputConfig, OutputMode, PromptConfig,
@@ -22,36 +25,13 @@ impl ConfigField for LimitsConfig {
 
     fn set_field(&mut self, key: &str, value: &str) -> Result<(), FieldError> {
         match key {
-            "max_iterations" => {
-                self.max_iterations = value.parse().map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "positive integer".into(),
-                })?;
-                Ok(())
-            }
-            "max_task_failures" => {
-                self.max_task_failures = value.parse().map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "positive integer".into(),
-                })?;
-                Ok(())
-            }
-            "timeout_minutes" => {
-                self.timeout_minutes = value.parse().map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "positive integer".into(),
-                })?;
-                Ok(())
-            }
-            "prevent_sleep" => {
-                self.prevent_sleep = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "max_iterations" => self.max_iterations = parse_u32_field(key, value)?,
+            "max_task_failures" => self.max_task_failures = parse_u32_field(key, value)?,
+            "timeout_minutes" => self.timeout_minutes = parse_u32_field(key, value)?,
+            "prevent_sleep" => self.prevent_sleep = parse_bool_field(key, value)?,
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -98,14 +78,11 @@ impl ConfigField for OutputConfig {
                         })
                     }
                 };
-                Ok(())
             }
-            "file_path" => {
-                self.file_path = value.to_string();
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "file_path" => self.file_path = value.to_string(),
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -138,14 +115,8 @@ impl ConfigField for AiCliConfig {
 
     fn set_field(&mut self, key: &str, value: &str) -> Result<(), FieldError> {
         match key {
-            "command" => {
-                self.command = value.to_string();
-                Ok(())
-            }
-            "args" => {
-                self.args = parse_vec(value);
-                Ok(())
-            }
+            "command" => self.command = value.to_string(),
+            "args" => self.args = parse_vec(value),
             "output_format" => {
                 self.output_format = match value.to_lowercase().as_str() {
                     "text" => AiOutputFormat::Text,
@@ -158,21 +129,12 @@ impl ConfigField for AiCliConfig {
                         })
                     }
                 };
-                Ok(())
             }
-            "stream_partial" => {
-                self.stream_partial = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            "models" => {
-                self.models = parse_vec(value);
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "stream_partial" => self.stream_partial = parse_bool_field(key, value)?,
+            "models" => self.models = parse_vec(value),
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -204,35 +166,20 @@ impl ConfigField for PromptConfig {
 
     fn set_field(&mut self, key: &str, value: &str) -> Result<(), FieldError> {
         match key {
-            "template" => {
-                self.template = value.to_string();
-                Ok(())
-            }
+            "template" => self.template = value.to_string(),
             "custom_path" => {
                 self.custom_path = if value.is_empty() || value == "(not set)" {
                     None
                 } else {
                     Some(value.to_string())
                 };
-                Ok(())
             }
-            "context_files" => {
-                self.context_files = parse_vec(value);
-                Ok(())
-            }
-            "instructions" => {
-                self.instructions = parse_vec(value);
-                Ok(())
-            }
-            "has_frontend" => {
-                self.has_frontend = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: "has_frontend".into(),
-                    expected: "true/false, yes/no, 1/0, on/off".into(),
-                })?;
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "context_files" => self.context_files = parse_vec(value),
+            "instructions" => self.instructions = parse_vec(value),
+            "has_frontend" => self.has_frontend = parse_bool_field(key, value)?,
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -261,19 +208,11 @@ impl ConfigField for GitConfig {
 
     fn set_field(&mut self, key: &str, value: &str) -> Result<(), FieldError> {
         match key {
-            "auto_commit" => {
-                self.auto_commit = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            "commit_message_template" => {
-                self.commit_message_template = value.to_string();
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "auto_commit" => self.auto_commit = parse_bool_field(key, value)?,
+            "commit_message_template" => self.commit_message_template = value.to_string(),
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -296,19 +235,11 @@ impl ConfigField for ArchiveConfig {
 
     fn set_field(&mut self, key: &str, value: &str) -> Result<(), FieldError> {
         match key {
-            "enabled" => {
-                self.enabled = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            "directory" => {
-                self.directory = value.to_string();
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "enabled" => self.enabled = parse_bool_field(key, value)?,
+            "directory" => self.directory = value.to_string(),
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -345,13 +276,7 @@ impl ConfigField for FeedbackConfig {
 
     fn set_field(&mut self, key: &str, value: &str) -> Result<(), FieldError> {
         match key {
-            "enabled" => {
-                self.enabled = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
+            "enabled" => self.enabled = parse_bool_field(key, value)?,
             "mode" => {
                 self.mode = match value.to_lowercase().as_str() {
                     "full" => FeedbackMode::Full,
@@ -364,61 +289,19 @@ impl ConfigField for FeedbackConfig {
                         })
                     }
                 };
-                Ok(())
             }
-            "show_files" => {
-                self.show_files = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            "show_metrics" => {
-                self.show_metrics = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            "show_mascot" => {
-                self.show_mascot = parse_bool(value).map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "true or false".into(),
-                })?;
-                Ok(())
-            }
-            "refresh_rate" => {
-                self.refresh_rate = value.parse().map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "decimal number (e.g., 0.1)".into(),
-                })?;
-                Ok(())
-            }
-            "max_output_lines" => {
-                self.max_output_lines = value.parse().map_err(|_| FieldError::InvalidValue {
-                    key: key.into(),
-                    expected: "positive integer (e.g., 500)".into(),
-                })?;
-                Ok(())
-            }
-            "active_threshold_secs" => {
-                self.active_threshold_secs =
-                    value.parse().map_err(|_| FieldError::InvalidValue {
-                        key: key.into(),
-                        expected: "positive integer (e.g., 2)".into(),
-                    })?;
-                Ok(())
-            }
+            "show_files" => self.show_files = parse_bool_field(key, value)?,
+            "show_metrics" => self.show_metrics = parse_bool_field(key, value)?,
+            "show_mascot" => self.show_mascot = parse_bool_field(key, value)?,
+            "refresh_rate" => self.refresh_rate = parse_f64_field(key, value)?,
+            "max_output_lines" => self.max_output_lines = parse_usize_field(key, value)?,
+            "active_threshold_secs" => self.active_threshold_secs = parse_u64_field(key, value)?,
             "thinking_threshold_secs" => {
-                self.thinking_threshold_secs =
-                    value.parse().map_err(|_| FieldError::InvalidValue {
-                        key: key.into(),
-                        expected: "positive integer (e.g., 10)".into(),
-                    })?;
-                Ok(())
+                self.thinking_threshold_secs = parse_u64_field(key, value)?;
             }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
@@ -459,24 +342,13 @@ impl ConfigField for FeedbackLoopsConfig {
         };
 
         match key {
-            "types" => {
-                self.types = opt_value;
-                Ok(())
-            }
-            "lint" => {
-                self.lint = opt_value;
-                Ok(())
-            }
-            "test" => {
-                self.test = opt_value;
-                Ok(())
-            }
-            "build" => {
-                self.build = opt_value;
-                Ok(())
-            }
-            _ => Err(FieldError::UnknownKey(key.into())),
+            "types" => self.types = opt_value,
+            "lint" => self.lint = opt_value,
+            "test" => self.test = opt_value,
+            "build" => self.build = opt_value,
+            _ => return Err(FieldError::UnknownKey(key.into())),
         }
+        Ok(())
     }
 
     fn field_names() -> &'static [&'static str] {
