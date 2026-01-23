@@ -296,7 +296,7 @@ mod tests {
         use super::parse_f64_field;
 
         assert!((parse_f64_field("key", "0.5").unwrap() - 0.5).abs() < f64::EPSILON);
-        assert!((parse_f64_field("key", "3.14").unwrap() - 3.14).abs() < f64::EPSILON);
+        assert!((parse_f64_field("key", "1.25").unwrap() - 1.25).abs() < f64::EPSILON);
 
         let err = parse_f64_field("my_field", "not_a_float").unwrap_err();
         assert!(matches!(err, FieldError::InvalidValue { key, .. } if key == "my_field"));
