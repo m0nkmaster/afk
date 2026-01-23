@@ -90,6 +90,46 @@ pub fn parse_bool(value: &str) -> Result<bool, FieldError> {
     }
 }
 
+/// Parse a boolean field with proper error context.
+pub fn parse_bool_field(key: &str, value: &str) -> Result<bool, FieldError> {
+    parse_bool(value).map_err(|_| FieldError::InvalidValue {
+        key: key.into(),
+        expected: "true or false".into(),
+    })
+}
+
+/// Parse an unsigned 32-bit integer field.
+pub fn parse_u32_field(key: &str, value: &str) -> Result<u32, FieldError> {
+    value.parse().map_err(|_| FieldError::InvalidValue {
+        key: key.into(),
+        expected: "positive integer".into(),
+    })
+}
+
+/// Parse an unsigned 64-bit integer field.
+pub fn parse_u64_field(key: &str, value: &str) -> Result<u64, FieldError> {
+    value.parse().map_err(|_| FieldError::InvalidValue {
+        key: key.into(),
+        expected: "positive integer".into(),
+    })
+}
+
+/// Parse a usize field.
+pub fn parse_usize_field(key: &str, value: &str) -> Result<usize, FieldError> {
+    value.parse().map_err(|_| FieldError::InvalidValue {
+        key: key.into(),
+        expected: "positive integer".into(),
+    })
+}
+
+/// Parse a float field.
+pub fn parse_f64_field(key: &str, value: &str) -> Result<f64, FieldError> {
+    value.parse().map_err(|_| FieldError::InvalidValue {
+        key: key.into(),
+        expected: "decimal number".into(),
+    })
+}
+
 /// Parse a comma-separated string into a vector.
 pub fn parse_vec(value: &str) -> Vec<String> {
     if value.is_empty() || value == "(none)" {
@@ -207,5 +247,58 @@ mod tests {
 
         let err = FieldError::InvalidPath("invalid".into());
         assert_eq!(err.to_string(), "Invalid path format: invalid");
+    }
+
+    #[test]
+    fn test_parse_bool_field() {
+        use super::parse_bool_field;
+
+        assert!(parse_bool_field("key", "true").unwrap());
+        assert!(!parse_bool_field("key", "false").unwrap());
+
+        let err = parse_bool_field("my_field", "maybe").unwrap_err();
+        assert!(matches!(err, FieldError::InvalidValue { key, .. } if key == "my_field"));
+    }
+
+    #[test]
+    fn test_parse_u32_field() {
+        use super::parse_u32_field;
+
+        assert_eq!(parse_u32_field("key", "42").unwrap(), 42);
+        assert_eq!(parse_u32_field("key", "0").unwrap(), 0);
+
+        let err = parse_u32_field("my_field", "not_a_number").unwrap_err();
+        assert!(matches!(err, FieldError::InvalidValue { key, .. } if key == "my_field"));
+    }
+
+    #[test]
+    fn test_parse_u64_field() {
+        use super::parse_u64_field;
+
+        assert_eq!(parse_u64_field("key", "123").unwrap(), 123);
+
+        let err = parse_u64_field("my_field", "-1").unwrap_err();
+        assert!(matches!(err, FieldError::InvalidValue { key, .. } if key == "my_field"));
+    }
+
+    #[test]
+    fn test_parse_usize_field() {
+        use super::parse_usize_field;
+
+        assert_eq!(parse_usize_field("key", "500").unwrap(), 500);
+
+        let err = parse_usize_field("my_field", "abc").unwrap_err();
+        assert!(matches!(err, FieldError::InvalidValue { key, .. } if key == "my_field"));
+    }
+
+    #[test]
+    fn test_parse_f64_field() {
+        use super::parse_f64_field;
+
+        assert!((parse_f64_field("key", "0.5").unwrap() - 0.5).abs() < f64::EPSILON);
+        assert!((parse_f64_field("key", "1.25").unwrap() - 1.25).abs() < f64::EPSILON);
+
+        let err = parse_f64_field("my_field", "not_a_float").unwrap_err();
+        assert!(matches!(err, FieldError::InvalidValue { key, .. } if key == "my_field"));
     }
 }
