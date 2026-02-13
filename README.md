@@ -5,7 +5,7 @@
 
 > Let the AI work while you're away from the keyboard!
 
-A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, spawning a **fresh agent instance** for each iteration - so context never overflows and the AI stays sharp.
+A tool-agnostic CLI for autonomous AI-driven software development. `afk` runs your AI coding tasks in a loop, spawning a **fresh agent instance** for each iteration - so context never overflows and the AI stays sharp. Run a single agent with `afk go`, or supervise a **parallel team** with `afk team`.
 
 ## ✨ Why afk?
 
@@ -84,7 +84,37 @@ afk go -u                # Run until all tasks complete
 
 **Note:** These expect task lists, not raw PRDs. Use `afk import` to parse requirements into tasks.
 
-## 📦 Installation
+### Team Mode (parallel agents)
+
+Run multiple AI agents in parallel, each in its own git worktree:
+
+```bash
+# Quick mode: describe what you want, afk decomposes into tasks and spawns agents
+afk team "Build a settings page with dark mode and notifications"
+
+# Structured mode: use existing tasks with N agents
+afk team 3
+
+# Both together: 4 agents on a quick-mode prompt
+afk team 4 "Add user authentication"
+```
+
+Each agent gets a **persona** (Builder, Critic, Tester) that shapes how it approaches the work. Agents work in isolated git worktrees and merge sequentially when done. An interactive TUI dashboard lets you monitor, pause, kill, and focus on individual agents.
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ◉ afk team │ 3 agents │ Tasks: 2 pending, 1 complete │ 02:34      │
+├──────────────────────┬──────────────────────┬───────────────────────┤
+│ � Builder           │ 🎨 Critic            │ 🧪 Tester            │
+│ settings-001: Layout │ settings-002: Dark…  │ settings-003: Notif… │
+│ ▓▓▓▓▓▓▓▓░░ iter 4/5  │ ▓▓▓▓░░░░░░ iter 2/5  │ ▓▓░░░░░░░░ iter 1/5  │
+│ [working]            │ [working]            │ [working]            │
+├──────────────────────┴──────────────────────┴───────────────────────┤
+│ [1-3] focus │ [p+N] pause │ [k+N] kill │ [m] merge │ [q] quit     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## �📦 Installation
 
 ### One-liner (recommended)
 
@@ -124,6 +154,17 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk go TODO.md 5` | Use TODO.md as source, run 5 iterations |
 | `afk go --init` | Re-run setup, then start loop |
 | `afk go --fresh` | Clear session progress and start fresh |
+
+### Team Mode
+
+| Command | Description |
+|---------|-------------|
+| `afk team` | Run 3 agents on existing tasks (TUI dashboard) |
+| `afk team 5` | Run 5 agents |
+| `afk team "Build X"` | Quick mode: decompose into tasks + 3 agents |
+| `afk team 4 "Build X"` | Quick mode with 4 agents |
+| `afk team -i 10` | Set max 10 iterations per agent |
+| `afk team --no-tui` | Headless mode (plain text output) |
 
 ### Task Management
 
@@ -216,7 +257,7 @@ Each task **must complete in a single AI context window**. Tasks that are too la
 
 ## 🔄 How It Works
 
-**Each iteration:**
+### Single Agent (`afk go`)
 
 1. **Load tasks** from configured sources (json, markdown, beads, github, openspec)
 2. **Check completion** — if all tasks done, exit
@@ -230,6 +271,32 @@ Each task **must complete in a single AI context window**. Tasks that are too la
    - Marks task complete in `.afk/tasks.json`
    - Records learnings
 6. **Loop** — repeat from step 1
+
+### Team Mode (`afk team`)
+
+1. **Get tasks** — decompose a prompt (quick mode) or load existing `tasks.json`
+2. **Load personas** from `.afk/personas/*.md` (creates defaults on first run)
+3. **Create worktrees** — each agent gets an isolated git worktree in `.afk/team/agent-N/`
+4. **Assign tasks** — round-robin by priority, one task per agent
+5. **Run in parallel** — each agent runs the Ralph Wiggum loop in its worktree
+6. **Merge sequentially** — completed branches merge one at a time to avoid cascading conflicts
+7. **Reassign** — when an agent finishes, it picks up the next pending task
+
+### Personas
+
+Personas are markdown files in `.afk/personas/` with YAML frontmatter:
+
+```markdown
+---
+name: Builder
+emoji: 🔧
+---
+
+Focus on clean implementation. Get it working, keep it simple.
+Follow existing code patterns. Prefer standard library over new dependencies.
+```
+
+Three defaults ship with afk: **Builder**, **Critic**, **Tester**. Edit them, add your own, or delete ones you don't want — they're just files. Personas are assigned round-robin to agents.
 
 The key point: **afk is an orchestrator, not an AI itself**. It spawns your chosen AI CLI, gives it a task, and lets it work. Each iteration gets a fresh instance that reads state from files, does the work, and writes state back. No context accumulation, no degradation.
 

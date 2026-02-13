@@ -7,6 +7,7 @@ Complete reference for **afk** - autonomous AI coding loops, Ralph Wiggum style.
 - [Quick Start](#quick-start)
 - [Core Concepts](#core-concepts)
 - [Commands Reference](#commands-reference)
+- [Team Mode](#team-mode)
 - [Configuration](#configuration)
 - [Task Sources](#task-sources)
 - [AI CLI Support](#ai-cli-support)
@@ -89,6 +90,15 @@ Sources define where tasks come from:
 | `markdown` | Markdown checklist (TODO.md) |
 | `github` | GitHub issues via `gh` CLI |
 | `openspec` | OpenSpec change proposals |
+
+### Team Mode Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Personas** | Markdown files in `.afk/personas/` that give agents distinct perspectives |
+| **Worktrees** | Each agent gets an isolated git worktree — no file conflicts |
+| **Quick Mode** | `afk team "sentence"` decomposes into tasks via AI, then spawns agents |
+| **Merge Strategy** | Completed branches merge sequentially to avoid cascading conflicts |
 
 ### Quality Gates
 
@@ -175,6 +185,39 @@ The AI reads these files directly and updates them as it works.
 | `afk import PRD.md -o custom.json` | Custom output path |
 | `afk sync` | Sync from all sources (alias: `afk tasks sync`) |
 | `afk tasks sync` | Sync from all sources |
+
+### Team Mode Commands
+
+| Command | Description |
+|---------|-------------|
+| `afk team` | Run 3 agents on existing tasks (TUI dashboard) |
+| `afk team 5` | Run 5 agents on existing tasks |
+| `afk team "Build X"` | Quick mode: decompose + 3 agents |
+| `afk team 4 "Build X"` | Quick mode with 4 agents |
+| `afk team -i 10` | Set max 10 iterations per agent per task |
+| `afk team --no-tui` | Headless mode (plain text output) |
+
+**TUI Keyboard Controls (Overview mode):**
+
+| Key | Action |
+|-----|--------|
+| `1-9` | Focus on that agent (full-screen output) |
+| `p` + `1-9` | Pause agent |
+| `r` + `1-9` | Resume paused agent |
+| `k` + `1-9` | Kill agent |
+| `m` | Merge next completed agent's branch |
+| `q` | Quit all agents |
+
+**TUI Keyboard Controls (Focus mode):**
+
+| Key | Action |
+|-----|--------|
+| `Esc` | Back to overview |
+| `↑/↓` or `j/k` | Scroll output |
+| `space` | Toggle auto-scroll |
+| `p` | Pause this agent |
+| `K` | Kill this agent |
+| `q` | Quit all agents |
 
 ### Session/Archive Commands
 
@@ -480,6 +523,32 @@ afk tasks
 afk go
 ```
 
+### Using Team Mode
+
+```bash
+# Quick mode: describe what you want in plain English
+afk team "Build a settings page with dark mode and notification preferences"
+
+# Structured mode: import tasks first, then run team
+afk import requirements.md
+afk tasks                    # Review generated tasks
+afk team 3                   # Run with 3 agents
+
+# Mix modes: quick-mode creates tasks, then manage them
+afk team "Add user auth"     # Creates tasks + runs agents
+afk tasks                    # See what was generated
+afk reset auth-002           # Reset a stuck task
+afk team 3                   # Resume with team
+```
+
+**Personas:** On first `afk team` run, default persona files are created in `.afk/personas/`:
+
+- **Builder** (`builder.md`) — clean implementation, follow patterns
+- **Critic** (`critic.md`) — thorough, edge cases, error handling
+- **Tester** (`tester.md`) — write tests first, verify behaviour
+
+Edit them directly to customise agent behaviour. Add new files for more personas. If you run more agents than persona files, extra agents get generic names.
+
 ### Resuming Work
 
 ```bash
@@ -580,6 +649,14 @@ ls .afk/archive/           # Previous sessions
 ├── config.json      # Configuration
 ├── tasks.json       # Current task list (source of truth)
 ├── progress.json    # Session state (iterations, task status, per-task learnings, last branch)
+├── personas/        # Agent personas (team mode)
+│   ├── builder.md   # Default: clean implementation
+│   ├── critic.md    # Default: thorough, edge cases
+│   └── tester.md    # Default: test-first
+├── team/            # Git worktrees for team agents (created at runtime)
+│   ├── agent-0/     # Worktree for agent 0
+│   ├── agent-1/     # Worktree for agent 1
+│   └── agent-2/     # Worktree for agent 2
 └── archive/         # Previous sessions
     └── 20260112_123000/
         ├── progress.json

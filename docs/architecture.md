@@ -4,7 +4,7 @@ Technical overview of the afk codebase for contributors and developers.
 
 ## Overview
 
-afk is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools.
+afk is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools. Supports both single-agent (`afk go`) and multi-agent team mode (`afk team`) with git worktree isolation and persona-based agents.
 
 ## Project Structure
 
@@ -28,6 +28,7 @@ src/
 │   │   ├── source.rs
 │   │   ├── status.rs
 │   │   ├── task.rs
+│   │   ├── team.rs      # Team mode command
 │   │   ├── use_cli.rs
 │   │   └── verify.rs
 │   ├── output.rs    # Output formatting (clipboard, file, stdout)
@@ -39,12 +40,15 @@ src/
 │   └── validation.rs # Config validation
 ├── bootstrap/       # Project analysis
 │   └── mod.rs       # Project type detection, AI CLI detection, frontend detection
+├── persona/         # Agent personas (team mode)
+│   └── mod.rs       # Load/parse .afk/personas/*.md with YAML frontmatter
 ├── progress/        # Session tracking
 │   ├── mod.rs       # SessionProgress, TaskProgress models
 │   ├── limits.rs    # Iteration limits and constraints
 │   └── archive.rs   # Session archiving
 ├── prompt/          # Prompt generation
 │   ├── mod.rs       # Tera template rendering
+│   ├── decompose.md # Task decomposition template (team quick mode)
 │   └── template.rs  # Template utilities
 ├── prd/             # PRD management
 │   ├── mod.rs       # PrdDocument model
@@ -56,9 +60,11 @@ src/
 │   ├── iteration.rs  # Single iteration execution
 │   ├── output_handler.rs # Console output
 │   ├── quality_gates.rs  # Lint, test, type checks
-│   └── sleep_guard.rs    # System sleep prevention
+│   ├── sleep_guard.rs    # System sleep prevention
+│   ├── team.rs      # Team orchestrator (parallel workers + merge)
+│   └── worker.rs    # Single agent worker (worktree + task scoping)
 ├── git/             # Git integration
-│   └── mod.rs       # Commit and archive operations
+│   └── mod.rs       # Commit, archive, worktree, and merge operations
 ├── feedback/        # User feedback
 │   ├── mod.rs       # Module exports
 │   ├── art.rs       # ASCII art mascots
@@ -73,8 +79,10 @@ src/
 │   └── mod.rs       # File system monitoring (notify crate)
 ├── tui/             # Terminal UI
 │   ├── mod.rs       # Module exports
-│   ├── app.rs       # TUI application state
-│   └── ui.rs        # Ratatui UI rendering
+│   ├── app.rs       # Single-agent TUI application state
+│   ├── team_app.rs  # Team TUI state and event handling
+│   ├── team_ui.rs   # Team TUI rendering (overview + focus modes)
+│   └── ui.rs        # Single-agent TUI rendering
 └── sources/         # Task sources
     ├── mod.rs       # aggregate_tasks() dispatcher
     ├── beads.rs     # Beads (bd) integration
@@ -100,6 +108,7 @@ src/
 | `tokio` | Async runtime |
 | `reqwest` | HTTP client for self-update |
 | `anyhow` / `thiserror` | Error handling |
+| `tempfile` | Temporary directories for tests |
 
 ## Data Flow
 
@@ -317,6 +326,87 @@ pub enum SourceError {
 1. Add field to `FeedbackLoopsConfig` in `config/mod.rs`
 2. Add check in `run_quality_gates()` in `runner/quality_gates.rs`
 3. Update documentation
+
+## Team Mode Architecture
+
+### Data Flow
+
+```
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│  "Build X"    │───▶│  decompose    │───▶│  tasks.json    │
+│  (quick mode) │     │  (AI CLI)     │     │               │
+└───────────────┘     └───────────────┘     └───────┬───────┘
+                                                │
+                                                ▼
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│  TeamRunner   │───▶│  Worker 0     │───▶│  worktree 0   │
+│  (orchestr.)  │     │  + persona    │     │  (git branch) │
+└───────┬───────┘     └───────────────┘     └───────────────┘
+        │           ┌───────────────┐     ┌───────────────┐
+        ├─────────▶│  Worker 1     │───▶│  worktree 1   │
+        │           │  + persona    │     │  (git branch) │
+        │           └───────────────┘     └───────────────┘
+        │           ┌───────────────┐     ┌───────────────┐
+        └─────────▶│  Worker 2     │───▶│  worktree 2   │
+                    │  + persona    │     │  (git branch) │
+                    └───────────────┘     └───────────────┘
+                                                │
+                                          merge ▼
+                                        ┌───────────────┐
+                                        │  main branch  │
+                                        │  (sequential) │
+                                        └───────────────┘
+```
+
+### Key Types
+
+```rust
+// Team orchestrator — manages parallel workers
+pub struct TeamRunner {
+    config: AfkConfig,
+    options: TeamOptions,
+    workers: Vec<Worker>,
+    personas: Vec<Persona>,
+    task_queue: Vec<UserStory>,
+    completed_tasks: Vec<String>,
+    interrupted: Arc<AtomicBool>,
+}
+
+// Single agent worker — worktree + task scoping
+pub struct Worker {
+    pub id: usize,
+    pub persona: Option<Persona>,
+    pub status: WorkerStatus,
+    pub branch_name: String,
+    pub max_iterations: u32,
+    // ...
+}
+
+// Agent persona loaded from .afk/personas/*.md
+pub struct Persona {
+    pub name: String,
+    pub emoji: String,
+    pub instruction: String,
+}
+```
+
+### Worker Events
+
+Workers communicate with the orchestrator/TUI via `mpsc::Sender<WorkerEvent>`:
+
+- `StatusChange` — worker status transitions
+- `Output` — AI CLI output lines
+- `IterationStart` / `IterationComplete` — iteration lifecycle
+- `TaskComplete` / `TaskFailed` — task outcomes
+- `FileChange` / `ToolCall` — activity tracking
+
+### Team TUI
+
+The team TUI (`TeamTuiApp`) follows the same pattern as the single-agent TUI:
+- Owns terminal and event channels
+- `TeamTuiState` holds per-agent state (`AgentState`)
+- Two view modes: `Overview` (agent grid) and `Focus(idx)` (single agent output)
+- Keyboard events produce `TeamCommand` variants (pause, resume, kill, merge, quit)
 
 ## Performance Considerations
 
