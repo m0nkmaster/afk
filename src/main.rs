@@ -70,6 +70,7 @@ fn main() -> std::process::ExitCode {
             Commands::Update(c) => c.execute(),
             Commands::Completions(c) => c.execute(),
             Commands::Use(c) => c.execute(),
+            Commands::Team(c) => c.execute(),
         },
     };
 

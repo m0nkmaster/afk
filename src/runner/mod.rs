@@ -10,6 +10,10 @@ mod iteration;
 mod output_handler;
 mod quality_gates;
 mod sleep_guard;
+/// Team mode: parallel agents with git worktree isolation.
+pub mod team;
+/// Worker: a single agent in team mode.
+pub mod worker;
 
 pub use sleep_guard::SleepGuard;
 

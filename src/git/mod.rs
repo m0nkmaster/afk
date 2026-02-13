@@ -198,6 +198,143 @@ fn parse_github_url(url: &str) -> Option<String> {
     None
 }
 
+/// Result of a merge operation.
+#[derive(Debug, Clone)]
+pub enum MergeResult {
+    /// Merge completed cleanly.
+    Clean,
+    /// Merge had conflicts in the listed files.
+    Conflict(Vec<String>),
+    /// Merge failed for a non-conflict reason.
+    Failed(String),
+}
+
+/// Create a git worktree at the given path on a new branch.
+///
+/// Equivalent to: `git worktree add <path> -b <branch> <start_point>`
+///
+/// # Arguments
+///
+/// * `path` - Directory for the new worktree
+/// * `branch` - New branch name to create
+/// * `start_point` - Commit/branch to start from (e.g., "HEAD")
+///
+/// # Returns
+///
+/// True if the worktree was created successfully.
+pub fn create_worktree(path: &str, branch: &str, start_point: &str) -> bool {
+    Command::new("git")
+        .args(["worktree", "add", path, "-b", branch, start_point])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Remove a git worktree.
+///
+/// Equivalent to: `git worktree remove <path> --force`
+///
+/// # Returns
+///
+/// True if the worktree was removed successfully.
+pub fn remove_worktree(path: &str) -> bool {
+    Command::new("git")
+        .args(["worktree", "remove", path, "--force"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// List all git worktrees.
+///
+/// Returns a list of worktree paths.
+pub fn list_worktrees() -> Vec<String> {
+    let output = Command::new("git")
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|line| line.strip_prefix("worktree "))
+            .map(|s| s.to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Merge a branch into the current branch.
+///
+/// Attempts a no-fast-forward merge. If there are conflicts, aborts the
+/// merge and returns the list of conflicting files.
+///
+/// # Arguments
+///
+/// * `branch` - The branch to merge in
+///
+/// # Returns
+///
+/// `MergeResult::Clean` if the merge succeeded,
+/// `MergeResult::Conflict` with conflicting file list if there were conflicts,
+/// `MergeResult::Failed` if the merge failed for another reason.
+pub fn merge_branch(branch: &str) -> MergeResult {
+    let output = Command::new("git")
+        .args(["merge", "--no-ff", branch, "-m", &format!("Merge {branch}")])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => MergeResult::Clean,
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr).to_string();
+
+            // Check for merge conflicts
+            if stderr.contains("CONFLICT") || stderr.contains("Automatic merge failed") {
+                // Get list of conflicting files
+                let conflicts = get_conflict_files();
+
+                // Abort the merge to leave working directory clean
+                let _ = Command::new("git").args(["merge", "--abort"]).output();
+
+                if conflicts.is_empty() {
+                    MergeResult::Conflict(vec!["(unknown files)".to_string()])
+                } else {
+                    MergeResult::Conflict(conflicts)
+                }
+            } else {
+                MergeResult::Failed(stderr)
+            }
+        }
+        Err(e) => MergeResult::Failed(e.to_string()),
+    }
+}
+
+/// Get list of files with merge conflicts.
+fn get_conflict_files() -> Vec<String> {
+    let output = Command::new("git")
+        .args(["diff", "--name-only", "--diff-filter=U"])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| l.to_string())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Delete a local branch.
+///
+/// Uses `-D` (force delete) since worktree branches may not be fully merged.
+pub fn delete_branch(branch: &str) -> bool {
+    Command::new("git")
+        .args(["branch", "-D", branch])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

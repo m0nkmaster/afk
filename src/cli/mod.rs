@@ -245,6 +245,23 @@ pub enum Commands {
     ///   afk use           # Interactive selection
     ///   afk use --list    # Show available CLIs
     Use(UseCommand),
+
+    /// Run multiple AI agents in parallel (team mode).
+    ///
+    /// Spawns N agents, each in an isolated git worktree, working on
+    /// different tasks simultaneously. You supervise from the dashboard.
+    ///
+    /// Quick mode (natural language):
+    ///   afk team "Build a settings page with dark mode"
+    ///
+    /// Structured mode (use existing tasks):
+    ///   afk team 3
+    ///
+    /// Examples:
+    ///   afk team "Add user auth"     # Decompose + run 3 agents
+    ///   afk team 5                   # Run 5 agents on existing tasks
+    ///   afk team 3 "Build API"       # 3 agents on decomposed task
+    Team(TeamCommand),
 }
 
 /// Arguments for the 'go' command.
@@ -591,6 +608,25 @@ pub struct UseCommand {
     /// List all known AI CLIs with installation status.
     #[arg(short = 'l', long)]
     pub list: bool,
+}
+
+/// Arguments for the 'team' command.
+#[derive(Args, Debug)]
+pub struct TeamCommand {
+    /// Number of agents, or a natural language prompt.
+    ///
+    /// If a number, sets the agent count (uses existing tasks).
+    /// If text, decomposes it into tasks and runs with default 3 agents.
+    #[arg(value_name = "AGENTS_OR_PROMPT")]
+    pub agents_or_prompt: Option<String>,
+
+    /// Second argument: prompt when first argument is agent count.
+    #[arg(value_name = "PROMPT")]
+    pub prompt_if_agents: Option<String>,
+
+    /// Max iterations per agent per task.
+    #[arg(short = 'i', long, default_value = "5")]
+    pub iterations: u32,
 }
 
 // ============================================================================
@@ -950,6 +986,46 @@ impl UseCommand {
         commands::use_cli::use_ai_cli(self.cli.as_deref(), self.list)
             .map(|()| ExitCode::SUCCESS)
             .map_err(|e| CliError::Command(e.to_string()))
+    }
+}
+
+impl TeamCommand {
+    /// Execute the team command.
+    pub fn execute(&self) -> CliResult {
+        use commands::team::TeamCommandOptions;
+
+        let (num_agents, prompt) = self.parse_args();
+
+        let options = TeamCommandOptions {
+            num_agents,
+            prompt,
+            max_iterations: Some(self.iterations),
+        };
+
+        commands::team::team(options)
+            .map(|()| ExitCode::SUCCESS)
+            .map_err(|e| CliError::Command(e.to_string()))
+    }
+
+    /// Parse agents_or_prompt argument.
+    ///
+    /// Logic:
+    /// - `afk team` → 3 agents, no prompt
+    /// - `afk team 5` → 5 agents, no prompt
+    /// - `afk team "Build X"` → 3 agents, prompt
+    /// - `afk team 5 "Build X"` → 5 agents, prompt
+    fn parse_args(&self) -> (u32, Option<String>) {
+        match &self.agents_or_prompt {
+            Some(arg) => {
+                if let Ok(n) = arg.parse::<u32>() {
+                    (n, self.prompt_if_agents.clone())
+                } else {
+                    // First arg is the prompt, use default agent count
+                    (3, Some(arg.clone()))
+                }
+            }
+            None => (3, None),
+        }
     }
 }
 
@@ -1387,6 +1463,79 @@ mod tests {
                 assert!(cmd.list);
             }
             _ => panic!("Expected Use command"),
+        }
+    }
+
+    #[test]
+    fn test_team_command_default() {
+        let cli = Cli::try_parse_from(["afk", "team"]).unwrap();
+        match cli.command {
+            Some(Commands::Team(cmd)) => {
+                assert!(cmd.agents_or_prompt.is_none());
+                assert!(cmd.prompt_if_agents.is_none());
+                assert_eq!(cmd.iterations, 5);
+                // Default parsing: 3 agents, no prompt
+                let (agents, prompt) = cmd.parse_args();
+                assert_eq!(agents, 3);
+                assert!(prompt.is_none());
+            }
+            _ => panic!("Expected Team command"),
+        }
+    }
+
+    #[test]
+    fn test_team_command_with_agent_count() {
+        let cli = Cli::try_parse_from(["afk", "team", "5"]).unwrap();
+        match cli.command {
+            Some(Commands::Team(cmd)) => {
+                let (agents, prompt) = cmd.parse_args();
+                assert_eq!(agents, 5);
+                assert!(prompt.is_none());
+            }
+            _ => panic!("Expected Team command"),
+        }
+    }
+
+    #[test]
+    fn test_team_command_with_prompt() {
+        let cli =
+            Cli::try_parse_from(["afk", "team", "Build a settings page with dark mode"]).unwrap();
+        match cli.command {
+            Some(Commands::Team(cmd)) => {
+                let (agents, prompt) = cmd.parse_args();
+                assert_eq!(agents, 3); // Default
+                assert_eq!(
+                    prompt,
+                    Some("Build a settings page with dark mode".to_string())
+                );
+            }
+            _ => panic!("Expected Team command"),
+        }
+    }
+
+    #[test]
+    fn test_team_command_with_agents_and_prompt() {
+        let cli = Cli::try_parse_from(["afk", "team", "4", "Build an API"]).unwrap();
+        match cli.command {
+            Some(Commands::Team(cmd)) => {
+                let (agents, prompt) = cmd.parse_args();
+                assert_eq!(agents, 4);
+                assert_eq!(prompt, Some("Build an API".to_string()));
+            }
+            _ => panic!("Expected Team command"),
+        }
+    }
+
+    #[test]
+    fn test_team_command_with_iterations_flag() {
+        let cli = Cli::try_parse_from(["afk", "team", "3", "-i", "10"]).unwrap();
+        match cli.command {
+            Some(Commands::Team(cmd)) => {
+                assert_eq!(cmd.iterations, 10);
+                let (agents, _) = cmd.parse_args();
+                assert_eq!(agents, 3);
+            }
+            _ => panic!("Expected Team command"),
         }
     }
 }
