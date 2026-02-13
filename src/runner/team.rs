@@ -385,7 +385,9 @@ impl TeamRunner {
             .render("decompose", &context)
             .map_err(|e| TeamError::DecomposeError(e.to_string()))?;
 
-        // Run the AI CLI with the decompose prompt
+        // Run the AI CLI with the decompose prompt.
+        // Use only the base args (no --output-format stream-json) since we
+        // want plain text output, and inherit stderr to avoid pipe deadlocks.
         let command = &self.config.ai_cli.command;
         let args: Vec<&str> = self.config.ai_cli.args.iter().map(|s| s.as_str()).collect();
 
@@ -394,7 +396,7 @@ impl TeamRunner {
             .arg(&full_prompt)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::inherit());
 
         let mut child = cmd.spawn().map_err(|e| {
             if e.kind() == std::io::ErrorKind::NotFound {
