@@ -7,6 +7,11 @@
 //! - Task and iteration info
 
 mod app;
+/// Team TUI application state and event handling.
+pub mod team_app;
+/// Team TUI rendering.
+pub mod team_ui;
 mod ui;
 
 pub use app::{TuiApp, TuiEvent};
+pub use team_app::{TeamCommand, TeamTuiApp};

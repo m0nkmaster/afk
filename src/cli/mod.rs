@@ -627,6 +627,10 @@ pub struct TeamCommand {
     /// Max iterations per agent per task.
     #[arg(short = 'i', long, default_value = "5")]
     pub iterations: u32,
+
+    /// Disable TUI dashboard (use plain text output).
+    #[arg(long)]
+    pub no_tui: bool,
 }
 
 // ============================================================================
@@ -1000,6 +1004,7 @@ impl TeamCommand {
             num_agents,
             prompt,
             max_iterations: Some(self.iterations),
+            use_tui: !self.no_tui,
         };
 
         commands::team::team(options)

@@ -32,6 +32,8 @@ pub struct TeamCommandOptions {
     pub prompt: Option<String>,
     /// Max iterations per agent per task.
     pub max_iterations: Option<u32>,
+    /// Use TUI dashboard (default: true).
+    pub use_tui: bool,
 }
 
 /// Execute the team command.
@@ -56,13 +58,18 @@ pub fn team(options: TeamCommandOptions) -> TeamCommandResult {
         prompt: options.prompt,
     };
 
-    println!(
-        "\x1b[1m◉ afk team\x1b[0m │ {} agents │ {} iterations/task\n",
-        team_options.num_agents, team_options.max_iterations
-    );
-
     let mut runner = TeamRunner::new(config, team_options);
-    runner.run()?;
+
+    if options.use_tui {
+        runner.run_with_tui()?;
+    } else {
+        println!(
+            "\x1b[1m◉ afk team\x1b[0m │ {} agents │ {} iterations/task\n",
+            options.num_agents,
+            options.max_iterations.unwrap_or(5)
+        );
+        runner.run()?;
+    }
 
     Ok(())
 }

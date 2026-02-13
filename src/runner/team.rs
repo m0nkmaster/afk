@@ -442,6 +442,143 @@ impl TeamRunner {
         Ok(())
     }
 
+    /// Run the team with TUI dashboard.
+    ///
+    /// Same as `run()` but renders a multi-agent TUI instead of printing
+    /// to stdout. The TUI supports overview and focus modes with keyboard
+    /// controls for pause/kill/merge.
+    pub fn run_with_tui(&mut self) -> Result<RunResult, TeamError> {
+        use crate::tui::TeamTuiApp;
+
+        let start = Instant::now();
+
+        // Set up interrupt handler
+        let interrupted = self.interrupted.clone();
+        let _ = ctrlc::set_handler(move || {
+            interrupted.store(true, Ordering::SeqCst);
+        });
+
+        // Step 1: Get tasks (pre-TUI, uses println)
+        if let Some(ref prompt) = self.options.prompt.clone() {
+            self.decompose_prompt(prompt)?;
+        } else {
+            self.load_existing_tasks()?;
+        }
+
+        if self.task_queue.is_empty() {
+            return Err(TeamError::NoTasks);
+        }
+
+        let total_tasks = self.task_queue.len() as u32;
+
+        // Step 2: Load personas
+        persona::ensure_defaults(None)?;
+        self.personas = persona::load_personas(None)?;
+
+        // Step 3: Create TUI
+        let num_agents = (self.options.num_agents as usize).min(self.task_queue.len());
+        let mut tui = TeamTuiApp::new(num_agents).map_err(TeamError::IoError)?;
+        let worker_tx = tui.worker_sender();
+
+        // Step 4: Set up workers
+        for i in 0..num_agents {
+            let persona = self.personas.get(i).cloned();
+            let mut worker = Worker::new(
+                i,
+                persona,
+                self.options.max_iterations,
+                Some(worker_tx.clone()),
+            );
+
+            if let Some(task) = self.task_queue.first().cloned() {
+                self.task_queue.remove(0);
+                tui.add_agent(worker.display_name(), task.id.clone(), task.title.clone());
+                worker.assign_task(task);
+            }
+
+            self.workers.push(worker);
+        }
+
+        tui.set_task_counts(total_tasks, self.task_queue.len() as u32);
+
+        // Step 5: Set up worktrees
+        for worker in &mut self.workers {
+            if let Err(e) = worker.setup() {
+                worker.status = WorkerStatus::Failed(e.to_string());
+            }
+        }
+
+        // Step 6: Spawn worker threads
+        let mut handles = Vec::new();
+        for worker in &self.workers {
+            if worker.status == WorkerStatus::Setting {
+                let worker_id = worker.id;
+                let working_dir = worker.working_dir().to_path_buf();
+                let config = self.config.clone();
+                let max_iters = worker.max_iterations;
+                let tx_clone = worker_tx.clone();
+                let interrupted_clone = self.interrupted.clone();
+
+                let handle = std::thread::spawn(move || {
+                    run_worker_loop(
+                        worker_id,
+                        &working_dir,
+                        &config,
+                        max_iters,
+                        tx_clone,
+                        interrupted_clone,
+                    )
+                });
+                handles.push((worker.id, handle));
+            }
+        }
+
+        // Drop our copy of the sender so TUI's receiver closes when workers finish
+        drop(worker_tx);
+
+        // Step 7: Run TUI event loop (blocks until quit or all done)
+        let _ = tui.run();
+        tui.cleanup().ok();
+
+        // Step 8: Wait for worker threads
+        // Signal interrupt so workers stop
+        self.interrupted.store(true, Ordering::SeqCst);
+        for (id, handle) in handles {
+            if let Err(e) = handle.join() {
+                eprintln!("  Worker {} thread panicked: {:?}", id, e);
+            }
+        }
+
+        // Step 9: Clean up worktrees
+        for worker in &mut self.workers {
+            worker.teardown();
+        }
+
+        let duration = start.elapsed().as_secs_f64();
+        let tasks_completed = self.completed_tasks.len() as u32;
+        let iterations_completed: u32 = self
+            .workers
+            .iter()
+            .map(|w| w.max_iterations.min(5)) // Best estimate
+            .sum();
+
+        let stop_reason = if self.interrupted.load(Ordering::SeqCst) {
+            StopReason::UserInterrupt
+        } else if self.task_queue.is_empty() && tasks_completed > 0 {
+            StopReason::Complete
+        } else {
+            StopReason::MaxIterations
+        };
+
+        Ok(RunResult {
+            iterations_completed,
+            tasks_completed,
+            stop_reason,
+            duration_seconds: duration,
+            archived_to: None,
+        })
+    }
+
     /// Load tasks from existing .afk/tasks.json.
     fn load_existing_tasks(&mut self) -> Result<(), TeamError> {
         let prd = PrdDocument::load(None)?;
