@@ -631,9 +631,12 @@ fn run_worker_loop(
 
         let iter_start = Instant::now();
 
-        // Build the AI CLI command
+        // Build the AI CLI command with output format args (stream-json etc.)
+        // Without --output-format, many CLIs buffer output with no newlines,
+        // causing BufReader::lines() to block indefinitely.
         let command = &config.ai_cli.command;
-        let args: Vec<&str> = config.ai_cli.args.iter().map(|s| s.as_str()).collect();
+        let selected_model = config.ai_cli.select_model().map(|s| s.to_string());
+        let full_args = config.ai_cli.full_args_with_model(selected_model.as_deref());
 
         // Generate prompt for this worker
         let _ = tx.send(WorkerEvent::Output {
@@ -665,22 +668,17 @@ fn run_worker_loop(
 
         let _ = tx.send(WorkerEvent::Output {
             worker_id,
-            line: format!("Spawning {} {}...", command, args.join(" ")),
+            line: format!("Spawning {} {}...", command, full_args.join(" ")),
         });
 
         // Spawn AI CLI in the worker's worktree
         let mut cmd = Command::new(command);
-        cmd.args(&args)
+        cmd.args(&full_args)
             .arg(&prompt)
             .current_dir(working_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-
-        // Select model if configured
-        if let Some(model) = config.ai_cli.select_model() {
-            cmd.args(["--model", model]);
-        }
 
         let mut child = match cmd.spawn() {
             Ok(child) => child,
