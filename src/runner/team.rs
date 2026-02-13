@@ -496,7 +496,13 @@ impl TeamRunner {
         // Step 5: Set up worktrees
         for worker in &mut self.workers {
             if let Err(e) = worker.setup() {
-                worker.status = WorkerStatus::Failed(e.to_string());
+                let err_msg = e.to_string();
+                worker.status = WorkerStatus::Failed(err_msg.clone());
+                // Notify TUI of the failure (setup only sets local status)
+                let _ = worker_tx.send(WorkerEvent::StatusChange {
+                    worker_id: worker.id,
+                    status: WorkerStatus::Failed(err_msg),
+                });
             }
         }
 
@@ -601,6 +607,11 @@ fn run_worker_loop(
         status: WorkerStatus::Working,
     });
 
+    let _ = tx.send(WorkerEvent::Output {
+        worker_id,
+        line: format!("Starting in {}", working_dir.display()),
+    });
+
     for iteration in 1..=max_iterations {
         if interrupted.load(Ordering::SeqCst) {
             break;
@@ -619,7 +630,10 @@ fn run_worker_loop(
         let args: Vec<&str> = config.ai_cli.args.iter().map(|s| s.as_str()).collect();
 
         // Generate prompt for this worker
-        // Use the standard prompt generation but from the worker's directory
+        let _ = tx.send(WorkerEvent::Output {
+            worker_id,
+            line: "Generating prompt...".to_string(),
+        });
         let prompt_result = crate::prompt::generate_prompt_with_root(
             config,
             true, // bootstrap mode
@@ -642,6 +656,11 @@ fn run_worker_loop(
                 return;
             }
         };
+
+        let _ = tx.send(WorkerEvent::Output {
+            worker_id,
+            line: format!("Spawning {} {}...", command, args.join(" ")),
+        });
 
         // Spawn AI CLI in the worker's worktree
         let mut cmd = Command::new(command);
