@@ -132,22 +132,32 @@ impl TeamRunner {
         persona::ensure_defaults(None)?;
         self.personas = persona::load_personas(None)?;
 
-        // Step 3: Set up workers
+        // Step 3: Set up workers — distribute ALL tasks round-robin
         let num_agents = (self.options.num_agents as usize).min(self.task_queue.len());
         println!("Spawning {} agents...\n", num_agents);
 
         let (tx, rx): (Sender<WorkerEvent>, Receiver<WorkerEvent>) = mpsc::channel();
 
-        for i in 0..num_agents {
-            let persona = self.personas.get(i).cloned();
-            let mut worker = Worker::new(i, persona, self.options.max_iterations, Some(tx.clone()));
+        // Distribute tasks round-robin across workers
+        let mut worker_tasks: Vec<Vec<UserStory>> = vec![Vec::new(); num_agents];
+        for (i, task) in self.task_queue.drain(..).enumerate() {
+            worker_tasks[i % num_agents].push(task);
+        }
 
-            // Assign next task from queue
-            if let Some(task) = self.task_queue.first().cloned() {
-                self.task_queue.remove(0);
-                println!("  {} → {}", worker.display_name(), task.title);
-                worker.assign_task(task);
-            }
+        for (i, tasks) in worker_tasks.into_iter().enumerate() {
+            let persona = self.personas.get(i).cloned();
+            // Scale iterations: base * number of tasks assigned
+            let scaled_iterations = self.options.max_iterations * tasks.len() as u32;
+            let mut worker = Worker::new(i, persona, scaled_iterations, Some(tx.clone()));
+
+            let task_names: Vec<&str> = tasks.iter().map(|t| t.title.as_str()).collect();
+            println!(
+                "  {} → {} tasks: {}",
+                worker.display_name(),
+                tasks.len(),
+                task_names.join(", ")
+            );
+            worker.assign_tasks(tasks);
 
             self.workers.push(worker);
         }
@@ -260,17 +270,7 @@ impl TeamRunner {
                         }
                     }
 
-                    // Assign next task if available
-                    if let Some(next_task) = self.task_queue.first().cloned() {
-                        self.task_queue.remove(0);
-                        if let Some(w) = self.workers.get_mut(worker_id) {
-                            println!("  {} → next task: {}", w.display_name(), next_task.title);
-                            w.assign_task(next_task);
-                            if let Err(e) = w.setup() {
-                                eprintln!("  \x1b[33m⚠\x1b[0m  Setup failed: {}", e);
-                            }
-                        }
-                    }
+                    // Tasks are pre-distributed, no reassignment needed
                 }
                 WorkerEvent::TaskFailed {
                     worker_id,
@@ -478,26 +478,35 @@ impl TeamRunner {
         let mut tui = TeamTuiApp::new(num_agents).map_err(TeamError::IoError)?;
         let worker_tx = tui.worker_sender();
 
-        // Step 4: Set up workers
-        for i in 0..num_agents {
+        // Step 4: Set up workers — distribute ALL tasks round-robin
+        let mut worker_tasks: Vec<Vec<UserStory>> = vec![Vec::new(); num_agents];
+        for (i, task) in self.task_queue.drain(..).enumerate() {
+            worker_tasks[i % num_agents].push(task);
+        }
+
+        for (i, tasks) in worker_tasks.into_iter().enumerate() {
             let persona = self.personas.get(i).cloned();
+            let scaled_iterations = self.options.max_iterations * tasks.len() as u32;
             let mut worker = Worker::new(
                 i,
                 persona,
-                self.options.max_iterations,
+                scaled_iterations,
                 Some(worker_tx.clone()),
             );
 
-            if let Some(task) = self.task_queue.first().cloned() {
-                self.task_queue.remove(0);
-                tui.add_agent(worker.display_name(), task.id.clone(), task.title.clone());
-                worker.assign_task(task);
-            }
+            let summary = tasks.iter().map(|t| t.title.as_str()).collect::<Vec<_>>().join(", ");
+            let first = &tasks[0];
+            tui.add_agent(
+                worker.display_name(),
+                first.id.clone(),
+                format!("{} tasks: {}", tasks.len(), summary),
+            );
+            worker.assign_tasks(tasks);
 
             self.workers.push(worker);
         }
 
-        tui.set_task_counts(total_tasks, self.task_queue.len() as u32);
+        tui.set_task_counts(total_tasks, 0);
 
         // Step 5: Set up worktrees
         for worker in &mut self.workers {

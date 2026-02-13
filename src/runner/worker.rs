@@ -103,8 +103,10 @@ pub struct Worker {
     pub id: usize,
     /// Assigned persona (if any).
     pub persona: Option<Persona>,
-    /// Assigned task.
+    /// Assigned task (first/primary task, used for display).
     pub task: Option<UserStory>,
+    /// All assigned tasks for this worker.
+    pub tasks: Vec<UserStory>,
     /// Current status.
     pub status: WorkerStatus,
     /// Worktree directory path.
@@ -155,6 +157,7 @@ impl Worker {
             id,
             persona,
             task: None,
+            tasks: Vec::new(),
             status: WorkerStatus::Setting,
             worktree_path,
             branch_name: String::new(),
@@ -175,7 +178,21 @@ impl Worker {
     pub fn assign_task(&mut self, task: UserStory) {
         let sanitised_id = task.id.replace(['/', ' '], "-");
         self.branch_name = format!("afk/agent-{}/{}", self.id, sanitised_id);
-        self.task = Some(task);
+        self.task = Some(task.clone());
+        self.tasks = vec![task];
+    }
+
+    /// Assign multiple tasks to this worker.
+    ///
+    /// All tasks are written to the worker's scoped tasks.json so the AI
+    /// agent can work through them across iterations.
+    pub fn assign_tasks(&mut self, tasks: Vec<UserStory>) {
+        if tasks.is_empty() {
+            return;
+        }
+        self.task = Some(tasks[0].clone());
+        self.branch_name = format!("afk/agent-{}", self.id);
+        self.tasks = tasks;
     }
 
     /// Set up the worker's git worktree and scoped task file.
@@ -207,15 +224,21 @@ impl Worker {
             });
         }
 
-        // Write scoped tasks.json with only this worker's task
+        // Write scoped tasks.json with this worker's assigned tasks
         let afk_dir = self.worktree_path.join(".afk");
         fs::create_dir_all(&afk_dir)?;
+
+        let stories = if self.tasks.is_empty() {
+            vec![task.clone()]
+        } else {
+            self.tasks.clone()
+        };
 
         let prd = PrdDocument {
             project: String::new(),
             branch_name: self.branch_name.clone(),
             description: String::new(),
-            user_stories: vec![task.clone()],
+            user_stories: stories,
             last_synced: String::new(),
         };
         prd.save(Some(&afk_dir.join("tasks.json")))?;
@@ -328,6 +351,36 @@ mod tests {
 
         assert_eq!(worker.task.as_ref().unwrap().id, "auth-login");
         assert_eq!(worker.branch_name, "afk/agent-1/auth-login");
+    }
+
+    #[test]
+    fn test_worker_assign_tasks_multiple() {
+        let mut worker = Worker::new(0, None, 5, None);
+        let tasks = vec![
+            UserStory {
+                id: "html-structure".to_string(),
+                title: "Create HTML".to_string(),
+                ..Default::default()
+            },
+            UserStory {
+                id: "css-styling".to_string(),
+                title: "Style CSS".to_string(),
+                ..Default::default()
+            },
+        ];
+        worker.assign_tasks(tasks);
+
+        assert_eq!(worker.tasks.len(), 2);
+        assert_eq!(worker.task.as_ref().unwrap().id, "html-structure");
+        assert_eq!(worker.branch_name, "afk/agent-0");
+    }
+
+    #[test]
+    fn test_worker_assign_tasks_empty() {
+        let mut worker = Worker::new(0, None, 5, None);
+        worker.assign_tasks(vec![]);
+        assert!(worker.task.is_none());
+        assert!(worker.tasks.is_empty());
     }
 
     #[test]
