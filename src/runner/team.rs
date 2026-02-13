@@ -87,14 +87,6 @@ impl TeamRunner {
         }
     }
 
-    /// Set the interrupt flag (shared with signal handler).
-    pub fn set_interrupted(&self, interrupted: Arc<AtomicBool>) -> Arc<AtomicBool> {
-        let old = self.interrupted.clone();
-        // Return old for caller, they should use the new one
-        drop(old);
-        interrupted
-    }
-
     /// Run the team.
     ///
     /// This is the main entry point. It:
@@ -257,9 +249,7 @@ impl TeamRunner {
                             git::MergeResult::Conflict(files) => {
                                 println!("\x1b[33mconflict\x1b[0m");
                                 println!("    Conflicting files: {}", files.join(", "));
-                                println!("    Task {} queued for sequential retry.", task_id);
-                                // Put it back in the queue
-                                // (In a full implementation we'd re-queue the task)
+                                println!("    Task {} needs manual resolution.", task_id);
                             }
                             git::MergeResult::Failed(reason) => {
                                 println!("\x1b[31mfailed\x1b[0m: {}", reason);

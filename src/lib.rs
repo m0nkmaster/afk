@@ -10,7 +10,6 @@
 /// Version string from Cargo.toml.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-// Module declarations - to be implemented in future stories
 pub mod bootstrap;
 pub mod cli;
 pub mod config;

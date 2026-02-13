@@ -1,10 +1,8 @@
 //! TUI (Terminal User Interface) module for live feedback display.
 //!
-//! Provides a rich, animated dashboard during loop execution showing:
-//! - Live AI output stream
-//! - Real-time statistics
-//! - Animated spinners and progress
-//! - Task and iteration info
+//! Provides animated dashboards for both single-agent and team modes:
+//! - **Single-agent TUI** (`TuiApp`): live output stream, stats, progress
+//! - **Team TUI** (`TeamTuiApp`): multi-agent dashboard with overview and focus modes
 
 mod app;
 /// Team TUI application state and event handling.

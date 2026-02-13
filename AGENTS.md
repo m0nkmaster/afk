@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-This is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools.
+This is a Rust CLI tool that implements the Ralph Wiggum pattern for autonomous AI coding. It aggregates tasks from multiple sources and generates prompts for AI coding tools. Supports both single-agent (`afk go`) and multi-agent team mode (`afk team`) with git worktree isolation and persona-based agents.
 
 ## Development Setup
 
@@ -69,6 +69,11 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 | `feedback` | Metrics collection and ASCII art |
 | `watcher` | File system monitoring |
 | `runner` | Loop controller and iteration runner |
+| `runner::team` | Team orchestrator (parallel workers, task assignment, merge) |
+| `runner::worker` | Worker lifecycle (worktree setup/teardown, task scoping) |
+| `persona` | Persona loading from `.afk/personas/*.md` |
+| `tui::team_app` | Team TUI state, event handling, keyboard controls |
+| `git` | Git worktree create/remove/list, merge with conflict detection |
 | `cli_integration` | End-to-end CLI command tests (in tests/) |
 
 ### Writing Tests
@@ -104,6 +109,7 @@ src/
 │       ├── source.rs    # Source management
 │       ├── status.rs    # Status display
 │       ├── task.rs      # Task management (done/fail/reset)
+│       ├── team.rs      # Team mode command (parallel agents)
 │       ├── use_cli.rs   # AI CLI switching
 │       └── verify.rs    # Quality gate verification
 ├── config/
@@ -119,10 +125,12 @@ src/
 │   ├── metrics.rs       # Iteration metrics collection
 │   └── spinner.rs       # Inline spinner animations
 ├── git/
-│   └── mod.rs           # Git operations (commit, archive)
+│   └── mod.rs           # Git operations (commit, archive, worktree, merge)
 ├── parser/
 │   ├── mod.rs           # AI CLI output parsing (regex patterns)
 │   └── stream_json.rs   # Streaming JSON parser for AI CLI output
+├── persona/
+│   └── mod.rs           # Persona loading from .afk/personas/*.md
 ├── prd/
 │   ├── mod.rs           # PRD document model
 │   ├── parse.rs         # PRD parsing
@@ -133,6 +141,7 @@ src/
 │   └── limits.rs        # Iteration limits and constraints
 ├── prompt/
 │   ├── mod.rs           # Tera template rendering
+│   ├── decompose.md     # Task decomposition template (team quick mode)
 │   └── template.rs      # Template utilities
 ├── runner/
 │   ├── mod.rs           # Module exports
@@ -140,7 +149,9 @@ src/
 │   ├── iteration.rs     # Single iteration execution
 │   ├── output_handler.rs # Console output
 │   ├── quality_gates.rs # Lint, test, type checks
-│   └── sleep_guard.rs   # System sleep prevention
+│   ├── sleep_guard.rs   # System sleep prevention
+│   ├── team.rs          # Team orchestrator (parallel workers + merge)
+│   └── worker.rs        # Single agent worker (worktree + task scoping)
 ├── sources/
 │   ├── mod.rs           # aggregate_tasks() dispatcher
 │   ├── beads.rs         # Beads (bd) integration
@@ -150,8 +161,10 @@ src/
 │   └── openspec.rs      # OpenSpec change proposals
 ├── tui/
 │   ├── mod.rs           # Module exports
-│   ├── app.rs           # TUI application state
-│   └── ui.rs            # Ratatui UI rendering
+│   ├── app.rs           # Single-agent TUI application state
+│   ├── team_app.rs      # Team TUI state and event handling
+│   ├── team_ui.rs       # Team TUI rendering (overview + focus modes)
+│   └── ui.rs            # Single-agent TUI rendering
 └── watcher/
     └── mod.rs           # File system monitoring (notify crate)
 ```
@@ -170,6 +183,7 @@ src/
 | `ctrlc` | Signal handling |
 | `ratatui` / `crossterm` | Terminal UI |
 | `tokio` | Async runtime |
+| `thiserror` | Error derive macros |
 
 ## Key Patterns
 
@@ -185,6 +199,10 @@ src/
 - **Archiving**: Sessions archived on completion, manually via `afk archive`, or when switching git branches (moves files to `.afk/archive/`, clears session)
 - **Branch Detection**: On `afk go`, detects if git branch changed since last session and prompts to archive
 - **Multi-Model Rotation**: Configure multiple models in `ai_cli.models` array; afk selects one pseudo-randomly each iteration with equal distribution, passing `--model <selected>` to the AI CLI. Brings different perspectives to avoid local optima.
+- **Team Mode**: `afk team` runs multiple agents in parallel, each in a git worktree. Workers get persona-based instructions, work independently, and merge sequentially.
+- **Personas**: Markdown files in `.afk/personas/` with YAML frontmatter (`name`, `emoji`). Assigned round-robin to agents. Defaults: Builder, Critic, Tester.
+- **Quick Mode**: `afk team "natural language"` decomposes a sentence into tasks via AI CLI, then spawns agents. Both quick and structured modes converge at `tasks.json`.
+- **Git Worktrees**: Each team agent gets its own worktree in `.afk/team/agent-N/`. Isolation prevents file conflicts during parallel work. Branches merge sequentially on completion.
 
 ## Key Commands
 
@@ -212,6 +230,11 @@ afk config set <key> <value>  # Set a config value
 afk init --force       # Re-initialise with AI CLI selection
 afk archive            # Archive session and clear (ready for fresh work)
 afk archive list       # List archived sessions
+afk team               # Run 3 agents on existing tasks (TUI dashboard)
+afk team 5             # Run 5 agents
+afk team "Build X"     # Quick mode: decompose + 3 agents
+afk team 4 "Build X"   # Quick mode: decompose + 4 agents
+afk team --no-tui      # Headless mode (plain text output)
 ```
 
 ## PRD Workflow

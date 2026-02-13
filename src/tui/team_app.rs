@@ -216,8 +216,6 @@ pub struct TeamTuiApp {
     worker_tx: Sender<WorkerEvent>,
     /// Command sender (for orchestrator to read).
     cmd_tx: Sender<TeamCommand>,
-    /// Command receiver (not used here, given to orchestrator).
-    _cmd_rx: Receiver<TeamCommand>,
     /// Application state.
     state: TeamTuiState,
     /// Last tick time.
@@ -234,14 +232,13 @@ impl TeamTuiApp {
         let terminal = Terminal::new(backend)?;
 
         let (worker_tx, worker_rx) = mpsc::channel();
-        let (cmd_tx, cmd_rx) = mpsc::channel();
+        let (cmd_tx, _cmd_rx) = mpsc::channel();
 
         Ok(Self {
             terminal,
             worker_rx,
             worker_tx,
             cmd_tx,
-            _cmd_rx: cmd_rx,
             state: TeamTuiState::new(num_agents),
             last_tick: Instant::now(),
         })
@@ -250,14 +247,6 @@ impl TeamTuiApp {
     /// Get a sender for worker events.
     pub fn worker_sender(&self) -> Sender<WorkerEvent> {
         self.worker_tx.clone()
-    }
-
-    /// Get a receiver for commands (give to orchestrator).
-    pub fn command_receiver(&mut self) -> Receiver<TeamCommand> {
-        let (new_tx, new_rx) = mpsc::channel();
-        let old_rx = std::mem::replace(&mut self._cmd_rx, new_rx);
-        self.cmd_tx = new_tx;
-        old_rx
     }
 
     /// Register an agent with the TUI.

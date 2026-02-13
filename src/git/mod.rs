@@ -1,6 +1,6 @@
 //! Git operations.
 //!
-//! This module handles branching, committing, and status checks.
+//! Handles branching, committing, status checks, worktree management, and merge coordination.
 
 use std::process::Command;
 
