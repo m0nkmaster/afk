@@ -657,7 +657,7 @@ fn run_worker_loop(
             cmd.args(["--model", model]);
         }
 
-        let child = match cmd.spawn() {
+        let mut child = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
                 let _ = tx.send(WorkerEvent::TaskFailed {
@@ -669,9 +669,24 @@ fn run_worker_loop(
             }
         };
 
+        // Read stderr in a separate thread to avoid pipe deadlocks.
+        // Without this, the child blocks when the 64KB stderr buffer fills.
+        let stderr_tx = tx.clone();
+        let stderr_handle = child.stderr.take().map(|stderr| {
+            std::thread::spawn(move || {
+                let reader = BufReader::new(stderr);
+                for line in reader.lines().map_while(Result::ok) {
+                    let _ = stderr_tx.send(WorkerEvent::Output {
+                        worker_id,
+                        line,
+                    });
+                }
+            })
+        });
+
         // Stream stdout
         let mut completed = false;
-        if let Some(stdout) = child.stdout {
+        if let Some(stdout) = child.stdout.take() {
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 if interrupted.load(Ordering::SeqCst) {
@@ -688,6 +703,11 @@ fn run_worker_loop(
                     Err(_) => break,
                 }
             }
+        }
+
+        // Wait for stderr thread to finish
+        if let Some(handle) = stderr_handle {
+            let _ = handle.join();
         }
 
         let duration = iter_start.elapsed().as_secs_f64();
