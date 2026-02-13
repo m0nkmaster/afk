@@ -13,6 +13,47 @@ pub fn is_git_repo() -> bool {
         .unwrap_or(false)
 }
 
+/// Ensure we're in a git repo with at least one commit (required for worktrees).
+///
+/// If not a git repo, runs `git init` and creates an initial commit.
+/// If a git repo but no commits, creates an initial commit.
+pub fn ensure_repo_with_commit() -> Result<(), String> {
+    if !is_git_repo() {
+        let output = Command::new("git")
+            .args(["init"])
+            .output()
+            .map_err(|e| format!("Failed to run git init: {e}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git init failed: {}", stderr.trim()));
+        }
+    }
+
+    // Check if HEAD exists (repo has at least one commit)
+    let has_head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if !has_head {
+        // Create initial commit so worktrees have something to branch from
+        let _ = Command::new("git")
+            .args(["add", "-A"])
+            .output();
+        let output = Command::new("git")
+            .args(["commit", "--allow-empty", "-m", "Initial commit (afk team)"])
+            .output()
+            .map_err(|e| format!("Failed to create initial commit: {e}"))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git commit failed: {}", stderr.trim()));
+        }
+    }
+
+    Ok(())
+}
+
 /// Get the current branch name.
 pub fn get_current_branch() -> Option<String> {
     let output = Command::new("git")
@@ -221,13 +262,19 @@ pub enum MergeResult {
 ///
 /// # Returns
 ///
-/// True if the worktree was created successfully.
-pub fn create_worktree(path: &str, branch: &str, start_point: &str) -> bool {
-    Command::new("git")
+/// Ok if the worktree was created successfully, Err with the git error message otherwise.
+pub fn create_worktree(path: &str, branch: &str, start_point: &str) -> Result<(), String> {
+    match Command::new("git")
         .args(["worktree", "add", path, "-b", branch, start_point])
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    {
+        Ok(output) if output.status.success() => Ok(()),
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(stderr.trim().to_string())
+        }
+        Err(e) => Err(format!("Failed to run git: {e}")),
+    }
 }
 
 /// Remove a git worktree.

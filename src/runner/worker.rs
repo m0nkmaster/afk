@@ -200,10 +200,10 @@ impl Worker {
         git::delete_branch(&self.branch_name);
 
         // Create worktree
-        if !git::create_worktree(&wt_path, &self.branch_name, "HEAD") {
+        if let Err(git_err) = git::create_worktree(&wt_path, &self.branch_name, "HEAD") {
             return Err(WorkerError::WorktreeCreateError {
                 path: wt_path,
-                reason: "git worktree add failed".to_string(),
+                reason: git_err,
             });
         }
 

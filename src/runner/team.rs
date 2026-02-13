@@ -98,6 +98,9 @@ impl TeamRunner {
     pub fn run(&mut self) -> Result<RunResult, TeamError> {
         let start = Instant::now();
 
+        // Ensure git repo exists with at least one commit (required for worktrees)
+        git::ensure_repo_with_commit().map_err(TeamError::DecomposeError)?;
+
         // Set up interrupt handler
         let interrupted = self.interrupted.clone();
         let _ = ctrlc::set_handler(move || {
@@ -443,6 +446,9 @@ impl TeamRunner {
         use crate::tui::TeamTuiApp;
 
         let start = Instant::now();
+
+        // Ensure git repo exists with at least one commit (required for worktrees)
+        git::ensure_repo_with_commit().map_err(TeamError::DecomposeError)?;
 
         // Set up interrupt handler
         let interrupted = self.interrupted.clone();
