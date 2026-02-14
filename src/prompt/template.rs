@@ -80,6 +80,9 @@ mod tests {
         assert!(DEFAULT_TEMPLATE.contains("## Key Files"));
         assert!(DEFAULT_TEMPLATE.contains("## Progress"));
         assert!(DEFAULT_TEMPLATE.contains("## Quality Checks"));
+        assert!(DEFAULT_TEMPLATE.contains("## Deviation Rules"));
+        assert!(DEFAULT_TEMPLATE.contains("## Commit Protocol"));
+        assert!(DEFAULT_TEMPLATE.contains("## Self-Check Before Completing"));
         assert!(DEFAULT_TEMPLATE.contains("## Recording Learnings"));
         assert!(DEFAULT_TEMPLATE.contains("## Stop Condition"));
         assert!(DEFAULT_TEMPLATE.contains("<promise>COMPLETE</promise>"));
@@ -211,11 +214,15 @@ mod tests {
         struct NextStory {
             id: String,
             priority: u32,
+            verify_command: Option<String>,
+            done_criteria: Vec<String>,
         }
 
         let next_story = NextStory {
             id: "story-001".to_string(),
             priority: 1,
+            verify_command: None,
+            done_criteria: Vec::new(),
         };
 
         let mut feedback_loops = HashMap::new();
