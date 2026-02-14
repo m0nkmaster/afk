@@ -57,10 +57,12 @@ The UI should be clean and mobile-friendly.
 ### Step 2: Generate tasks
 
 ```bash
-afk import requirements.md
+afk plan requirements.md
 ```
 
-This runs your AI CLI to analyse the PRD and break it down into small, AI-sized tasks. The output goes to `.afk/tasks.json`.
+This runs your AI CLI to analyse the requirements and decompose them into small, AI-sized tasks with verification commands and done criteria. The output goes to `.afk/tasks.json`.
+
+> **Tip:** `afk plan` uses an enhanced planning prompt that generates per-task verification. For a quicker, simpler import without verification fields, use `afk import requirements.md`.
 
 ### Step 3: Check and go!
 
@@ -82,7 +84,7 @@ afk go 20                # Run 20 iterations
 afk go -u                # Run until all tasks complete
 ```
 
-**Note:** These expect task lists, not raw PRDs. Use `afk import` to parse requirements into tasks.
+**Note:** These expect task lists, not raw PRDs. Use `afk plan` or `afk import` to parse requirements into tasks.
 
 ## 📦 Installation
 
@@ -138,11 +140,12 @@ cargo install --git https://github.com/m0nkmaster/afk
 | `afk fail <id>` | Mark task failed |
 | `afk reset <id>` | Reset stuck task to pending |
 
-### Import & Task Sources
+### Planning & Task Sources
 
 | Command | Description |
 |---------|-------------|
-| `afk import <file>` | Import requirements doc into .afk/tasks.json |
+| `afk plan <file>` | AI-assisted task decomposition with per-task verification |
+| `afk import <file>` | Quick import of requirements into .afk/tasks.json |
 | `afk sync` | Sync from configured sources (alias: `afk tasks sync`) |
 | `afk source add beads` | Add [beads](https://github.com/steveyegge/beads) as task source |
 | `afk source add markdown TODO.md` | Add markdown file source |
