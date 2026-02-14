@@ -113,6 +113,9 @@ mod tests {
         assert!(DEFAULT_TEMPLATE.contains("{% if bootstrap -%}"));
         assert!(DEFAULT_TEMPLATE.contains("{% if stop_signal -%}"));
         assert!(DEFAULT_TEMPLATE.contains("{% if has_frontend -%}"));
+        assert!(DEFAULT_TEMPLATE.contains("{% if ai_cli == \"claude\" -%}"));
+        assert!(DEFAULT_TEMPLATE.contains("{% if ai_cli == \"codex\" -%}"));
+        assert!(DEFAULT_TEMPLATE.contains("{% if ai_cli == \"amp\" -%}"));
     }
 
     #[test]
@@ -191,6 +194,7 @@ mod tests {
         context.insert("next_story", &None::<()>);
         context.insert("stop_signal", &None::<String>);
         context.insert("has_frontend", &false);
+        context.insert("ai_cli", &"claude");
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -244,6 +248,7 @@ mod tests {
         context.insert("next_story", &next_story);
         context.insert("stop_signal", &None::<String>);
         context.insert("has_frontend", &false);
+        context.insert("ai_cli", &"claude");
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -284,6 +289,7 @@ mod tests {
             &Some("AFK_COMPLETE - All stories have passes: true"),
         );
         context.insert("has_frontend", &false);
+        context.insert("ai_cli", &"claude");
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -316,6 +322,7 @@ mod tests {
         context.insert("next_story", &None::<()>);
         context.insert("stop_signal", &None::<String>);
         context.insert("has_frontend", &false);
+        context.insert("ai_cli", &"claude");
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -345,6 +352,7 @@ mod tests {
         context.insert("next_story", &None::<()>);
         context.insert("stop_signal", &None::<String>);
         context.insert("has_frontend", &true);
+        context.insert("ai_cli", &"claude");
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -376,6 +384,7 @@ mod tests {
         context.insert("next_story", &None::<()>);
         context.insert("stop_signal", &None::<String>);
         context.insert("has_frontend", &false);
+        context.insert("ai_cli", &"claude");
 
         let result = tera.render("prompt", &context);
         assert!(
@@ -386,5 +395,82 @@ mod tests {
 
         let rendered = result.unwrap();
         assert!(!rendered.contains("## Browser Testing"));
+    }
+
+    /// Helper to build a minimal template context with a given ai_cli value.
+    fn build_context_with_cli(ai_cli: &str) -> Context {
+        let mut context = Context::new();
+        context.insert("iteration", &1);
+        context.insert("max_iterations", &10);
+        context.insert("completed_count", &0);
+        context.insert("total_count", &5);
+        context.insert("context_files", &Vec::<String>::new());
+        context.insert("feedback_loops", &HashMap::<String, String>::new());
+        context.insert("custom_instructions", &Vec::<String>::new());
+        context.insert("bootstrap", &false);
+        context.insert("next_story", &None::<()>);
+        context.insert("stop_signal", &None::<String>);
+        context.insert("has_frontend", &false);
+        context.insert("ai_cli", ai_cli);
+        context
+    }
+
+    #[test]
+    fn test_template_renders_parallel_execution_for_claude() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let context = build_context_with_cli("claude");
+        let rendered = tera.render("prompt", &context).unwrap();
+
+        assert!(rendered.contains("## Parallel Execution"));
+        assert!(rendered.contains("Task()"));
+        assert!(rendered.contains("independent sub-tasks"));
+    }
+
+    #[test]
+    fn test_template_renders_parallel_execution_for_codex() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let context = build_context_with_cli("codex");
+        let rendered = tera.render("prompt", &context).unwrap();
+
+        assert!(rendered.contains("## Parallel Execution"));
+        assert!(!rendered.contains("Task()"));
+    }
+
+    #[test]
+    fn test_template_renders_parallel_execution_for_amp() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let context = build_context_with_cli("amp");
+        let rendered = tera.render("prompt", &context).unwrap();
+
+        assert!(rendered.contains("## Parallel Execution"));
+        assert!(rendered.contains("batch your file operations"));
+    }
+
+    #[test]
+    fn test_template_omits_parallel_execution_for_aider() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let context = build_context_with_cli("aider");
+        let rendered = tera.render("prompt", &context).unwrap();
+
+        assert!(!rendered.contains("## Parallel Execution"));
+    }
+
+    #[test]
+    fn test_template_omits_parallel_execution_for_cursor() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", DEFAULT_TEMPLATE).unwrap();
+
+        let context = build_context_with_cli("agent");
+        let rendered = tera.render("prompt", &context).unwrap();
+
+        assert!(!rendered.contains("## Parallel Execution"));
     }
 }

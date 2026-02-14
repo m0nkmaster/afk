@@ -173,6 +173,7 @@ pub fn generate_prompt_with_root(
     context.insert("bootstrap", &bootstrap);
     context.insert("stop_signal", &stop_signal);
     context.insert("has_frontend", &config.prompt.has_frontend);
+    context.insert("ai_cli", &config.ai_cli.command);
 
     let prompt = tera.render("prompt", &context)?;
 

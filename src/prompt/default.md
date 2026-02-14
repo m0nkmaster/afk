@@ -180,6 +180,42 @@ If there are still stories with `passes: false`, end your response normally (ano
 You are running autonomously. After completing this task, the loop will continue automatically.
 {% endif %}
 
+{% if ai_cli == "claude" -%}
+
+## Parallel Execution
+
+You have access to `Task()` for spawning sub-agents. Use it when this story involves **independent sub-tasks** that don't modify the same files:
+
+- **Writing tests alongside implementation** — one Task for src, one for tests
+- **Creating multiple independent files** — e.g. separate components, modules, or config files
+- **Research + implementation** — one Task reads docs/codebase, another starts scaffolding
+
+**Do NOT parallelise** when tasks share files or have ordering dependencies. When in doubt, stay sequential.
+
+Example:
+```
+# Good: independent files
+result1 = Task("Create the data model in src/models/user.rs")
+result2 = Task("Create the API handler in src/handlers/user.rs")
+
+# Bad: same file
+Task("Add imports to main.rs")
+Task("Add routes to main.rs")  # conflict!
+```
+{% endif -%}
+{% if ai_cli == "codex" -%}
+
+## Parallel Execution
+
+When this story involves independent sub-tasks, break them into separate tool calls that can execute in parallel. For example, create multiple files simultaneously rather than sequentially when they don't depend on each other.
+{% endif -%}
+{% if ai_cli == "amp" -%}
+
+## Parallel Execution
+
+When this story involves creating or modifying independent files, batch your file operations together rather than doing them sequentially. Parallelise reads to gather context from multiple files at once before making changes.
+{% endif -%}
+
 ## Important
 
 - Work on ONE story per iteration
