@@ -43,6 +43,12 @@ pub struct UserStory {
     /// Additional notes.
     #[serde(default)]
     pub notes: String,
+    /// Optional command to run to verify this specific task.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify_command: Option<String>,
+    /// Optional criteria that define when this task is truly done.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub done_criteria: Vec<String>,
 }
 
 fn default_priority() -> i32 {
@@ -64,6 +70,8 @@ impl Default for UserStory {
             passes: false,
             source: default_source(),
             notes: String::new(),
+            verify_command: None,
+            done_criteria: Vec::new(),
         }
     }
 }
@@ -144,6 +152,24 @@ impl UserStory {
             .unwrap_or("")
             .to_string();
 
+        let verify_command = data
+            .get("verifyCommand")
+            .or_else(|| data.get("verify_command"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let done_criteria = data
+            .get("doneCriteria")
+            .or_else(|| data.get("done_criteria"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
+
         Self {
             id,
             title,
@@ -153,6 +179,8 @@ impl UserStory {
             passes,
             source,
             notes,
+            verify_command,
+            done_criteria,
         }
     }
 }
@@ -383,6 +411,7 @@ mod tests {
             passes: true,
             source: "json:test.json".to_string(),
             notes: "Some notes".to_string(),
+            ..Default::default()
         };
 
         let json = serde_json::to_string(&story).unwrap();
@@ -640,6 +669,7 @@ mod tests {
                     passes: false,
                     source: "beads".to_string(),
                     notes: "Notes 1".to_string(),
+                    ..Default::default()
                 },
                 UserStory {
                     id: "story-2".to_string(),
@@ -650,6 +680,7 @@ mod tests {
                     passes: true,
                     source: "json:test.json".to_string(),
                     notes: String::new(),
+                    ..Default::default()
                 },
             ],
             last_synced: "2024-01-01T12:00:00".to_string(),

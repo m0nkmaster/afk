@@ -117,6 +117,7 @@ fn issue_to_story(issue: GhIssue) -> UserStory {
         passes: false,
         source: format!("github:#{}", issue.number),
         notes: String::new(),
+        ..Default::default()
     }
 }
 

@@ -188,6 +188,7 @@ fn parse_beads_item(item: &serde_json::Value) -> Option<UserStory> {
         passes: false,
         source: "beads".to_string(),
         notes: String::new(),
+        ..Default::default()
     })
 }
 
@@ -255,6 +256,7 @@ fn parse_text_line(line: &str) -> UserStory {
         passes: false,
         source: "beads".to_string(),
         notes: String::new(),
+        ..Default::default()
     }
 }
 

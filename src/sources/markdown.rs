@@ -98,6 +98,7 @@ pub fn load_markdown_tasks(path: Option<&str>) -> Vec<UserStory> {
                 passes: false,
                 source: source_str.clone(),
                 notes: String::new(),
+                ..Default::default()
             });
         }
     }

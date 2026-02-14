@@ -167,6 +167,7 @@ fn parse_task_item(item: &serde_json::Value, source: &str) -> Option<UserStory> 
         passes: false,
         source: source.to_string(),
         notes,
+        ..Default::default()
     })
 }
 

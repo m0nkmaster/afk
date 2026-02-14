@@ -156,6 +156,7 @@ fn load_change_tasks(change_path: &Path, change_id: &str) -> Vec<UserStory> {
                 passes: false,
                 source: source_str.clone(),
                 notes: String::new(),
+                ..Default::default()
             });
         }
     }

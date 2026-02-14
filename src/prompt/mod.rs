@@ -36,6 +36,10 @@ pub struct NextStoryContext {
     pub id: String,
     /// The story priority (1 = highest).
     pub priority: i32,
+    /// Optional command to verify this specific task.
+    pub verify_command: Option<String>,
+    /// Optional criteria that define when this task is truly done.
+    pub done_criteria: Vec<String>,
 }
 
 /// Result of prompt generation.
@@ -152,6 +156,8 @@ pub fn generate_prompt_with_root(
     let next_story: Option<NextStoryContext> = pending_stories.first().map(|s| NextStoryContext {
         id: s.id.clone(),
         priority: s.priority,
+        verify_command: s.verify_command.clone(),
+        done_criteria: s.done_criteria.clone(),
     });
 
     // Build context
@@ -715,11 +721,15 @@ mod tests {
         let next_story = NextStoryContext {
             id: "test-123".to_string(),
             priority: 2,
+            verify_command: Some("cargo test --lib".to_string()),
+            done_criteria: vec!["Tests pass".to_string()],
         };
 
         // Verify it can be serialised (needed for template)
         let json = serde_json::to_string(&next_story).unwrap();
         assert!(json.contains("test-123"));
         assert!(json.contains("2"));
+        assert!(json.contains("cargo test --lib"));
+        assert!(json.contains("Tests pass"));
     }
 }
