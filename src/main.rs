@@ -40,6 +40,7 @@ fn main() -> std::process::ExitCode {
                 SourceCommands::Remove(c) => c.execute(),
             },
             Commands::Import(c) => c.execute(),
+            Commands::Plan(c) => c.execute(),
             Commands::Tasks {
                 command,
                 pending,

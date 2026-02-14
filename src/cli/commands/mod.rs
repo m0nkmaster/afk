@@ -9,6 +9,7 @@ pub mod config;
 pub mod go;
 pub mod import;
 pub mod init;
+pub mod plan;
 pub mod progress_cmd;
 pub mod prompt;
 pub mod source;

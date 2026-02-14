@@ -169,6 +169,15 @@ pub enum Commands {
     /// to output the prompt for manual use instead.
     Import(ImportCommand),
 
+    /// Plan tasks from a requirements document.
+    ///
+    /// Like `import` but uses an enhanced planning prompt that generates
+    /// per-task verification commands and done criteria.
+    ///
+    /// By default, runs the AI CLI directly. Use --stdout, --copy, or --file
+    /// to output the prompt for manual use instead.
+    Plan(PlanCommand),
+
     /// List and manage tasks.
     ///
     /// Shows tasks from .afk/tasks.json. Use `afk tasks sync` to aggregate from sources.
@@ -484,6 +493,29 @@ pub struct ImportCommand {
     pub stdout: bool,
 }
 
+/// Arguments for 'plan' command.
+#[derive(Args, Debug)]
+pub struct PlanCommand {
+    /// Requirements file to plan from.
+    pub input_file: String,
+
+    /// Output JSON path.
+    #[arg(short = 'o', long, default_value = ".afk/tasks.json")]
+    pub output: String,
+
+    /// Copy prompt to clipboard.
+    #[arg(short = 'c', long)]
+    pub copy: bool,
+
+    /// Write prompt to file.
+    #[arg(short = 'f', long)]
+    pub file: bool,
+
+    /// Print prompt to stdout.
+    #[arg(short = 's', long)]
+    pub stdout: bool,
+}
+
 /// Arguments for 'tasks sync' command.
 #[derive(Args, Debug)]
 pub struct TasksSyncCommand {
@@ -714,6 +746,21 @@ impl ImportCommand {
     /// Execute the import command.
     pub fn execute(&self) -> CliResult {
         commands::import::import(
+            &self.input_file,
+            &self.output,
+            self.copy,
+            self.file,
+            self.stdout,
+        )
+        .map(|()| ExitCode::SUCCESS)
+        .map_err(|e| CliError::Command(e.to_string()))
+    }
+}
+
+impl PlanCommand {
+    /// Execute the plan command.
+    pub fn execute(&self) -> CliResult {
+        commands::plan::plan(
             &self.input_file,
             &self.output,
             self.copy,
