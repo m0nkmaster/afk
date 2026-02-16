@@ -64,7 +64,7 @@ Tests are inline with modules (`#[cfg(test)] mod tests`). Key test coverage:
 | `bootstrap` | Project analysis and AI CLI detection |
 | `prompt` | Tera template rendering |
 | `prd` | PRD document parsing and management |
-| `sources` | All source adapters (beads, json, markdown, github, openspec) |
+| `sources` | All source adapters (beads, json, markdown, github, openspec, gherkin) |
 | `parser` | Output parsing with regex patterns |
 | `feedback` | Metrics collection and ASCII art |
 | `watcher` | File system monitoring |
@@ -147,7 +147,8 @@ src/
 │   ├── github.rs        # GitHub issues via gh CLI
 │   ├── json.rs          # JSON PRD files
 │   ├── markdown.rs      # Markdown checklists
-│   └── openspec.rs      # OpenSpec change proposals
+│   ├── openspec.rs      # OpenSpec change proposals
+│   └── gherkin.rs       # Gherkin/BDD .feature files
 ├── tui/
 │   ├── mod.rs           # Module exports
 │   ├── app.rs           # TUI application state
@@ -177,7 +178,7 @@ src/
 - **Tasks File**: `.afk/tasks.json` is the working task list; used directly if no sources configured
 - **Progress**: Session state in `.afk/progress.json`, tracks iterations, task status, and per-task learnings (short-term memory)
 - **AGENTS.md**: Long-term learnings go in `AGENTS.md` at project root or in subfolders for folder-specific knowledge
-- **Sources**: Pluggable adapters (beads, json, markdown, github, openspec) that sync into tasks.json
+- **Sources**: Pluggable adapters (beads, json, markdown, github, openspec, gherkin) that sync into tasks.json
 - **Prompts**: Tera templates, customisable via config
 - **Runner**: Implements Ralph Wiggum pattern - spawns fresh AI CLI each iteration
 - **Fresh Context**: Each iteration gets clean context; memory persists via git + progress.json + AGENTS.md

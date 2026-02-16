@@ -116,6 +116,9 @@ pub fn status(verbose: bool) -> StatusCommandResult {
                     )
                 }
                 crate::config::SourceType::Openspec => "openspec".to_string(),
+                crate::config::SourceType::Gherkin => {
+                    format!("gherkin: {}", source.path.as_deref().unwrap_or("?"))
+                }
             };
             println!("  {}. {}", i + 1, desc);
         }

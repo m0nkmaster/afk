@@ -3,12 +3,14 @@
 //! This module aggregates tasks from various sources (beads, json, markdown, github, openspec).
 
 pub mod beads;
+pub mod gherkin;
 pub mod github;
 pub mod json;
 pub mod markdown;
 pub mod openspec;
 
 pub use beads::{close_beads_issue, load_beads_tasks, start_beads_issue};
+pub use gherkin::load_gherkin_tasks;
 pub use github::{close_github_issue, load_github_tasks, parse_github_issue_number};
 pub use json::load_json_tasks;
 pub use markdown::load_markdown_tasks;
@@ -68,6 +70,10 @@ fn load_from_source(source: &SourceConfig) -> Vec<UserStory> {
             load_github_tasks(repo, &source.labels)
         }
         SourceType::Openspec => load_openspec_tasks(),
+        SourceType::Gherkin => {
+            let path = source.path.as_deref();
+            load_gherkin_tasks(path)
+        }
     }
 }
 
@@ -384,5 +390,52 @@ mod tests {
         assert_eq!(tasks[1].id, "first-2");
         assert_eq!(tasks[2].id, "second-1");
         assert_eq!(tasks[3].id, "second-2");
+    }
+
+    #[test]
+    fn test_aggregate_tasks_single_gherkin_source() {
+        let temp = TempDir::new().unwrap();
+        let feature_path = temp.path().join("login.feature");
+        let feature_content = r#"
+Feature: User login
+
+  Scenario: User logs in with valid credentials
+    Given the user is on the login page
+    When the user enters valid credentials
+    Then the user is redirected to the dashboard
+"#;
+        fs::write(&feature_path, feature_content).unwrap();
+
+        let sources = vec![SourceConfig::gherkin(feature_path.to_str().unwrap())];
+        let tasks = aggregate_tasks(&sources);
+
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].title, "User logs in with valid credentials");
+        assert_eq!(tasks[0].acceptance_criteria.len(), 3);
+        assert!(tasks[0].acceptance_criteria[0].starts_with("Given"));
+        assert!(tasks[0].acceptance_criteria[1].starts_with("When"));
+        assert!(tasks[0].acceptance_criteria[2].starts_with("Then"));
+        assert!(tasks[0].source.starts_with("gherkin:"));
+    }
+
+    #[test]
+    fn test_load_from_source_gherkin() {
+        let temp = TempDir::new().unwrap();
+        let feature_path = temp.path().join("search.feature");
+        let feature_content = r#"
+Feature: Search
+
+  Scenario: Search by keyword
+    Given the user is on the search page
+    When the user searches for "test"
+    Then results are displayed
+"#;
+        fs::write(&feature_path, feature_content).unwrap();
+
+        let source = SourceConfig::gherkin(feature_path.to_str().unwrap());
+        let tasks = load_from_source(&source);
+
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].id, "search-search-by-keyword");
     }
 }

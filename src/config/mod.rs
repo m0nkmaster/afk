@@ -39,6 +39,8 @@ pub enum SourceType {
     Github,
     /// OpenSpec change proposals with structured specs.
     Openspec,
+    /// Gherkin/BDD feature files (Given/When/Then).
+    Gherkin,
 }
 
 /// Configuration for a task source.
@@ -107,6 +109,16 @@ impl SourceConfig {
         Self {
             source_type: SourceType::Openspec,
             path: None,
+            repo: None,
+            labels: Vec::new(),
+        }
+    }
+
+    /// Create a new Gherkin source with a path to a .feature file or directory.
+    pub fn gherkin(path: impl Into<String>) -> Self {
+        Self {
+            source_type: SourceType::Gherkin,
+            path: Some(path.into()),
             repo: None,
             labels: Vec::new(),
         }

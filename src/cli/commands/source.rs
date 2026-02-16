@@ -69,7 +69,10 @@ fn source_add_impl(
     let source_type_enum = parse_source_type(source_type)?;
 
     // Validate path exists for file-based sources
-    if matches!(source_type_enum, SourceType::Json | SourceType::Markdown) {
+    if matches!(
+        source_type_enum,
+        SourceType::Json | SourceType::Markdown | SourceType::Gherkin
+    ) {
         if let Some(p) = path {
             if !Path::new(p).exists() {
                 return Err(SourceCommandError::FileNotFound(p.to_string()));
@@ -100,6 +103,7 @@ fn source_add_impl(
             SourceConfig::github(&repo, vec![])
         }
         SourceType::Openspec => SourceConfig::openspec(),
+        SourceType::Gherkin => SourceConfig::gherkin(path.unwrap_or("features")),
     };
 
     // GitHub source: only allow one - replace any existing
@@ -211,6 +215,7 @@ fn parse_source_type(s: &str) -> Result<SourceType, SourceCommandError> {
         "markdown" => Ok(SourceType::Markdown),
         "github" => Ok(SourceType::Github),
         "openspec" => Ok(SourceType::Openspec),
+        "gherkin" => Ok(SourceType::Gherkin),
         _ => Err(SourceCommandError::InvalidSourceType(s.to_string())),
     }
 }
@@ -223,6 +228,7 @@ fn source_type_to_str(st: &SourceType) -> &'static str {
         SourceType::Markdown => "markdown",
         SourceType::Github => "github",
         SourceType::Openspec => "openspec",
+        SourceType::Gherkin => "gherkin",
     }
 }
 
@@ -247,6 +253,7 @@ mod tests {
         assert_eq!(parse_source_type("json").unwrap(), SourceType::Json);
         assert_eq!(parse_source_type("markdown").unwrap(), SourceType::Markdown);
         assert_eq!(parse_source_type("github").unwrap(), SourceType::Github);
+        assert_eq!(parse_source_type("gherkin").unwrap(), SourceType::Gherkin);
     }
 
     #[test]
@@ -273,6 +280,7 @@ mod tests {
         assert_eq!(source_type_to_str(&SourceType::Json), "json");
         assert_eq!(source_type_to_str(&SourceType::Markdown), "markdown");
         assert_eq!(source_type_to_str(&SourceType::Github), "github");
+        assert_eq!(source_type_to_str(&SourceType::Gherkin), "gherkin");
     }
 
     #[test]

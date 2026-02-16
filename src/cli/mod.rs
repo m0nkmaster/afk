@@ -345,7 +345,7 @@ pub enum SourceCommands {
 #[derive(Args, Debug)]
 pub struct SourceAddCommand {
     /// Type of source to add.
-    #[arg(value_parser = ["beads", "json", "markdown", "github"])]
+    #[arg(value_parser = ["beads", "json", "markdown", "github", "openspec", "gherkin"])]
     pub source_type: String,
 
     /// Path to the source file (for json/markdown types).
