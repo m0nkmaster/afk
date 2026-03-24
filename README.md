@@ -104,6 +104,9 @@ Installs a standalone binary - no dependencies required. Updates with `afk updat
 git clone https://github.com/m0nkmaster/afk.git && cd afk
 cargo build --release
 # Binary at target/release/afk
+
+# Optional: enable PTY-based AI CLI spawning (experimental)
+cargo build --release --features pty
 ```
 
 ### Cargo
@@ -228,7 +231,7 @@ Each task **must complete in a single AI context window**. Tasks that are too la
 4. **Spawn fresh AI** — a brand new CLI instance with clean context
 5. **AI works autonomously:**
    - Implements the task
-   - Runs `afk verify` (quality gates: lint, test, typecheck)
+   - Runs `afk verify` (quality gates run in parallel when configured)
    - Fixes issues until verify passes
    - Commits changes
    - Marks task complete in `.afk/tasks.json`
@@ -241,6 +244,7 @@ The key point: **afk is an orchestrator, not an AI itself**. It spawns your chos
 
 - **[docs/user-guide.md](docs/user-guide.md)** - Complete command reference and workflow examples
 - **[docs/architecture.md](docs/architecture.md)** - Technical overview for contributors
+- **[docs/performance-review.md](docs/performance-review.md)** - Bottlenecks, fixes, and implementation status
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - How to contribute
 
 ## 🙏 Inspired By

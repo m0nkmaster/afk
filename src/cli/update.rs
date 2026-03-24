@@ -1,14 +1,15 @@
 //! Self-update functionality.
 //!
 //! This module handles checking for updates and downloading new versions
-//! of the afk binary from GitHub releases.
+//! of the afk binary from GitHub releases. HTTP requests use async reqwest
+//! with a lightweight tokio runtime at the call boundary.
 
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-use reqwest::blocking::Client;
+use reqwest::Client;
 use serde::Deserialize;
 
 /// GitHub repository for releases.
@@ -129,23 +130,25 @@ fn create_client() -> Result<Client, UpdateError> {
 }
 
 /// Get the latest release from GitHub that has binaries for this platform.
-fn get_latest_release(client: &Client, include_prerelease: bool) -> Result<Release, UpdateError> {
+async fn get_latest_release(
+    client: &Client,
+    include_prerelease: bool,
+) -> Result<Release, UpdateError> {
     let url = format!("{}/{}/releases", GITHUB_API_URL, GITHUB_REPO);
 
-    let http_response = client.get(&url).send()?;
+    let http_response = client.get(&url).send().await?;
 
     // Check for rate limiting before trying to parse
     if http_response.status() == reqwest::StatusCode::FORBIDDEN {
         // Check if it's a rate limit error
-        if let Ok(text) = http_response.text() {
-            if text.contains("rate limit") {
-                return Err(UpdateError::RateLimited);
-            }
+        let text = http_response.text().await?;
+        if text.contains("rate limit") {
+            return Err(UpdateError::RateLimited);
         }
         return Err(UpdateError::NoReleaseFound);
     }
 
-    let response: Vec<Release> = http_response.json()?;
+    let response: Vec<Release> = http_response.json().await?;
 
     let platform_binary = get_platform_binary();
 
@@ -199,9 +202,9 @@ fn is_newer_version(current: &str, new: &str) -> bool {
 }
 
 /// Check for available updates.
-pub fn check_for_updates(include_prerelease: bool) -> Result<UpdateCheckResult, UpdateError> {
+async fn check_for_updates(include_prerelease: bool) -> Result<UpdateCheckResult, UpdateError> {
     let client = create_client()?;
-    let release = get_latest_release(&client, include_prerelease)?;
+    let release = get_latest_release(&client, include_prerelease).await?;
 
     let latest_version = parse_version(&release.tag_name).to_string();
     let update_available = is_newer_version(CURRENT_VERSION, &latest_version);
@@ -220,7 +223,7 @@ pub fn check_for_updates(include_prerelease: bool) -> Result<UpdateCheckResult, 
 }
 
 /// Download and install the update.
-pub fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
+async fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
     // Check if running from pip
     if is_pip_install() {
         return Err(UpdateError::InstalledViaPip);
@@ -237,8 +240,8 @@ pub fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
 
     println!("\x1b[2mDownloading update...\x1b[0m");
 
-    let response = client.get(download_url).send()?;
-    let bytes = response.bytes()?;
+    let response = client.get(download_url).send().await?;
+    let bytes = response.bytes().await?;
 
     {
         let mut file = File::create(&temp_file)?;
@@ -274,8 +277,8 @@ pub fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
     Ok(current_exe)
 }
 
-/// Execute the update command.
-pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
+/// Execute the update command (async implementation).
+async fn execute_update_async(beta: bool, check_only: bool) -> Result<(), UpdateError> {
     // Check if running from pip
     if is_pip_install() && !check_only {
         println!("\x1b[33mNote:\x1b[0m Self-update is not available for pip installations.");
@@ -293,7 +296,7 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
 
     println!("\x1b[36mℹ\x1b[0m Checking for updates...");
 
-    let result = check_for_updates(beta)?;
+    let result = check_for_updates(beta).await?;
 
     println!(
         "  Current version: \x1b[36m{}\x1b[0m",
@@ -339,7 +342,8 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
             .download_url
             .as_ref()
             .expect("download_url must be Some when can_update() is true"),
-    )?;
+    )
+    .await?;
 
     println!();
     println!(
@@ -351,6 +355,18 @@ pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
     println!("Restart afk to use the new version.");
 
     Ok(())
+}
+
+/// Execute the update command.
+///
+/// Creates a lightweight tokio runtime to run the async HTTP requests.
+pub fn execute_update(beta: bool, check_only: bool) -> Result<(), UpdateError> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+        .expect("failed to create tokio runtime");
+    rt.block_on(execute_update_async(beta, check_only))
 }
 
 #[cfg(test)]

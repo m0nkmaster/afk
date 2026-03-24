@@ -106,6 +106,7 @@ Quality gates (feedback loops) run after each task completion:
 ```
 
 The AI auto-commits only when all gates pass.
+When multiple gates are configured, afk executes them in parallel and reports per-gate status.
 
 ### Learnings
 
@@ -452,6 +453,8 @@ afk use --list       # Show all known CLIs with install status
 
 **Note:** afk automatically appends streaming output flags (`--output-format stream-json`) for supported CLIs. The `args` above are the base configuration only. To disable streaming, set `"output_format": "text"` in your config.
 
+**Optional PTY mode:** if afk is built with `--features pty`, AI CLIs are spawned under a pseudo-terminal (PTY) with ANSI stripping before parsing. This can improve streaming behaviour for some CLIs.
+
 ### Multi-Model Rotation
 
 Configure multiple models to rotate between them pseudo-randomly across iterations. Different models bring different strengths and problem-solving approaches - cycling through them helps avoid getting stuck in local optima.
@@ -664,5 +667,8 @@ curl -fsSL https://raw.githubusercontent.com/m0nkmaster/afk/main/scripts/install
 # From source
 git clone https://github.com/m0nkmaster/afk.git && cd afk
 cargo build --release
+
+# Optional: PTY-based AI spawning
+cargo build --release --features pty
 # Binary at target/release/afk
 ```

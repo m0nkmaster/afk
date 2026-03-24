@@ -6,6 +6,7 @@ pub mod template;
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Mutex;
 use tera::{Context, Tera};
 
 use crate::config::AfkConfig;
@@ -14,6 +15,28 @@ use crate::progress::SessionProgress;
 
 // Re-export key types and functions for convenience.
 pub use template::{get_template, get_template_with_root, DEFAULT_TEMPLATE};
+
+/// Cached Tera template keyed on template content string.
+/// Avoids recompiling the template on every iteration when it hasn't changed.
+static TEMPLATE_CACHE: Mutex<Option<(String, Tera)>> = Mutex::new(None);
+
+/// Render a template using a cached Tera instance, recompiling only when the template changes.
+fn render_with_cached_tera(template_str: &str, context: &Context) -> Result<String, tera::Error> {
+    let mut cache = TEMPLATE_CACHE.lock().unwrap();
+
+    let needs_compile = match cache.as_ref() {
+        Some((cached_key, _)) => cached_key != template_str,
+        None => true,
+    };
+
+    if needs_compile {
+        let mut tera = Tera::default();
+        tera.add_raw_template("prompt", template_str)?;
+        *cache = Some((template_str.to_string(), tera));
+    }
+
+    cache.as_ref().unwrap().1.render("prompt", context)
+}
 
 /// Error type for prompt generation operations.
 #[derive(Debug, thiserror::Error)]
@@ -115,15 +138,31 @@ pub fn generate_prompt_with_root(
         None
     };
 
-    // Increment iteration for tracking
-    let iteration = progress.increment_iteration();
+    // Increment iteration for tracking (skip when all complete to avoid phantom counts)
+    let iteration = if all_complete {
+        progress.iterations
+    } else {
+        progress.increment_iteration()
+    };
 
-    // Save the updated progress
-    let progress_save_path = root.map(|r| r.join(".afk/progress.json"));
-    progress.save(progress_save_path.as_deref())?;
+    // Save the updated progress (skip when all complete — nothing changed)
+    if !all_complete {
+        let progress_save_path = root.map(|r| r.join(".afk/progress.json"));
+        progress.save(progress_save_path.as_deref())?;
+    }
 
     // Build feedback loops dict (filter out None values)
-    let mut feedback_loops: HashMap<String, String> = HashMap::new();
+    let gate_count = [
+        config.feedback_loops.types.is_some(),
+        config.feedback_loops.lint.is_some(),
+        config.feedback_loops.test.is_some(),
+        config.feedback_loops.build.is_some(),
+    ]
+    .iter()
+    .filter(|&&b| b)
+    .count()
+        + config.feedback_loops.custom.len();
+    let mut feedback_loops: HashMap<String, String> = HashMap::with_capacity(gate_count);
     if let Some(ref types_cmd) = config.feedback_loops.types {
         feedback_loops.insert("types".to_string(), types_cmd.clone());
     }
@@ -143,10 +182,6 @@ pub fn generate_prompt_with_root(
 
     // Get template
     let template_str = get_template_with_root(config, root);
-
-    // Set up Tera and render
-    let mut tera = Tera::default();
-    tera.add_raw_template("prompt", &template_str)?;
 
     // Get next story for context
     let next_story: Option<NextStoryContext> = pending_stories.first().map(|s| NextStoryContext {
@@ -168,7 +203,7 @@ pub fn generate_prompt_with_root(
     context.insert("stop_signal", &stop_signal);
     context.insert("has_frontend", &config.prompt.has_frontend);
 
-    let prompt = tera.render("prompt", &context)?;
+    let prompt = render_with_cached_tera(&template_str, &context)?;
 
     Ok(PromptResult {
         prompt,
@@ -721,5 +756,45 @@ mod tests {
         let json = serde_json::to_string(&next_story).unwrap();
         assert!(json.contains("test-123"));
         assert!(json.contains("2"));
+    }
+
+    #[test]
+    fn test_generate_prompt_no_increment_when_all_complete() {
+        let temp = TempDir::new().unwrap();
+        let (progress_path, tasks_path) = setup_test_env(&temp);
+
+        // Create progress with 5 iterations
+        let mut progress = SessionProgress::new();
+        progress.iterations = 5;
+        progress.save(Some(&progress_path)).unwrap();
+
+        // All stories complete
+        let prd = PrdDocument {
+            user_stories: vec![
+                UserStory {
+                    id: "story-1".to_string(),
+                    passes: true,
+                    ..Default::default()
+                },
+                UserStory {
+                    id: "story-2".to_string(),
+                    passes: true,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        prd.save(Some(&tasks_path)).unwrap();
+
+        let config = AfkConfig::default();
+        let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
+
+        assert!(result.all_complete);
+        // Should NOT have incremented from 5 to 6
+        assert_eq!(result.iteration, 5);
+
+        // Verify progress file was not updated
+        let loaded_progress = SessionProgress::load(Some(&progress_path)).unwrap();
+        assert_eq!(loaded_progress.iterations, 5);
     }
 }

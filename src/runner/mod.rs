@@ -8,6 +8,9 @@ use std::sync::OnceLock;
 mod controller;
 mod iteration;
 mod output_handler;
+pub(crate) mod output_sink;
+#[cfg(feature = "pty")]
+pub(crate) mod pty_spawn;
 mod quality_gates;
 mod sleep_guard;
 

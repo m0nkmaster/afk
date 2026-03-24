@@ -6,7 +6,23 @@
 
 ## Executive Summary
 
-`afk` is a well-structured Rust CLI tool, but its current architecture leaves meaningful performance on the table in three areas: **startup overhead from sequential I/O**, **inefficient process I/O streaming**, and **untapped parallelism** during multi-task runs. The recommendations below are prioritised by impact-to-effort ratio.
+`afk` is a well-structured Rust CLI tool, but its current architecture leaves meaningful performance on the table in three areas: **startup overhead from sequential I/O**, **inefficient process I/O streaming**, and **untapped parallelism** during multi-task runs. There are also **correctness issues** that interact with performance: a pipe-buffer deadlock in quality gates, divergent behaviour between TUI and non-TUI streaming paths, and phantom iteration counting. The recommendations below are prioritised by impact-to-effort ratio, with correctness fixes elevated accordingly.
+
+---
+
+## Implementation Status (Performance Branch)
+
+As of 2026-03-24, the branch has implemented phases 1-7 from the follow-up plan:
+
+- **Phase 1 (quick wins):** done - single-string output accumulation, prompt `HashMap` pre-sizing, phantom-iteration fix, and template cache
+- **Phase 2 (quality gates):** done - concurrent stdout/stderr draining plus parallel gate execution
+- **Phase 3 (hot-loop I/O):** done - PRD mtime cache in the loop controller
+- **Phase 4 (sources):** done - multi-source aggregation now loads sources in parallel with a single-source fast path
+- **Phase 5 (streaming dedup):** done - shared `OutputSink` flow in `src/runner/output_sink.rs`, fixing TUI NDJSON leakage
+- **Phase 6 (PTY spike):** done - optional PTY path (`pty` feature), PTY spawn adapter, and validation example in `examples/pty_spike.rs`
+- **Phase 7 (reqwest):** done - moved update path from `reqwest::blocking` to async `reqwest::Client`
+
+The remaining item from the original review is the future worktree-based parallel runner (section 2.7), which is intentionally deferred.
 
 ---
 
@@ -24,26 +40,26 @@ let prd = PrdDocument::load(tasks_path.as_deref())?;                  // disk re
 progress.save(progress_save_path.as_deref())?;                        // disk write
 ```
 
-And in the main loop (`controller.rs`), `PrdDocument::load` is called **again** every iteration to detect task completion:
+And in the main loop (`controller.rs`), `PrdDocument::load` is called **again** every iteration to detect task completion. Both the non-TUI path (`run_main_loop`, lines 220 and 295) and the TUI path (`run_loop_with_tui_sender`, lines 629 and 723) contain the same pair of redundant loads:
 
 ```rust
-// src/runner/controller.rs – inside the hot loop
+// src/runner/controller.rs – inside both hot loop variants (lines 220/629 and 295/723)
 let mut current_prd = match PrdDocument::load(None) {
     Ok(p) => p,
     Err(_) => prd.clone(),
 };
-// ...
+// ... ~75 lines later in the same loop iteration ...
 let updated_prd = PrdDocument::load(None).unwrap_or(current_prd.clone());
 ```
 
-This means **3–4 JSON file reads per iteration** even for a simple one-task session.
+This means **3 file I/O operations per iteration** (2 PRD reads + 1 progress write) even for a simple one-task session.
 
 ### 1.2 No PTY — AI CLIs Lose Interactivity
 
-The subprocess is spawned with `Stdio::piped()` on all three handles:
+The subprocess is spawned with `Stdio::piped()` in both code paths — `iteration.rs` (line 245) and `controller.rs` `build_ai_command` (lines 820–821):
 
 ```rust
-// src/runner/iteration.rs
+// src/runner/iteration.rs (line 245) and controller.rs build_ai_command (line 820)
 cmd.args(&args)
     .arg(prompt)
     .stdin(Stdio::null())
@@ -60,7 +76,9 @@ The result is that the current pipeline adds **artificial latency** between the 
 
 ### 1.3 Duplicate Output Streaming Logic
 
-`controller.rs` contains a complete copy of the iteration streaming loop (`run_iteration_with_tui`) that is largely a reimplementation of what `IterationRunner::execute_command` in `iteration.rs` already does. This means bug fixes and performance improvements must be applied in two places, and the code paths diverge in subtle ways. Neither path currently uses async I/O.
+`controller.rs` contains a complete copy of the iteration streaming loop (`run_iteration_with_tui`) that is largely a reimplementation of what `IterationRunner::execute_command` in `iteration.rs` already does. This means bug fixes and performance improvements must be applied in two places, and the code paths have **already diverged with a user-visible bug**: the TUI path (line 1083) sends raw unparsed NDJSON lines directly to the display when the `StreamJsonParser` returns `None`, while the non-TUI path in `iteration.rs` correctly suppresses them. Users of the TUI see raw JSON noise that the non-TUI path filters out.
+
+The duplication goes deeper than just streaming — `run_main_loop` and `run_loop_with_tui_sender` duplicate ~100 lines of loop-control logic (interrupt check, timeout check, iteration limit, PRD load, completion check, source sync, pending tasks, run iteration, task completion sync). Neither path currently uses async I/O.
 
 ### 1.4 Quality Gates Run Sequentially
 
@@ -111,13 +129,36 @@ This allocates one `String` per line of AI output, then concatenates them all in
 
 ### 1.8 reqwest Blocking Client in Binary
 
-`Cargo.toml` pulls in `reqwest` with the `blocking` feature for the self-update path. The blocking client starts its own Tokio runtime internally. Since the binary already has a Tokio runtime (`tokio = { features = ["full"] }`), this creates two runtimes — one of which sits idle for the entire session.
+`Cargo.toml` pulls in `reqwest` with the `blocking` feature for the self-update path. The blocking client starts its own Tokio runtime internally. Since the binary already has a Tokio runtime (`tokio = { features = ["full"] }`), this creates two runtimes. Note: the blocking runtime is only created when the update-check code path is actually invoked, not at process startup, so the overhead is limited to runs that trigger an update check.
+
+### 1.9 Quality Gate Pipe Deadlock
+
+In `run_single_gate` (`quality_gates.rs`, lines 170–183), stdout is read to completion before stderr is read:
+
+```rust
+if let Some(stdout) = process.stdout.take() {
+    let reader = BufReader::new(stdout);
+    for line in reader.lines().map_while(Result::ok) { ... }
+}
+if let Some(stderr) = process.stderr.take() {
+    let reader = BufReader::new(stderr);
+    for line in reader.lines().map_while(Result::ok) { ... }
+}
+```
+
+If a gate command writes more data to stderr than fits in the OS pipe buffer (~64 KB on Linux, ~512 KB on macOS) while stdout is being drained, the subprocess blocks writing to stderr while the parent blocks reading stdout. This is a textbook pipe-buffer deadlock. The fix is to read both streams concurrently (two threads or non-blocking reads).
+
+Additionally, the `verbose` parameter is accepted as `_verbose` (line 142) and never used — verbose output is collected but never conditionally printed.
+
+### 1.10 Progress File Written on No-Op Iterations
+
+`generate_prompt_with_root` increments and saves the iteration counter to disk (line 123 in `prompt/mod.rs`) before returning the prompt. If the caller detects `AFK_COMPLETE` in the prompt and returns early (controller.rs line 1025), the progress file has already been written with an incremented count — recording a phantom iteration that never actually ran.
 
 ---
 
 ## 2. Recommended Optimisations
 
-### 2.1 (HIGH IMPACT) Use a PTY for AI CLI Subprocess
+### 2.1 (HIGH IMPACT — requires validation spike) Use a PTY for AI CLI Subprocess
 
 Replace `Stdio::piped()` with a PTY so AI CLIs see a real terminal. The `portable-pty` crate provides cross-platform PTY support.
 
@@ -152,7 +193,7 @@ fn spawn_with_pty(cmd_parts: &[String], prompt: &str) -> Result<Box<dyn std::io:
 
 The `slave` end acts as the AI CLI's stdin/stdout/stderr. Because the PTY presents as a TTY, the AI CLI enables interactive output. Read from `master` as normal.
 
-**Caveat:** PTY output includes ANSI escape sequences. Strip them before passing to your NDJSON parser with a small state machine or the `strip-ansi-escapes` crate.
+**Caveat — NDJSON correctness risk:** PTY output includes ANSI escape sequences (colours, cursor movement, etc.). These sequences can appear mid-line and even span line boundaries during cursor repositioning. The `StreamJsonParser` expects clean JSON lines — ANSI sequences injected into the stream will corrupt JSON parsing and cause silent fallback to raw line display. A simple per-line `strip-ansi-escapes` pass is insufficient for cursor-movement sequences that span lines. **A validation spike is recommended before committing to this approach**: spawn a real AI CLI under a PTY, capture the raw byte stream, and verify that stripping produces parseable NDJSON before investing in the full integration. Both spawn sites (`iteration.rs` line 245 and `controller.rs` line 820) must be updated.
 
 ### 2.2 (HIGH IMPACT) Parallelise Quality Gates with Rayon or Threads
 
@@ -194,27 +235,32 @@ For three typical gates (clippy ~2 s, tests ~5 s, format ~0.5 s), this reduces w
 
 ### 2.3 (HIGH IMPACT) Cache the Tera Template Across Iterations
 
-Move template compilation out of `generate_prompt_with_root` into a `OnceLock` or pass a compiled `Tera` instance through `AfkConfig`:
+Move template compilation out of `generate_prompt_with_root` into a cache keyed on the template content. A `Mutex`-guarded cache with key comparison handles the case where the template changes mid-session (e.g., user edits a custom template):
 
 ```rust
 // src/prompt/mod.rs
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
-static COMPILED_TEMPLATE: OnceLock<(String, Tera)> = OnceLock::new();
+static TEMPLATE_CACHE: Mutex<Option<(String, Tera)>> = Mutex::new(None);
 
-fn get_compiled_tera(template_str: &str) -> Result<&'static Tera, tera::Error> {
-    // Recompile only if template string changed (e.g., user edited custom template)
-    // For simplicity, compile once per process lifetime
-    let (_, tera) = COMPILED_TEMPLATE.get_or_try_init(|| {
-        let mut tera = Tera::default();
-        tera.add_raw_template("prompt", template_str)?;
-        Ok::<_, tera::Error>((template_str.to_string(), tera))
-    })?;
+fn get_compiled_tera(template_str: &str) -> Result<Tera, tera::Error> {
+    let mut cache = TEMPLATE_CACHE.lock().unwrap();
+
+    if let Some((cached_key, cached_tera)) = cache.as_ref() {
+        if cached_key == template_str {
+            return Ok(cached_tera.clone());
+        }
+    }
+
+    // Template changed or first call — recompile
+    let mut tera = Tera::default();
+    tera.add_raw_template("prompt", template_str)?;
+    *cache = Some((template_str.to_string(), tera.clone()));
     Ok(tera)
 }
 ```
 
-For a 20-iteration session, this eliminates 19 template compilations.
+For a 20-iteration session with a stable template, this eliminates 19 template compilations. Unlike a bare `OnceLock`, this correctly handles custom templates that differ from the default — the cache invalidates when the template string changes.
 
 ### 2.4 (MEDIUM IMPACT) Parallelise Source Loading
 
@@ -235,12 +281,18 @@ pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
 
     handles
         .into_iter()
-        .flat_map(|h| h.join().unwrap_or_default())
+        .flat_map(|h| match h.join() {
+            Ok(tasks) => tasks,
+            Err(e) => {
+                eprintln!("Warning: source loader thread panicked: {:?}", e);
+                vec![]
+            }
+        })
         .collect()
 }
 ```
 
-When using beads + GitHub + JSON simultaneously, this turns three sequential process/network calls into one parallel batch.
+When using beads + GitHub + JSON simultaneously, this turns three sequential process/network calls into one parallel batch. Note: handles are joined in spawn order, preserving source-declaration ordering.
 
 ### 2.5 (MEDIUM IMPACT) Reduce Disk I/O in the Hot Loop
 
@@ -273,7 +325,9 @@ impl PrdCache {
 }
 ```
 
-This replaces `PrdDocument::load(None)` in the loop with a stat + conditional read, reducing the common case from a full JSON parse to a single `stat()` syscall.
+This replaces `PrdDocument::load(None)` in both loop variants (non-TUI and TUI paths) with a stat + conditional read, reducing the common case from a full JSON parse to a single `stat()` syscall.
+
+**Note:** mtime resolution on some filesystems (FAT32, older HFS+) can be 1–2 seconds, so a change written and re-read within a second could be missed. On modern APFS/ext4 this is not a practical concern.
 
 ### 2.6 (MEDIUM IMPACT) Switch Output Buffer to a Single Growing String
 
@@ -382,7 +436,7 @@ reqwest = { version = "0.12", features = ["json"] }
 // or run the check lazily after the main loop completes
 ```
 
-This reduces startup overhead by avoiding the creation of a second hidden thread pool.
+This avoids the creation of a second hidden Tokio runtime when the update-check path is invoked. The overhead is limited to runs that trigger an update check, so this is a cleanliness improvement rather than a startup-time fix.
 
 ### 2.9 (LOW IMPACT) Pre-size HashMaps with Known Capacity
 
@@ -398,13 +452,16 @@ let gate_count = [
 let mut feedback_loops: HashMap<String, String> = HashMap::with_capacity(gate_count);
 ```
 
-### 2.10 (LOW IMPACT) Deduplicate Streaming Logic
+### 2.10 (HIGH IMPACT) Deduplicate Streaming and Loop-Control Logic
 
-`controller.rs` (`run_iteration_with_tui`) and `iteration.rs` (`execute_command`) contain near-identical output streaming loops. Merging them into a single `stream_output` function with a trait-based sink reduces binary size, compile time, and maintenance burden:
+This is higher-impact than it appears. The duplication between `controller.rs` and `iteration.rs` has **already caused a bug**: the TUI path sends raw unparsed NDJSON to the display (line 1083) while the non-TUI path correctly suppresses it. Beyond streaming, `run_main_loop` and `run_loop_with_tui_sender` duplicate ~100 lines of loop-control logic that will continue to diverge.
+
+Merge the streaming into a single `stream_output` function with a trait-based sink. Use separate trait methods for display vs events rather than combining them:
 
 ```rust
 trait OutputSink: Send {
-    fn on_line(&mut self, display: Option<String>, tui: Option<TuiEvent>);
+    fn on_display_line(&mut self, line: &str);
+    fn on_stream_event(&mut self, event: &StreamEvent);
 }
 
 struct ConsoleSink<'a>(&'a mut OutputHandler);
@@ -417,21 +474,25 @@ fn stream_output(
 ) -> (bool, String) { /* unified streaming logic */ }
 ```
 
+For the loop-control duplication, extract the shared iteration loop into a single function parameterised by the output sink, eliminating the second copy entirely.
+
 ---
 
 ## 3. Prioritised Next Steps
 
 | Priority | Change | Estimated Speedup | Effort |
 |----------|--------|-------------------|--------|
-| **P0** | PTY-based subprocess spawning (2.1) | Eliminates buffering latency; unlocks AI CLI streaming features | Medium (2–3 days) |
 | **P0** | Parallel quality gates (2.2) | Saves `(N-1)` × avg gate time per iteration | Low (1 day) |
+| **P0** | Fix quality gate pipe deadlock (1.9) | Prevents hangs on verbose gate output | Low (1 day) |
+| **P1** | Deduplicate streaming + loop-control logic (2.10) | Correctness fix (TUI NDJSON bug); maintenance win | Medium (2–3 days) |
+| **P1** | PTY-based subprocess spawning (2.1) | Eliminates buffering latency; unlocks AI CLI streaming — requires validation spike first | Medium (2–3 days) |
 | **P1** | Cache compiled Tera template (2.3) | Removes template re-parse overhead on every iteration | Low (half day) |
 | **P1** | Reduce hot-loop disk I/O via mtime cache (2.5) | Replaces 2 JSON parses per iteration with `stat()` | Low (1 day) |
 | **P1** | Single-string output buffer (2.6) | Reduces allocator pressure for large AI responses | Low (hours) |
 | **P2** | Parallel source loading (2.4) | Cuts source sync time when using multiple adapters | Low (1 day) |
 | **P2** | Git worktrees for parallel task execution (2.7) | Can achieve N× throughput for independent tasks | High (1–2 weeks) |
-| **P3** | Deduplicate streaming logic (2.10) | Compile-time improvement; correctness benefit | Medium (2–3 days) |
-| **P3** | Async reqwest (2.8) | Removes hidden runtime overhead | Low (hours) |
+| **P2** | Fix progress write on no-op iterations (1.10) | Avoids phantom iteration counts | Low (hours) |
+| **P3** | Async reqwest (2.8) | Removes hidden runtime overhead on update-check path | Low (hours) |
 | **P3** | Pre-size HashMaps (2.9) | Micro-optimisation | Low (minutes) |
 
 ---
@@ -440,10 +501,12 @@ fn stream_output(
 
 These changes require < 30 minutes each and have no risk:
 
-- [ ] Replace `Vec<String>` output buffer with `String::with_capacity(64 * 1024)`
-- [ ] Add `HashMap::with_capacity` to feedback loops builder
-- [ ] Extract `run_single_gate` calls into `thread::spawn` joinset
-- [ ] Wrap `Tera` in `OnceLock` to avoid re-compilation
+- [x] Replace `Vec<String>` output buffer with `String::with_capacity(64 * 1024)` (handled via shared streaming output buffer)
+- [x] Add `HashMap::with_capacity` to feedback loops builder
+- [x] Extract `run_single_gate` calls into `thread::spawn` joinset
+- [x] Cache `Tera` in a `Mutex`-guarded cache keyed on template content (not a bare `OnceLock` — see 2.3)
+- [x] Read stdout and stderr concurrently in `run_single_gate` to prevent pipe deadlock (see 1.9)
+- [x] Remove dead `_verbose` parameter in `run_single_gate` or implement verbose output (implemented by removing dead parameter and printing output when `verbose`)
 
 ---
 

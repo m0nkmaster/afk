@@ -55,6 +55,8 @@ src/
 │   ├── controller.rs # Loop lifecycle management
 │   ├── iteration.rs  # Single iteration execution
 │   ├── output_handler.rs # Console output
+│   ├── output_sink.rs # Shared console/TUI streaming sink
+│   ├── pty_spawn.rs   # PTY subprocess adapter (feature-gated)
 │   ├── quality_gates.rs  # Lint, test, type checks
 │   └── sleep_guard.rs    # System sleep prevention
 ├── git/             # Git integration
@@ -81,7 +83,8 @@ src/
     ├── json.rs      # JSON PRD files
     ├── markdown.rs  # Markdown checklists
     ├── github.rs    # GitHub issues via gh CLI
-    └── openspec.rs  # OpenSpec change proposals
+    ├── openspec.rs  # OpenSpec change proposals
+    └── gherkin.rs   # Gherkin/BDD .feature files
 ```
 
 ## Key Dependencies
@@ -97,8 +100,9 @@ src/
 | `arboard` | Cross-platform clipboard access |
 | `ctrlc` | Signal handling for graceful shutdown |
 | `ratatui` / `crossterm` | Terminal UI framework for TUI mode |
-| `tokio` | Async runtime |
+| `tokio` | Lightweight runtime for async update checks |
 | `reqwest` | HTTP client for self-update |
+| `portable-pty` / `strip-ansi-escapes` | Optional PTY output path (`pty` feature) |
 | `anyhow` / `thiserror` | Error handling |
 
 ## Data Flow
@@ -143,16 +147,24 @@ pub struct AfkConfig {
 
 ### Task Aggregation
 
-Sources implement a common pattern returning `Vec<UserStory>`:
+Sources are loaded with a single-source fast path and parallel fan-out for multi-source configs:
 
 ```rust
 pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
-    let mut all_tasks = Vec::new();
-    for source in sources {
-        let tasks = load_from_source(source);
-        all_tasks.extend(tasks);
+    if sources.len() <= 1 {
+        return sources.iter().flat_map(load_from_source).collect();
     }
-    all_tasks
+
+    let handles: Vec<_> = sources
+        .iter()
+        .cloned()
+        .map(|source| thread::spawn(move || load_from_source(&source)))
+        .collect();
+
+    handles
+        .into_iter()
+        .flat_map(|h| h.join().unwrap_or_default())
+        .collect()
 }
 ```
 
@@ -180,9 +192,11 @@ The runner implements the core pattern:
 
 ```rust
 pub fn run_loop(config: &AfkConfig, iterations: Option<u32>, ...) -> LoopResult {
+    let mut prd_cache = PrdCache::new(&initial_prd);
+
     loop {
-        // 1. Load current state
-        let prd = PrdDocument::load(None)?;
+        // 1. Refresh current state (mtime-aware cache)
+        let prd = prd_cache.get(&initial_prd).clone();
         let mut progress = SessionProgress::load(None)?;
         
         // 2. Check stop conditions
@@ -198,7 +212,7 @@ pub fn run_loop(config: &AfkConfig, iterations: Option<u32>, ...) -> LoopResult 
         // 5. Spawn fresh AI CLI with selected model
         let output = spawn_ai_cli(&config.ai_cli, &prompt, model)?;
         
-        // 6. Run quality gates
+        // 6. Run quality gates (executed in parallel)
         let gates = run_quality_gates(&config.feedback_loops)?;
         
         // 7. Auto-commit if gates pass
@@ -236,24 +250,16 @@ The selected model is passed via `--model <name>` to the AI CLI. This brings dif
 
 ### Quality Gates
 
-Gates run sequentially and report results:
+Gates run concurrently and report a combined result:
 
 ```rust
 pub fn run_quality_gates(config: &FeedbackLoopsConfig, verbose: bool) -> GatesResult {
-    let mut results = Vec::new();
-    
-    if let Some(ref cmd) = config.types {
-        results.push(run_gate("types", cmd, verbose));
-    }
-    if let Some(ref cmd) = config.lint {
-        results.push(run_gate("lint", cmd, verbose));
-    }
+    let handles = collect_gates(config)
+        .into_iter()
+        .map(|(name, cmd)| thread::spawn(move || run_single_gate(&name, &cmd)))
+        .collect::<Vec<_>>();
+    // join handles and accumulate status
     // ...
-    
-    GatesResult {
-        all_passed: results.iter().all(|r| r.passed),
-        results,
-    }
 }
 ```
 
@@ -322,7 +328,9 @@ pub enum SourceError {
 
 - **Startup time**: Rust provides fast cold start (~10ms)
 - **Memory**: Single-pass processing, no persistent runtime
-- **I/O**: Async file operations via tokio where beneficial
+- **I/O**: PRD mtime cache avoids redundant hot-loop reloads
+- **Streaming**: shared output sink removes duplicate console/TUI parsing logic
+- **Parallelism**: task source loading and quality gates run concurrently
 - **Binary size**: ~5-10MB depending on platform and optimisation
 
 ## Cross-Platform Support

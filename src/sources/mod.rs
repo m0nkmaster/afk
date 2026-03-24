@@ -16,6 +16,8 @@ pub use json::load_json_tasks;
 pub use markdown::load_markdown_tasks;
 pub use openspec::load_openspec_tasks;
 
+use std::thread;
+
 use crate::config::{SourceConfig, SourceType};
 use crate::prd::UserStory;
 
@@ -47,7 +49,28 @@ use crate::prd::UserStory;
 /// ```
 #[must_use]
 pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
-    sources.iter().flat_map(load_from_source).collect()
+    if sources.len() <= 1 {
+        // Fast path: no thread overhead for single source
+        return sources.iter().flat_map(load_from_source).collect();
+    }
+
+    // Spawn one thread per source and join in order to preserve source-declaration ordering
+    let handles: Vec<_> = sources
+        .iter()
+        .cloned()
+        .map(|source| thread::spawn(move || load_from_source(&source)))
+        .collect();
+
+    handles
+        .into_iter()
+        .flat_map(|h| match h.join() {
+            Ok(tasks) => tasks,
+            Err(e) => {
+                eprintln!("Warning: source loader thread panicked: {e:?}");
+                vec![]
+            }
+        })
+        .collect()
 }
 
 /// Load tasks from a single source.
