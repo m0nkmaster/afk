@@ -397,7 +397,6 @@ impl IterationRunner {
     pub fn output_handler_mut(&mut self) -> &mut OutputHandler {
         &mut self.output
     }
-
 }
 
 /// Run a single iteration with fresh AI context.
