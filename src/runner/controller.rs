@@ -926,9 +926,9 @@ fn run_iteration_with_tui(
     tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
     interrupted: Arc<AtomicBool>,
 ) -> super::iteration::IterationResult {
+    use super::output_sink::{stream_subprocess_output, TuiSink};
     use crate::parser::StreamJsonParser;
     use crate::prompt::generate_prompt_with_root;
-    use super::output_sink::{stream_subprocess_output, TuiSink};
 
     // Generate prompt
     let prompt = match generate_prompt_with_root(config, true, None, None) {
@@ -966,7 +966,10 @@ fn run_iteration_with_tui(
     };
 
     let mut output = String::with_capacity(64 * 1024);
-    let mut sink = TuiSink { tx: tx.clone(), interrupted };
+    let mut sink = TuiSink {
+        tx: tx.clone(),
+        interrupted,
+    };
 
     #[cfg(feature = "pty")]
     {
@@ -1055,7 +1058,9 @@ fn run_iteration_with_tui(
 
         let stdout = child.stdout.take().expect("stdout was piped");
         let reader: Box<dyn std::io::BufRead> = Box::new(std::io::BufReader::new(stdout));
-        let mut kill = || { let _ = child.kill(); };
+        let mut kill = || {
+            let _ = child.kill();
+        };
         let stream_result = stream_subprocess_output(
             reader,
             &mut kill,

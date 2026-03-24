@@ -57,8 +57,10 @@ pub fn aggregate_tasks(sources: &[SourceConfig]) -> Vec<UserStory> {
     // Spawn one thread per source and join in order to preserve source-declaration ordering
     let handles: Vec<_> = sources
         .iter()
-        .cloned()
-        .map(|source| thread::spawn(move || load_from_source(&source)))
+        .map(|source| {
+            let source = source.clone();
+            thread::spawn(move || load_from_source(&source))
+        })
         .collect();
 
     handles

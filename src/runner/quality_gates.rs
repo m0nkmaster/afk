@@ -99,15 +99,16 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
     }
 
     println!();
-    println!("\x1b[1mRunning {} quality gates in parallel...\x1b[0m", gates.len());
+    println!(
+        "\x1b[1mRunning {} quality gates in parallel...\x1b[0m",
+        gates.len()
+    );
     println!();
 
     // Spawn all gates concurrently
     let handles: Vec<_> = gates
         .into_iter()
-        .map(|(name, cmd)| {
-            thread::spawn(move || run_single_gate(&name, &cmd))
-        })
+        .map(|(name, cmd)| thread::spawn(move || run_single_gate(&name, &cmd)))
         .collect();
 
     // Join all threads and collect results
@@ -440,7 +441,11 @@ mod tests {
         assert!(result.all_passed);
         assert_eq!(result.gates.len(), 3);
         // Should be well under the sequential time of 0.9s
-        assert!(elapsed < 0.8, "Parallel gates took {:.2}s, expected < 0.8s", elapsed);
+        assert!(
+            elapsed < 0.8,
+            "Parallel gates took {:.2}s, expected < 0.8s",
+            elapsed
+        );
     }
 
     #[test]

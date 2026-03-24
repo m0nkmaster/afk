@@ -273,7 +273,9 @@ impl IterationRunner {
                             cmd_parts[0]
                         ));
                     }
-                    return IterationResult::failure(format!("Failed to spawn AI CLI via PTY: {e}"));
+                    return IterationResult::failure(format!(
+                        "Failed to spawn AI CLI via PTY: {e}"
+                    ));
                 }
             };
 
@@ -289,7 +291,11 @@ impl IterationRunner {
 
             // PTY merges stdout+stderr — no separate stderr capture
             let exit_ok = pty.wait();
-            (stream_result.completion_detected, String::new(), Ok::<bool, std::io::Error>(exit_ok))
+            (
+                stream_result.completion_detected,
+                String::new(),
+                Ok::<bool, std::io::Error>(exit_ok),
+            )
         };
 
         #[cfg(not(feature = "pty"))]
@@ -320,7 +326,9 @@ impl IterationRunner {
 
             let stdout = child.stdout.take().expect("stdout was piped");
             let reader: Box<dyn std::io::BufRead> = Box::new(BufReader::new(stdout));
-            let mut kill = || { let _ = child.kill(); };
+            let mut kill = || {
+                let _ = child.kill();
+            };
             let stream_result = stream_subprocess_output(
                 reader,
                 &mut kill,
@@ -339,7 +347,11 @@ impl IterationRunner {
             };
 
             let wait_result = child.wait().map(|status| status.success());
-            (stream_result.completion_detected, stderr_output, wait_result)
+            (
+                stream_result.completion_detected,
+                stderr_output,
+                wait_result,
+            )
         };
 
         // Show iteration summary with stats

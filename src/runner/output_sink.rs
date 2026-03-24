@@ -107,9 +107,9 @@ impl OutputSink for TuiSink {
                 || text.contains("AFK_COMPLETE")
                 || text.contains("AFK_STOP")
             {
-                let _ = self
-                    .tx
-                    .send(TuiEvent::OutputLine("✓ Completion signal detected".to_string()));
+                let _ = self.tx.send(TuiEvent::OutputLine(
+                    "✓ Completion signal detected".to_string(),
+                ));
                 // Caller handles the kill — we just report
             }
         }
@@ -204,15 +204,13 @@ impl OutputSink for TuiSink {
     }
 
     fn on_completion(&mut self) {
-        let _ = self
-            .tx
-            .send(TuiEvent::OutputLine("✓ Completion signal detected".to_string()));
+        let _ = self.tx.send(TuiEvent::OutputLine(
+            "✓ Completion signal detected".to_string(),
+        ));
     }
 
     fn on_warning(&mut self, msg: &str) {
-        let _ = self
-            .tx
-            .send(TuiEvent::Warning(format!("Warning: {msg}")));
+        let _ = self.tx.send(TuiEvent::Warning(format!("Warning: {msg}")));
     }
 
     fn contains_completion_signal(&self, text: &str) -> bool {
@@ -284,8 +282,8 @@ pub fn stream_subprocess_output(
                         // Parser returned None — decide whether to display or suppress.
                         // JSON-shaped lines are suppressed (they're NDJSON metadata);
                         // plain text is displayed (fallback for CLIs without stream-json).
-                        let is_json = line.trim_start().starts_with('{')
-                            && line.trim_end().ends_with('}');
+                        let is_json =
+                            line.trim_start().starts_with('{') && line.trim_end().ends_with('}');
 
                         if is_json {
                             // Silently skip, but still check for embedded completion signals

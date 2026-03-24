@@ -55,7 +55,10 @@ fn main() {
     cmd.arg("--output-format");
     cmd.arg("stream-json");
 
-    println!("Spawning: claude --dangerously-skip-permissions -p \"{}\" --output-format stream-json", prompt);
+    println!(
+        "Spawning: claude --dangerously-skip-permissions -p \"{}\" --output-format stream-json",
+        prompt
+    );
     println!();
 
     // Spawn on the slave side
@@ -83,7 +86,10 @@ fn main() {
         Ok(n) => println!("Read {n} raw bytes from PTY"),
         Err(e) => {
             // PTY read may return an error when the child exits — that's normal.
-            println!("PTY read ended with: {e} ({} bytes captured)", raw_bytes.len());
+            println!(
+                "PTY read ended with: {e} ({} bytes captured)",
+                raw_bytes.len()
+            );
         }
     }
 
@@ -124,8 +130,7 @@ fn main() {
         }
 
         let trimmed = line.trim();
-        let looks_like_json =
-            trimmed.starts_with('{') && trimmed.ends_with('}');
+        let looks_like_json = trimmed.starts_with('{') && trimmed.ends_with('}');
 
         if looks_like_json {
             match serde_json::from_str::<serde_json::Value>(trimmed) {
