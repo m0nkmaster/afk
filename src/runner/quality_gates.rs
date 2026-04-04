@@ -5,6 +5,7 @@
 
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
+use std::thread;
 
 use crate::config::FeedbackLoopsConfig;
 
@@ -98,11 +99,29 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
     }
 
     println!();
-    println!("\x1b[1mRunning quality gates...\x1b[0m");
+    println!(
+        "\x1b[1mRunning {} quality gates in parallel...\x1b[0m",
+        gates.len()
+    );
     println!();
 
-    for (name, cmd) in gates {
-        let gate_result = run_single_gate(&name, &cmd, verbose);
+    // Spawn all gates concurrently
+    let handles: Vec<_> = gates
+        .into_iter()
+        .map(|(name, cmd)| thread::spawn(move || run_single_gate(&name, &cmd)))
+        .collect();
+
+    // Join all threads and collect results
+    for handle in handles {
+        let gate_result = match handle.join() {
+            Ok(r) => r,
+            Err(_) => GateResult {
+                name: "unknown".to_string(),
+                passed: false,
+                output: "Gate thread panicked".to_string(),
+                duration_seconds: 0.0,
+            },
+        };
 
         let status = if gate_result.passed {
             "\x1b[32m✓\x1b[0m"
@@ -112,7 +131,7 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
 
         println!(
             "  {} {} ({:.1}s)",
-            status, name, gate_result.duration_seconds
+            status, gate_result.name, gate_result.duration_seconds
         );
 
         if verbose && !gate_result.output.is_empty() {
@@ -139,7 +158,10 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
 }
 
 /// Run a single quality gate.
-fn run_single_gate(name: &str, cmd: &str, _verbose: bool) -> GateResult {
+///
+/// Reads stdout and stderr concurrently to prevent pipe-buffer deadlock
+/// when a gate produces more output than the OS pipe buffer can hold.
+fn run_single_gate(name: &str, cmd: &str) -> GateResult {
     let start = std::time::Instant::now();
 
     // Parse command - use shell for complex commands
@@ -164,29 +186,44 @@ fn run_single_gate(name: &str, cmd: &str, _verbose: bool) -> GateResult {
         }
     };
 
-    // Collect output
-    let mut output = String::new();
+    // Read stdout and stderr concurrently to avoid pipe-buffer deadlock.
+    // If we read one to completion before the other, the child can block
+    // writing to the unread pipe when the OS buffer fills (~64KB linux, ~512KB macOS).
+    let stdout_handle = process.stdout.take().map(|stdout| {
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            let mut out = String::new();
+            for line in reader.lines().map_while(Result::ok) {
+                out.push_str(&line);
+                out.push('\n');
+            }
+            out
+        })
+    });
 
-    if let Some(stdout) = process.stdout.take() {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines().map_while(Result::ok) {
-            output.push_str(&line);
-            output.push('\n');
-        }
-    }
+    let stderr_handle = process.stderr.take().map(|stderr| {
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            let mut out = String::new();
+            for line in reader.lines().map_while(Result::ok) {
+                out.push_str(&line);
+                out.push('\n');
+            }
+            out
+        })
+    });
 
-    if let Some(stderr) = process.stderr.take() {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines().map_while(Result::ok) {
-            output.push_str(&line);
-            output.push('\n');
-        }
-    }
+    let stdout_output = stdout_handle
+        .map(|h| h.join().unwrap_or_default())
+        .unwrap_or_default();
+    let stderr_output = stderr_handle
+        .map(|h| h.join().unwrap_or_default())
+        .unwrap_or_default();
 
-    // Wait for process with timeout
-    let result = process.wait();
+    let output = format!("{stdout_output}{stderr_output}");
 
-    let passed = match result {
+    // Wait for process to finish
+    let passed = match process.wait() {
         Ok(status) => status.success(),
         Err(_) => false,
     };
@@ -353,25 +390,64 @@ mod tests {
 
     #[test]
     fn test_run_single_gate_success() {
-        // This test runs an actual command - 'true' always succeeds
-        let result = run_single_gate("test", "true", false);
+        let result = run_single_gate("test", "true");
         assert!(result.passed);
         assert_eq!(result.name, "test");
     }
 
     #[test]
     fn test_run_single_gate_failure() {
-        // This test runs an actual command - 'false' always fails
-        let result = run_single_gate("test", "false", false);
+        let result = run_single_gate("test", "false");
         assert!(!result.passed);
         assert_eq!(result.name, "test");
     }
 
     #[test]
     fn test_run_single_gate_with_output() {
-        let result = run_single_gate("echo", "echo hello", false);
+        let result = run_single_gate("echo", "echo hello");
         assert!(result.passed);
         assert!(result.output.contains("hello"));
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_run_single_gate_large_stderr_no_deadlock() {
+        // Produces >64KB of stderr output. Without concurrent stream reading,
+        // this would deadlock because the parent blocks reading stdout while
+        // the child blocks writing to the full stderr pipe buffer.
+        let result = run_single_gate(
+            "large-stderr",
+            "for i in $(seq 1 5000); do echo \"stderr line $i\" >&2; done; echo done",
+        );
+        assert!(result.passed);
+        assert!(result.output.contains("done"));
+        assert!(result.output.contains("stderr line 5000"));
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_run_quality_gates_parallel_timing() {
+        // Three gates each sleeping 0.3s. Sequential would take ~0.9s,
+        // parallel should complete in ~0.3s (plus overhead).
+        let config = FeedbackLoopsConfig {
+            lint: Some("sleep 0.3".to_string()),
+            test: Some("sleep 0.3".to_string()),
+            build: Some("sleep 0.3".to_string()),
+            ..Default::default()
+        };
+
+        let start = std::time::Instant::now();
+        let result = run_quality_gates(&config, false);
+        let elapsed = start.elapsed().as_secs_f64();
+
+        assert!(result.all_passed);
+        assert_eq!(result.gates.len(), 3);
+        // Should be well under the sequential time of 0.9s
+        assert!(
+            elapsed < 0.8,
+            "Parallel gates took {:.2}s, expected < 0.8s",
+            elapsed
+        );
     }
 
     #[test]

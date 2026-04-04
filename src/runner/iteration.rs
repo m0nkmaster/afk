@@ -3,17 +3,19 @@
 //! This module handles spawning AI CLI, streaming output, and detecting completion signals.
 //! Supports both plain text and NDJSON stream-json output formats.
 
+#[cfg(not(feature = "pty"))]
 use std::io::{BufRead, BufReader};
+#[cfg(not(feature = "pty"))]
 use std::process::{Command, Stdio};
 use std::sync::mpsc::Sender;
 
 use crate::config::AfkConfig;
-use crate::parser::{StreamEvent, StreamJsonParser};
+use crate::parser::StreamJsonParser;
 use crate::prompt::generate_prompt_with_root;
 use crate::tui::TuiEvent;
 
-use super::make_path_relative;
 use super::output_handler::OutputHandler;
+use super::output_sink::{stream_subprocess_output, ConsoleSink};
 
 /// Result of a single iteration.
 #[derive(Debug)]
@@ -237,17 +239,6 @@ impl IterationRunner {
             return IterationResult::failure("No command specified");
         }
 
-        let command = &cmd_parts[0];
-        let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
-
-        // Build full command with prompt as final argument
-        let mut cmd = Command::new(command);
-        cmd.args(&args)
-            .arg(prompt)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-
         // Start feedback display (shows live status)
         self.output.set_iteration_context(
             self.current_iteration,
@@ -257,120 +248,110 @@ impl IterationRunner {
         );
         self.output.start_feedback(None);
 
-        // Spawn process
-        let mut child = match cmd.spawn() {
-            Ok(child) => child,
-            Err(e) => {
-                self.output.stop_feedback();
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    return IterationResult::failure(format!(
-                        "AI CLI not found: {}. Is it installed and in your PATH?",
-                        command
-                    ));
-                }
-                return IterationResult::failure(format!("Failed to spawn AI CLI: {e}"));
-            }
+        // Stream stdout through the unified streaming function
+        let mut output = String::with_capacity(64 * 1024);
+        let mut sink = ConsoleSink {
+            output: &mut self.output,
+            tui_sender: self.tui_sender.as_ref(),
         };
 
-        // Stream stdout
-        let mut output_buffer = Vec::new();
-        let mut completion_detected = false;
+        #[cfg(feature = "pty")]
+        let (completion_detected, stderr_output, wait_result) = {
+            use super::pty_spawn::PtyProcess;
 
-        if let Some(stdout) = child.stdout.take() {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                match line {
-                    Ok(line) => {
-                        // Parse and display based on output format
-                        if self.stream_parser.is_some() {
-                            // NDJSON mode: parse and convert to display text
-                            // Falls back to raw line if parsing fails (CLI doesn't support stream-json)
-                            if let Some(ref mut parser) = self.stream_parser {
-                                if let Some(event) = parser.parse_line(&line) {
-                                    // Check for completion signal only in assistant messages
-                                    // (not in user messages which may contain the prompt with examples)
-                                    if let crate::parser::StreamEvent::AssistantMessage {
-                                        ref text,
-                                    } = event
-                                    {
-                                        if self.output.contains_completion_signal(text) {
-                                            completion_detected = true;
-                                            self.output.completion_detected();
-                                            // Terminate the process
-                                            let _ = child.kill();
-                                            break;
-                                        }
-                                    }
-
-                                    // Convert event to display text and emit TUI event
-                                    let (display, tui_event) = self.stream_event_to_display(&event);
-
-                                    // Send TUI event if we have a sender
-                                    if let (Some(ref sender), Some(tui_event)) =
-                                        (&self.tui_sender, tui_event)
-                                    {
-                                        let _ = sender.send(tui_event);
-                                    }
-
-                                    if let Some(display) = display {
-                                        self.output.stream_line(&format!("{display}\n"));
-                                    }
-                                } else {
-                                    // Parsing returned None - check if it's valid JSON we should suppress
-                                    // vs plain text we should display
-                                    let is_json = line.trim_start().starts_with('{')
-                                        && line.trim_end().ends_with('}');
-
-                                    if is_json {
-                                        // Valid JSON but no displayable content - silently skip
-                                        // Still check for completion signals in case they're embedded
-                                        if self.output.contains_completion_signal(&line) {
-                                            completion_detected = true;
-                                            self.output.completion_detected();
-                                            let _ = child.kill();
-                                            break;
-                                        }
-                                    } else {
-                                        // Plain text output - display as-is (fallback for CLIs
-                                        // that don't support stream-json)
-                                        self.output.stream_line(&format!("{line}\n"));
-                                        if self.output.contains_completion_signal(&line) {
-                                            completion_detected = true;
-                                            self.output.completion_detected();
-                                            let _ = child.kill();
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            // Plain text mode: display as-is and check raw line
-                            self.output.stream_line(&format!("{line}\n"));
-                            if self.output.contains_completion_signal(&line) {
-                                completion_detected = true;
-                                self.output.completion_detected();
-                                // Terminate the process
-                                let _ = child.kill();
-                                break;
-                            }
-                        }
-                        output_buffer.push(format!("{line}\n"));
+            let mut pty = match PtyProcess::spawn(cmd_parts, prompt) {
+                Ok(pty) => pty,
+                Err(e) => {
+                    self.output.stop_feedback();
+                    let err_msg = format!("{e}");
+                    if err_msg.contains("No such file")
+                        || err_msg.contains("not found")
+                        || err_msg.contains("not exist")
+                    {
+                        return IterationResult::failure(format!(
+                            "AI CLI not found: {}. Is it installed and in your PATH?",
+                            cmd_parts[0]
+                        ));
                     }
-                    Err(e) => {
-                        self.output.warning(&format!("Error reading output: {e}"));
-                        break;
-                    }
+                    return IterationResult::failure(format!(
+                        "Failed to spawn AI CLI via PTY: {e}"
+                    ));
                 }
-            }
-        }
+            };
 
-        // Capture stderr before waiting for process
-        let stderr_output = if let Some(stderr) = child.stderr.take() {
-            let reader = BufReader::new(stderr);
-            let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
-            lines.join("\n")
-        } else {
-            String::new()
+            let reader: Box<dyn std::io::BufRead> = pty.take_reader();
+            let mut kill = || pty.kill();
+            let stream_result = stream_subprocess_output(
+                reader,
+                &mut kill,
+                &mut self.stream_parser,
+                &mut sink,
+                &mut output,
+            );
+
+            // PTY merges stdout+stderr — no separate stderr capture
+            let exit_ok = pty.wait();
+            (
+                stream_result.completion_detected,
+                String::new(),
+                Ok::<bool, std::io::Error>(exit_ok),
+            )
+        };
+
+        #[cfg(not(feature = "pty"))]
+        let (completion_detected, stderr_output, wait_result) = {
+            let command = &cmd_parts[0];
+            let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
+
+            let mut cmd = Command::new(command);
+            cmd.args(&args)
+                .arg(prompt)
+                .stdin(Stdio::null())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+
+            let mut child = match cmd.spawn() {
+                Ok(child) => child,
+                Err(e) => {
+                    self.output.stop_feedback();
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        return IterationResult::failure(format!(
+                            "AI CLI not found: {}. Is it installed and in your PATH?",
+                            command
+                        ));
+                    }
+                    return IterationResult::failure(format!("Failed to spawn AI CLI: {e}"));
+                }
+            };
+
+            let stdout = child.stdout.take().expect("stdout was piped");
+            let reader: Box<dyn std::io::BufRead> = Box::new(BufReader::new(stdout));
+            let mut kill = || {
+                let _ = child.kill();
+            };
+            let stream_result = stream_subprocess_output(
+                reader,
+                &mut kill,
+                &mut self.stream_parser,
+                &mut sink,
+                &mut output,
+            );
+
+            // Capture stderr before waiting for process
+            let stderr_output = if let Some(stderr) = child.stderr.take() {
+                let reader = BufReader::new(stderr);
+                let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
+                lines.join("\n")
+            } else {
+                String::new()
+            };
+
+            let wait_result = child.wait().map(|status| status.success());
+            (
+                stream_result.completion_detected,
+                stderr_output,
+                wait_result,
+            )
         };
 
         // Show iteration summary with stats
@@ -379,33 +360,26 @@ impl IterationRunner {
         // Stop feedback display
         self.output.stop_feedback();
 
-        let output = output_buffer.concat();
-
         if completion_detected {
             return IterationResult::success(output);
         }
 
-        // Wait for process to finish
-        match child.wait() {
-            Ok(status) => {
-                if !status.success() {
-                    let exit_code = status.code().unwrap_or(-1);
-                    // Include full stderr in error message
-                    let error_msg = if stderr_output.is_empty() {
-                        format!("AI CLI exited with code {exit_code}")
-                    } else {
-                        format!(
-                            "AI CLI exited with code {exit_code}\n\x1b[31m{}\x1b[0m",
-                            stderr_output.trim()
-                        )
-                    };
-                    // Display stderr prominently
-                    if !stderr_output.is_empty() {
-                        self.output.error(&error_msg);
-                    }
-                    return IterationResult::failure_with_output(error_msg, output);
+        // Check process exit status
+        match wait_result {
+            Ok(true) => IterationResult::success(output),
+            Ok(false) => {
+                let error_msg = if stderr_output.is_empty() {
+                    "AI CLI exited with non-zero status".to_string()
+                } else {
+                    format!(
+                        "AI CLI exited with non-zero status\n\x1b[31m{}\x1b[0m",
+                        stderr_output.trim()
+                    )
+                };
+                if !stderr_output.is_empty() {
+                    self.output.error(&error_msg);
                 }
-                IterationResult::success(output)
+                IterationResult::failure_with_output(error_msg, output)
             }
             Err(e) => IterationResult::failure_with_output(
                 format!("Failed to wait for AI CLI: {e}"),
@@ -422,117 +396,6 @@ impl IterationRunner {
     /// Get a mutable reference to the output handler.
     pub fn output_handler_mut(&mut self) -> &mut OutputHandler {
         &mut self.output
-    }
-
-    /// Convert a StreamEvent to display text and optional TuiEvent.
-    fn stream_event_to_display(&self, event: &StreamEvent) -> (Option<String>, Option<TuiEvent>) {
-        match event {
-            StreamEvent::SystemInit { model, .. } => {
-                let display = model
-                    .as_ref()
-                    .map(|m| format!("\x1b[2m◉ Model: {}\x1b[0m", m));
-                (display, None)
-            }
-            StreamEvent::UserMessage { .. } => {
-                // Don't display user message (it's the prompt we sent)
-                (None, None)
-            }
-            StreamEvent::AssistantMessage { text } => {
-                // Skip empty messages (e.g., tool-use-only content blocks)
-                if text.is_empty() {
-                    return (None, None);
-                }
-                // Truncate very long messages for display
-                let display_text = if text.len() > 200 {
-                    format!("{}...", &text[..197])
-                } else {
-                    text.clone()
-                };
-                let display = format!("\x1b[37m{}\x1b[0m", display_text);
-                let tui_event = TuiEvent::OutputLine(text.clone());
-                (Some(display), Some(tui_event))
-            }
-            StreamEvent::ToolStarted {
-                tool_name,
-                tool_type,
-                path,
-            } => {
-                let path_str = path
-                    .as_ref()
-                    .map(|p| format!(" {}", make_path_relative(p)))
-                    .unwrap_or_default();
-                let display = format!("\x1b[33m→ {}{}\x1b[0m", tool_type, path_str);
-                let tui_event = TuiEvent::ToolCall(tool_name.clone());
-                (Some(display), Some(tui_event))
-            }
-            StreamEvent::ToolCompleted {
-                tool_type,
-                path,
-                success,
-                lines,
-                ..
-            } => {
-                let status = if *success { "✓" } else { "✗" };
-                let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
-                let path_str = path
-                    .as_ref()
-                    .map(|p| format!(" {}", make_path_relative(p)))
-                    .unwrap_or_default();
-                let colour = if *success { "\x1b[32m" } else { "\x1b[31m" };
-                let display = format!(
-                    "{}{} {}{}{}\x1b[0m",
-                    colour, status, tool_type, path_str, lines_str
-                );
-
-                // Emit file change event for file operations
-                let tui_event = path.as_ref().map(|p| {
-                    let change_type = match tool_type {
-                        crate::parser::ToolType::Read => "read",
-                        crate::parser::ToolType::Write => "created",
-                        crate::parser::ToolType::Edit => "modified",
-                        crate::parser::ToolType::Delete => "deleted",
-                        _ => "modified",
-                    };
-                    TuiEvent::FileChange {
-                        path: make_path_relative(p).to_string(),
-                        change_type: change_type.to_string(),
-                    }
-                });
-
-                (Some(display), tui_event)
-            }
-            StreamEvent::Result {
-                success,
-                duration_ms,
-                ..
-            } => {
-                let status = if *success {
-                    "✓ Complete"
-                } else {
-                    "✗ Failed"
-                };
-                let duration_str = duration_ms
-                    .map(|ms| format!(" ({:.1}s)", ms as f64 / 1000.0))
-                    .unwrap_or_default();
-                let colour = if *success { "\x1b[32m" } else { "\x1b[31m" };
-                let display = format!("{}{}{}\x1b[0m", colour, status, duration_str);
-
-                let tui_event = duration_ms.map(|ms| TuiEvent::IterationComplete {
-                    duration_secs: ms as f64 / 1000.0,
-                });
-
-                (Some(display), tui_event)
-            }
-            StreamEvent::Error { message } => {
-                let display = format!("\x1b[31m✗ Error: {}\x1b[0m", message);
-                let tui_event = TuiEvent::Error(message.clone());
-                (Some(display), Some(tui_event))
-            }
-            StreamEvent::Unknown { .. } => {
-                // Don't display unknown events
-                (None, None)
-            }
-        }
     }
 }
 

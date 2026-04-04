@@ -3,17 +3,55 @@
 //! This module implements the main loop lifecycle, including limits,
 //! stop conditions, and session management.
 
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use crate::config::AfkConfig;
 use crate::prd::{mark_story_in_progress, sync_prd_with_root, PrdDocument};
 
 use super::iteration::IterationRunner;
-use super::make_path_relative;
 use super::output_handler::{FeedbackMode, OutputHandler};
 use super::{RunOptions, RunResult, StopReason};
+
+/// Cache for PrdDocument that only re-reads from disk when the file's mtime changes.
+/// Replaces redundant `PrdDocument::load(None)` calls in the hot loop with a single `stat()`.
+struct PrdCache {
+    prd: PrdDocument,
+    last_modified: SystemTime,
+    path: PathBuf,
+}
+
+impl PrdCache {
+    fn new(initial_prd: &PrdDocument) -> Self {
+        let path = PathBuf::from(crate::config::TASKS_FILE);
+        let last_modified = std::fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        Self {
+            prd: initial_prd.clone(),
+            last_modified,
+            path,
+        }
+    }
+
+    /// Return the cached PrdDocument, re-reading from disk only if mtime has changed.
+    fn get(&mut self) -> &PrdDocument {
+        let mtime = std::fs::metadata(&self.path)
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+
+        if mtime != self.last_modified {
+            if let Ok(prd) = PrdDocument::load(None) {
+                self.prd = prd;
+                self.last_modified = mtime;
+            }
+            // On load failure, keep self.prd (last known good state)
+        }
+        &self.prd
+    }
+}
 
 /// Controls the main loop lifecycle.
 pub struct LoopController {
@@ -190,6 +228,7 @@ impl LoopController {
         let mut iterations_completed: u32 = 0;
         let mut tasks_completed: u32 = 0;
         let stop_reason;
+        let mut prd_cache = PrdCache::new(prd);
 
         let timeout_minutes = timeout_override.unwrap_or(self.config.limits.timeout_minutes);
         let timeout_duration = std::time::Duration::from_secs(timeout_minutes as u64 * 60);
@@ -216,11 +255,8 @@ impl LoopController {
                 break;
             }
 
-            // Reload PRD to check completion
-            let mut current_prd = match PrdDocument::load(None) {
-                Ok(p) => p,
-                Err(_) => prd.clone(),
-            };
+            // Reload PRD (from cache — only re-reads disk if mtime changed)
+            let mut current_prd = prd_cache.get().clone();
 
             // Check if all local tasks complete - if so, try to sync more from sources
             if current_prd.all_stories_complete() {
@@ -291,8 +327,8 @@ impl LoopController {
                 }
             }
 
-            // Check if task was completed (PRD updated)
-            let updated_prd = PrdDocument::load(None).unwrap_or(current_prd.clone());
+            // Check if task was completed (PRD updated by AI CLI)
+            let updated_prd = prd_cache.get().clone();
             let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
             let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
             if new_completed > old_completed {
@@ -600,6 +636,7 @@ fn run_loop_with_tui_sender(
     let mut iterations_completed: u32 = 0;
     let mut tasks_completed: u32 = 0;
     let stop_reason;
+    let mut prd_cache = PrdCache::new(&prd);
 
     let timeout_minutes = options
         .timeout_minutes
@@ -625,11 +662,8 @@ fn run_loop_with_tui_sender(
             break;
         }
 
-        // Reload PRD to check completion
-        let mut current_prd = match PrdDocument::load(None) {
-            Ok(p) => p,
-            Err(_) => prd.clone(),
-        };
+        // Reload PRD (from cache — only re-reads disk if mtime changed)
+        let mut current_prd = prd_cache.get().clone();
 
         // Check if all local tasks complete - if so, try to sync more from sources
         if current_prd.all_stories_complete() {
@@ -719,8 +753,8 @@ fn run_loop_with_tui_sender(
             }
         }
 
-        // Check if task was completed
-        let updated_prd = PrdDocument::load(None).unwrap_or(current_prd.clone());
+        // Check if task was completed (PRD updated by AI CLI)
+        let updated_prd = prd_cache.get().clone();
         let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
         let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
         if new_completed > old_completed {
@@ -760,24 +794,18 @@ fn run_loop_with_tui_sender(
     }
 }
 
-/// Build and spawn the AI CLI command.
+/// Build command parts and log them to the TUI.
 ///
-/// Constructs the command with the prompt and output format arguments,
-/// then spawns it as a child process with piped stdout/stderr.
+/// Shared by both PTY and piped spawn paths so command construction
+/// stays in one place.
 ///
-/// If multiple models are configured, one is selected pseudo-randomly
-/// and displayed in the output.
-///
-/// Returns the spawned child process or an error result if spawn fails.
-fn build_ai_command(
+/// Returns `(cmd_parts, selected_model)` or an error if no command is configured.
+fn prepare_ai_command(
     config: &AfkConfig,
-    prompt: &str,
     tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
-) -> Result<std::process::Child, super::iteration::IterationResult> {
+) -> Result<Vec<String>, super::iteration::IterationResult> {
     use crate::tui::TuiEvent;
-    use std::process::{Command, Stdio};
 
-    // Select model upfront so we can display it
     let selected_model = config.ai_cli.select_model().map(|s| s.to_string());
 
     let mut cmd_parts = vec![config.ai_cli.command.clone()];
@@ -793,25 +821,40 @@ fn build_ai_command(
         ));
     }
 
-    let command = &cmd_parts[0];
-    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
-
     // Display model selection if multiple models configured
     if config.ai_cli.models.len() > 1 {
         if let Some(ref model) = selected_model {
             let _ = tx.send(TuiEvent::OutputLine(format!(
-                "🎲 Model: {} (1 of {})",
+                "\u{1f3b2} Model: {} (1 of {})",
                 model,
                 config.ai_cli.models.len()
             )));
         }
     }
 
+    let pty_tag = if cfg!(feature = "pty") { " [PTY]" } else { "" };
     let _ = tx.send(TuiEvent::OutputLine(format!(
-        "$ {} {}",
-        command,
-        args.join(" ")
+        "$ {}{}",
+        cmd_parts.join(" "),
+        pty_tag
     )));
+
+    Ok(cmd_parts)
+}
+
+/// Build and spawn the AI CLI command with piped stdout/stderr.
+#[cfg(not(feature = "pty"))]
+fn build_ai_command(
+    config: &AfkConfig,
+    prompt: &str,
+    tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+) -> Result<std::process::Child, super::iteration::IterationResult> {
+    use std::process::{Command, Stdio};
+
+    let cmd_parts = prepare_ai_command(config, tx)?;
+
+    let command = &cmd_parts[0];
+    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
 
     let mut cmd = Command::new(command);
     cmd.args(&args)
@@ -837,117 +880,7 @@ fn build_ai_command(
     }
 }
 
-/// Handle a parsed stream event and send appropriate TUI updates.
-///
-/// Processes different event types (messages, tool calls, results) and
-/// sends corresponding TUI events. Returns true if a completion signal
-/// was detected in the event.
-fn handle_stream_event(
-    event: &crate::parser::StreamEvent,
-    tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
-) -> bool {
-    use crate::parser::{StreamEvent, ToolType};
-    use crate::tui::TuiEvent;
-
-    // Check for completion signal only in assistant messages
-    if let StreamEvent::AssistantMessage { ref text } = event {
-        if text.contains("<promise>COMPLETE</promise>")
-            || text.contains("AFK_COMPLETE")
-            || text.contains("AFK_STOP")
-        {
-            let _ = tx.send(TuiEvent::OutputLine(
-                "✓ Completion signal detected".to_string(),
-            ));
-            return true;
-        }
-    }
-
-    match event {
-        StreamEvent::AssistantMessage { text } => {
-            // Truncate long messages for display
-            let display_text = if text.len() > 200 {
-                format!("{}...", &text[..197])
-            } else {
-                text.clone()
-            };
-            let _ = tx.send(TuiEvent::OutputLine(display_text));
-        }
-        StreamEvent::ToolStarted {
-            tool_name,
-            tool_type,
-            path,
-        } => {
-            let path_str = path
-                .as_ref()
-                .map(|p| format!(" {}", make_path_relative(p)))
-                .unwrap_or_default();
-            let _ = tx.send(TuiEvent::OutputLine(format!("→ {}{}", tool_type, path_str)));
-            let _ = tx.send(TuiEvent::ToolCall(tool_name.clone()));
-        }
-        StreamEvent::ToolCompleted {
-            tool_type,
-            path,
-            success,
-            lines,
-            ..
-        } => {
-            let status = if *success { "✓" } else { "✗" };
-            let lines_str = lines.map(|l| format!(" ({} lines)", l)).unwrap_or_default();
-            let path_str = path
-                .as_ref()
-                .map(|p| format!(" {}", make_path_relative(p)))
-                .unwrap_or_default();
-            let _ = tx.send(TuiEvent::OutputLine(format!(
-                "{} {}{}{}",
-                status, tool_type, path_str, lines_str
-            )));
-
-            // Emit file change event for file operations
-            if let Some(p) = path {
-                let change_type = match tool_type {
-                    ToolType::Read => "read",
-                    ToolType::Write => "created",
-                    ToolType::Edit => "modified",
-                    ToolType::Delete => "deleted",
-                    _ => "modified",
-                };
-                let _ = tx.send(TuiEvent::FileChange {
-                    path: make_path_relative(p).to_string(),
-                    change_type: change_type.to_string(),
-                });
-            }
-        }
-        StreamEvent::Result {
-            success,
-            duration_ms,
-            ..
-        } => {
-            let status = if *success {
-                "✓ Complete"
-            } else {
-                "✗ Failed"
-            };
-            let duration_str = duration_ms
-                .map(|ms| format!(" ({:.1}s)", ms as f64 / 1000.0))
-                .unwrap_or_default();
-            let _ = tx.send(TuiEvent::OutputLine(format!("{}{}", status, duration_str)));
-        }
-        StreamEvent::Error { message } => {
-            let _ = tx.send(TuiEvent::Error(message.clone()));
-        }
-        StreamEvent::SystemInit { model, .. } => {
-            if let Some(m) = model {
-                let _ = tx.send(TuiEvent::OutputLine(format!("◉ Model: {}", m)));
-            }
-        }
-        StreamEvent::UserMessage { .. } | StreamEvent::Unknown { .. } => {
-            // Skip these
-        }
-    }
-
-    false
-}
-
+#[cfg(not(feature = "pty"))]
 /// Wait for the AI CLI child process to complete.
 ///
 /// Returns a success result if the process exits cleanly, or a failure
@@ -992,13 +925,6 @@ fn wait_for_completion(
     }
 }
 
-/// Check if a line contains a completion signal.
-fn contains_completion_signal(line: &str) -> bool {
-    line.contains("<promise>COMPLETE</promise>")
-        || line.contains("AFK_COMPLETE")
-        || line.contains("AFK_STOP")
-}
-
 /// Run a single iteration with TUI output.
 fn run_iteration_with_tui(
     config: &AfkConfig,
@@ -1006,10 +932,9 @@ fn run_iteration_with_tui(
     tx: std::sync::mpsc::Sender<crate::tui::TuiEvent>,
     interrupted: Arc<AtomicBool>,
 ) -> super::iteration::IterationResult {
+    use super::output_sink::{stream_subprocess_output, TuiSink};
     use crate::parser::StreamJsonParser;
     use crate::prompt::generate_prompt_with_root;
-    use crate::tui::TuiEvent;
-    use std::io::{BufRead, BufReader};
 
     // Generate prompt
     let prompt = match generate_prompt_with_root(config, true, None, None) {
@@ -1039,12 +964,6 @@ fn run_iteration_with_tui(
         };
     }
 
-    // Build and spawn the AI CLI command
-    let mut child = match build_ai_command(config, &prompt, &tx) {
-        Ok(child) => child,
-        Err(result) => return result,
-    };
-
     // Create NDJSON parser if using stream-json format
     let mut stream_parser = if config.ai_cli.uses_stream_json() {
         Some(StreamJsonParser::new(config.ai_cli.detect_cli_format()))
@@ -1052,91 +971,101 @@ fn run_iteration_with_tui(
         None
     };
 
-    // Stream stdout to TUI
-    let mut output_buffer = Vec::new();
-    let mut completion_detected = false;
-    let mut user_interrupted = false;
+    let mut output = String::with_capacity(64 * 1024);
+    let mut sink = TuiSink {
+        tx: tx.clone(),
+        interrupted,
+    };
 
-    if let Some(stdout) = child.stdout.take() {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            // Check for user interrupt (Q pressed in TUI)
-            if interrupted.load(Ordering::SeqCst) {
-                user_interrupted = true;
-                let _ = child.kill();
-                break;
+    #[cfg(feature = "pty")]
+    {
+        use super::pty_spawn::PtyProcess;
+
+        let cmd_parts = match prepare_ai_command(config, &tx) {
+            Ok(parts) => parts,
+            Err(result) => return result,
+        };
+
+        let mut pty = match PtyProcess::spawn(&cmd_parts, &prompt) {
+            Ok(pty) => pty,
+            Err(e) => {
+                return super::iteration::IterationResult::failure(format!(
+                    "Failed to spawn AI CLI via PTY: {e}"
+                ));
             }
+        };
 
-            match line {
-                Ok(line) => {
-                    // Parse and process based on output format
-                    if let Some(ref mut parser) = stream_parser {
-                        // NDJSON mode: parse and emit events
-                        if let Some(event) = parser.parse_line(&line) {
-                            if handle_stream_event(&event, &tx) {
-                                completion_detected = true;
-                                let _ = child.kill();
-                                break;
-                            }
-                        } else {
-                            // Parsing failed - fall back to raw line display
-                            let _ = tx.send(TuiEvent::OutputLine(line.clone()));
-                            if contains_completion_signal(&line) {
-                                completion_detected = true;
-                                let _ = tx.send(TuiEvent::OutputLine(
-                                    "✓ Completion signal detected".to_string(),
-                                ));
-                                let _ = child.kill();
-                                break;
-                            }
-                        }
-                    } else {
-                        // Plain text mode: send line as-is
-                        let _ = tx.send(TuiEvent::OutputLine(line.clone()));
+        let reader: Box<dyn std::io::BufRead> = pty.take_reader();
+        let mut kill = || pty.kill();
+        let stream_result = stream_subprocess_output(
+            reader,
+            &mut kill,
+            &mut stream_parser,
+            &mut sink,
+            &mut output,
+        );
 
-                        // Track tool calls from output patterns
-                        if line.contains("antml:invoke") || line.contains("<tool_call>") {
-                            let _ = tx.send(TuiEvent::ToolCall("tool".to_string()));
-                        }
+        if stream_result.user_interrupted {
+            return super::iteration::IterationResult {
+                success: false,
+                task_id: None,
+                error: Some("User interrupted".to_string()),
+                output,
+            };
+        }
 
-                        // Check for completion signal in plain text mode
-                        if contains_completion_signal(&line) {
-                            completion_detected = true;
-                            let _ = tx.send(TuiEvent::OutputLine(
-                                "✓ Completion signal detected".to_string(),
-                            ));
-                            let _ = child.kill();
-                            break;
-                        }
-                    }
+        if stream_result.completion_detected {
+            return super::iteration::IterationResult::success(output);
+        }
 
-                    output_buffer.push(format!("{line}\n"));
-                }
-                Err(e) => {
-                    let _ = tx.send(TuiEvent::Warning(format!("Error reading output: {e}")));
-                    break;
-                }
-            }
+        // PTY merges stdout+stderr — just check exit status
+        let exit_ok = pty.wait();
+        if exit_ok {
+            super::iteration::IterationResult::success(output)
+        } else {
+            super::iteration::IterationResult::failure_with_output(
+                "AI CLI exited with non-zero status".to_string(),
+                output,
+            )
         }
     }
 
-    let output = output_buffer.concat();
-
-    if user_interrupted {
-        // User pressed Q in TUI - return gracefully
-        return super::iteration::IterationResult {
-            success: false,
-            task_id: None,
-            error: Some("User interrupted".to_string()),
-            output,
+    #[cfg(not(feature = "pty"))]
+    {
+        // Build and spawn the AI CLI command (piped stdout/stderr)
+        let mut child = match build_ai_command(config, &prompt, &tx) {
+            Ok(child) => child,
+            Err(result) => return result,
         };
-    }
 
-    if completion_detected {
-        return super::iteration::IterationResult::success(output);
-    }
+        let stdout = child.stdout.take().expect("stdout was piped");
+        let reader: Box<dyn std::io::BufRead> = Box::new(std::io::BufReader::new(stdout));
+        let mut kill = || {
+            let _ = child.kill();
+        };
+        let stream_result = stream_subprocess_output(
+            reader,
+            &mut kill,
+            &mut stream_parser,
+            &mut sink,
+            &mut output,
+        );
 
-    wait_for_completion(child, output)
+        if stream_result.user_interrupted {
+            return super::iteration::IterationResult {
+                success: false,
+                task_id: None,
+                error: Some("User interrupted".to_string()),
+                output,
+            };
+        }
+
+        if stream_result.completion_detected {
+            return super::iteration::IterationResult::success(output);
+        }
+
+        wait_for_completion(child, output)
+    }
 }
 
 /// Sync completed tasks back to their sources.
