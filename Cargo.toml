@@ -55,11 +55,11 @@ reqwest = { version = "0.12", features = ["json"] }
 
 # PTY support (opt-in)
 portable-pty = { version = "0.8", optional = true }
-strip-ansi-escapes = { version = "0.2", optional = true }
+vte = { version = "0.14", optional = true }
 
 [features]
 default = []
-pty = ["portable-pty", "strip-ansi-escapes"]
+pty = ["portable-pty", "vte"]
 
 [dev-dependencies]
 tempfile = "3.15"

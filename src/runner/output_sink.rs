@@ -101,18 +101,8 @@ impl OutputSink for TuiSink {
     fn on_stream_event(&mut self, event: &StreamEvent) {
         use crate::parser::StreamEvent::*;
 
-        // Check for completion signal in assistant messages
-        if let AssistantMessage { ref text } = event {
-            if text.contains("<promise>COMPLETE</promise>")
-                || text.contains("AFK_COMPLETE")
-                || text.contains("AFK_STOP")
-            {
-                let _ = self.tx.send(TuiEvent::OutputLine(
-                    "✓ Completion signal detected".to_string(),
-                ));
-                // Caller handles the kill — we just report
-            }
-        }
+        // Completion signal detection is handled by stream_subprocess_output,
+        // which calls on_completion() and triggers the kill. No need to check here.
 
         match event {
             AssistantMessage { text } => {

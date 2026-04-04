@@ -10,6 +10,7 @@
 
 use portable_pty::{native_pty_system, Child as PtyChild, CommandBuilder, MasterPty, PtySize};
 use std::io::{self, BufRead, BufReader, Read};
+use vte::{Parser, Perform};
 
 /// A subprocess spawned under a PTY, providing an ANSI-stripped reader
 /// and process lifecycle methods compatible with `stream_subprocess_output`.
@@ -87,15 +88,49 @@ impl PtyProcess {
 // ANSI escape stripping adapter
 // ---------------------------------------------------------------------------
 
+/// Collects printable output while discarding ANSI control sequences.
+#[derive(Default)]
+struct StripAnsiPerformer {
+    out: Vec<u8>,
+}
+
+impl Perform for StripAnsiPerformer {
+    fn print(&mut self, c: char) {
+        let mut buf = [0u8; 4];
+        self.out
+            .extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+    }
+
+    fn execute(&mut self, byte: u8) {
+        // Preserve line-oriented control bytes used by the streaming loop.
+        if matches!(byte, b'\n' | b'\r' | b'\t') {
+            self.out.push(byte);
+        }
+    }
+
+    fn hook(&mut self, _: &vte::Params, _: &[u8], _: bool, _: char) {}
+
+    fn put(&mut self, _: u8) {}
+
+    fn unhook(&mut self) {}
+
+    fn osc_dispatch(&mut self, _: &[&[u8]], _: bool) {}
+
+    fn csi_dispatch(&mut self, _: &vte::Params, _: &[u8], _: bool, _: char) {}
+
+    fn esc_dispatch(&mut self, _: &[u8], _: bool, _: u8) {}
+}
+
 /// A `Read` adapter that strips ANSI escape sequences from the underlying reader.
 ///
-/// Reads raw bytes in chunks, passes them through `strip_ansi_escapes::strip()`,
-/// and serves the cleaned output. This sits between the PTY master and the
-/// `BufReader` that feeds `reader.lines()`.
+/// Uses a stateful `vte::Parser`, which correctly handles escape sequences
+/// that span multiple read chunks.
 struct AnsiStrippingReader {
     inner: Box<dyn Read + Send>,
     buffer: Vec<u8>,
     pos: usize,
+    parser: Parser,
+    performer: StripAnsiPerformer,
 }
 
 impl AnsiStrippingReader {
@@ -104,6 +139,8 @@ impl AnsiStrippingReader {
             inner,
             buffer: Vec::new(),
             pos: 0,
+            parser: Parser::new(),
+            performer: StripAnsiPerformer::default(),
         }
     }
 }
@@ -118,16 +155,26 @@ impl Read for AnsiStrippingReader {
             return Ok(n);
         }
 
-        // Read a chunk of raw PTY output.
-        let mut raw = [0u8; 4096];
-        let n = self.inner.read(&mut raw)?;
-        if n == 0 {
-            return Ok(0); // EOF
-        }
+        loop {
+            // Read a chunk of raw PTY output.
+            let mut raw = [0u8; 4096];
+            let n = self.inner.read(&mut raw)?;
+            if n == 0 {
+                return Ok(0); // EOF
+            }
 
-        // Strip ANSI escape sequences and buffer the result.
-        self.buffer = strip_ansi_escapes::strip(&raw[..n]);
-        self.pos = 0;
+            // Parse bytes incrementally with stateful ANSI parser.
+            self.parser.advance(&mut self.performer, &raw[..n]);
+
+            // Grab newly rendered printable output.
+            if !self.performer.out.is_empty() {
+                self.buffer = std::mem::take(&mut self.performer.out);
+                self.pos = 0;
+                break;
+            }
+
+            // Chunk may contain only control/escape bytes; keep reading.
+        }
 
         let out_n = std::cmp::min(buf.len(), self.buffer.len());
         buf[..out_n].copy_from_slice(&self.buffer[..out_n]);
@@ -136,13 +183,41 @@ impl Read for AnsiStrippingReader {
     }
 }
 
-// Send is safe: inner reader is Send, buffer is owned.
-unsafe impl Send for AnsiStrippingReader {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    struct ChunkedReader {
+        data: Vec<u8>,
+        pos: usize,
+        chunk_size: usize,
+    }
+
+    impl ChunkedReader {
+        fn new(data: Vec<u8>, chunk_size: usize) -> Self {
+            Self {
+                data,
+                pos: 0,
+                chunk_size,
+            }
+        }
+    }
+
+    impl Read for ChunkedReader {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.pos >= self.data.len() {
+                return Ok(0);
+            }
+            let n = std::cmp::min(
+                std::cmp::min(buf.len(), self.chunk_size),
+                self.data.len() - self.pos,
+            );
+            buf[..n].copy_from_slice(&self.data[self.pos..self.pos + n]);
+            self.pos += n;
+            Ok(n)
+        }
+    }
 
     #[test]
     fn test_ansi_stripping_reader_plain_text() {
@@ -173,5 +248,16 @@ mod tests {
         let mut line = String::new();
         reader.read_line(&mut line).unwrap();
         assert_eq!(line.trim(), "{\"type\":\"assistant\",\"text\":\"hello\"}");
+    }
+
+    #[test]
+    fn test_ansi_stripping_reader_split_escape_sequences() {
+        // Deliberately split CSI escapes across chunk boundaries.
+        let input = b"\x1b[31mred\x1b[0m\n".to_vec();
+        let inner: Box<dyn Read + Send> = Box::new(ChunkedReader::new(input, 2));
+        let mut reader = BufReader::new(AnsiStrippingReader::new(inner));
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        assert_eq!(line, "red\n");
     }
 }

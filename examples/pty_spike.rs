@@ -23,6 +23,33 @@ fn main() {
 fn main() {
     use portable_pty::{native_pty_system, CommandBuilder, PtySize};
     use std::io::{BufRead, BufReader, Read, Write};
+    use vte::{Parser, Perform};
+
+    /// Collects printable output while discarding ANSI control sequences.
+    /// Same approach as the production `AnsiStrippingReader` in `pty_spawn.rs`.
+    #[derive(Default)]
+    struct StripAnsi {
+        out: Vec<u8>,
+    }
+
+    impl Perform for StripAnsi {
+        fn print(&mut self, c: char) {
+            let mut buf = [0u8; 4];
+            self.out
+                .extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+        }
+        fn execute(&mut self, byte: u8) {
+            if matches!(byte, b'\n' | b'\r' | b'\t') {
+                self.out.push(byte);
+            }
+        }
+        fn hook(&mut self, _: &vte::Params, _: &[u8], _: bool, _: char) {}
+        fn put(&mut self, _: u8) {}
+        fn unhook(&mut self) {}
+        fn osc_dispatch(&mut self, _: &[&[u8]], _: bool) {}
+        fn csi_dispatch(&mut self, _: &vte::Params, _: &[u8], _: bool, _: char) {}
+        fn esc_dispatch(&mut self, _: &[u8], _: bool, _: u8) {}
+    }
 
     let prompt = std::env::args()
         .nth(1)
@@ -99,8 +126,11 @@ fn main() {
         println!("Saved raw output to pty_raw.log");
     }
 
-    // Strip ANSI
-    let stripped_bytes = strip_ansi_escapes::strip(&raw_bytes);
+    // Strip ANSI using vte (same stateful parser as production pty_spawn.rs)
+    let mut parser = Parser::new();
+    let mut performer = StripAnsi::default();
+    parser.advance(&mut performer, &raw_bytes);
+    let stripped_bytes = performer.out;
     if let Ok(mut f) = std::fs::File::create("pty_stripped.log") {
         let _ = f.write_all(&stripped_bytes);
         println!("Saved stripped output to pty_stripped.log");

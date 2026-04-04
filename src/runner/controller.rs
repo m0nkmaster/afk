@@ -37,7 +37,7 @@ impl PrdCache {
     }
 
     /// Return the cached PrdDocument, re-reading from disk only if mtime has changed.
-    fn get(&mut self, fallback: &PrdDocument) -> &PrdDocument {
+    fn get(&mut self) -> &PrdDocument {
         let mtime = std::fs::metadata(&self.path)
             .and_then(|m| m.modified())
             .unwrap_or(SystemTime::UNIX_EPOCH);
@@ -46,9 +46,8 @@ impl PrdCache {
             if let Ok(prd) = PrdDocument::load(None) {
                 self.prd = prd;
                 self.last_modified = mtime;
-            } else {
-                self.prd = fallback.clone();
             }
+            // On load failure, keep self.prd (last known good state)
         }
         &self.prd
     }
@@ -257,7 +256,7 @@ impl LoopController {
             }
 
             // Reload PRD (from cache — only re-reads disk if mtime changed)
-            let mut current_prd = prd_cache.get(prd).clone();
+            let mut current_prd = prd_cache.get().clone();
 
             // Check if all local tasks complete - if so, try to sync more from sources
             if current_prd.all_stories_complete() {
@@ -329,7 +328,7 @@ impl LoopController {
             }
 
             // Check if task was completed (PRD updated by AI CLI)
-            let updated_prd = prd_cache.get(prd).clone();
+            let updated_prd = prd_cache.get().clone();
             let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
             let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
             if new_completed > old_completed {
@@ -664,7 +663,7 @@ fn run_loop_with_tui_sender(
         }
 
         // Reload PRD (from cache — only re-reads disk if mtime changed)
-        let mut current_prd = prd_cache.get(&prd).clone();
+        let mut current_prd = prd_cache.get().clone();
 
         // Check if all local tasks complete - if so, try to sync more from sources
         if current_prd.all_stories_complete() {
@@ -755,7 +754,7 @@ fn run_loop_with_tui_sender(
         }
 
         // Check if task was completed (PRD updated by AI CLI)
-        let updated_prd = prd_cache.get(&prd).clone();
+        let updated_prd = prd_cache.get().clone();
         let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
         let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
         if new_completed > old_completed {
@@ -795,25 +794,18 @@ fn run_loop_with_tui_sender(
     }
 }
 
-/// Build and spawn the AI CLI command.
+/// Build command parts and log them to the TUI.
 ///
-#[cfg(not(feature = "pty"))]
-/// Constructs the command with the prompt and output format arguments,
-/// then spawns it as a child process with piped stdout/stderr.
+/// Shared by both PTY and piped spawn paths so command construction
+/// stays in one place.
 ///
-/// If multiple models are configured, one is selected pseudo-randomly
-/// and displayed in the output.
-///
-/// Returns the spawned child process or an error result if spawn fails.
-fn build_ai_command(
+/// Returns `(cmd_parts, selected_model)` or an error if no command is configured.
+fn prepare_ai_command(
     config: &AfkConfig,
-    prompt: &str,
     tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
-) -> Result<std::process::Child, super::iteration::IterationResult> {
+) -> Result<Vec<String>, super::iteration::IterationResult> {
     use crate::tui::TuiEvent;
-    use std::process::{Command, Stdio};
 
-    // Select model upfront so we can display it
     let selected_model = config.ai_cli.select_model().map(|s| s.to_string());
 
     let mut cmd_parts = vec![config.ai_cli.command.clone()];
@@ -829,25 +821,40 @@ fn build_ai_command(
         ));
     }
 
-    let command = &cmd_parts[0];
-    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
-
     // Display model selection if multiple models configured
     if config.ai_cli.models.len() > 1 {
         if let Some(ref model) = selected_model {
             let _ = tx.send(TuiEvent::OutputLine(format!(
-                "🎲 Model: {} (1 of {})",
+                "\u{1f3b2} Model: {} (1 of {})",
                 model,
                 config.ai_cli.models.len()
             )));
         }
     }
 
+    let pty_tag = if cfg!(feature = "pty") { " [PTY]" } else { "" };
     let _ = tx.send(TuiEvent::OutputLine(format!(
-        "$ {} {}",
-        command,
-        args.join(" ")
+        "$ {}{}",
+        cmd_parts.join(" "),
+        pty_tag
     )));
+
+    Ok(cmd_parts)
+}
+
+/// Build and spawn the AI CLI command with piped stdout/stderr.
+#[cfg(not(feature = "pty"))]
+fn build_ai_command(
+    config: &AfkConfig,
+    prompt: &str,
+    tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
+) -> Result<std::process::Child, super::iteration::IterationResult> {
+    use std::process::{Command, Stdio};
+
+    let cmd_parts = prepare_ai_command(config, tx)?;
+
+    let command = &cmd_parts[0];
+    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
 
     let mut cmd = Command::new(command);
     cmd.args(&args)
@@ -918,7 +925,6 @@ fn wait_for_completion(
     }
 }
 
-/// Check if a line contains a completion signal.
 /// Run a single iteration with TUI output.
 fn run_iteration_with_tui(
     config: &AfkConfig,
@@ -974,35 +980,11 @@ fn run_iteration_with_tui(
     #[cfg(feature = "pty")]
     {
         use super::pty_spawn::PtyProcess;
-        use crate::tui::TuiEvent;
 
-        // Build cmd_parts for PTY spawn (mirrors build_ai_command logic)
-        let selected_model = config.ai_cli.select_model().map(|s| s.to_string());
-        let mut cmd_parts = vec![config.ai_cli.command.clone()];
-        cmd_parts.extend(
-            config
-                .ai_cli
-                .full_args_with_model(selected_model.as_deref()),
-        );
-
-        if cmd_parts.is_empty() {
-            return super::iteration::IterationResult::failure("No command specified");
-        }
-
-        // Log to TUI
-        if config.ai_cli.models.len() > 1 {
-            if let Some(ref model) = selected_model {
-                let _ = tx.send(TuiEvent::OutputLine(format!(
-                    "\u{1f3b2} Model: {} (1 of {})",
-                    model,
-                    config.ai_cli.models.len()
-                )));
-            }
-        }
-        let _ = tx.send(TuiEvent::OutputLine(format!(
-            "$ {} [PTY]",
-            cmd_parts.join(" ")
-        )));
+        let cmd_parts = match prepare_ai_command(config, &tx) {
+            Ok(parts) => parts,
+            Err(result) => return result,
+        };
 
         let mut pty = match PtyProcess::spawn(&cmd_parts, &prompt) {
             Ok(pty) => pty,

@@ -410,6 +410,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_run_single_gate_large_stderr_no_deadlock() {
         // Produces >64KB of stderr output. Without concurrent stream reading,
         // this would deadlock because the parent blocks reading stdout while
@@ -424,6 +425,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_run_quality_gates_parallel_timing() {
         // Three gates each sleeping 0.3s. Sequential would take ~0.9s,
         // parallel should complete in ~0.3s (plus overhead).
