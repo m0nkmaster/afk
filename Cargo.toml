@@ -47,7 +47,7 @@ ctrlc = "3.4"
 notify = "6.1"
 
 # TUI framework
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.28"
 
 # HTTP client for self-update
