@@ -5,9 +5,9 @@
 //! - `afk tasks` - Display current task list
 //! - `afk tasks sync` - Sync tasks from configured sources
 
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use crate::bootstrap::ensure_ai_cli_configured;
 use crate::cli::output::{get_effective_mode, output_prompt};
@@ -125,17 +125,14 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
         config.ai_cli.command
     )));
 
-    // Build the command
+    // Build the command — stderr is drained on a background thread so a
+    // verbose child can't fill its stderr pipe and deadlock
     let mut cmd = Command::new(command);
-    cmd.args(&args)
-        .arg(prompt)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(&args).arg(prompt);
 
     // Spawn process
-    let mut child = match cmd.spawn() {
-        Ok(child) => child,
+    let mut proc = match crate::process::spawn_streaming(&mut cmd) {
+        Ok(proc) => proc,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
                 if let Some(s) = spinner.take() {
@@ -152,23 +149,21 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
     };
 
     // Stream stdout
-    if let Some(stdout) = child.stdout.take() {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            // Stop spinner on first output
-            if let Some(s) = spinner.take() {
-                s.stop();
-                println!();
-            }
+    let stdout = proc.take_stdout();
+    for line in stdout.lines() {
+        // Stop spinner on first output
+        if let Some(s) = spinner.take() {
+            s.stop();
+            println!();
+        }
 
-            match line {
-                Ok(line) => {
-                    println!("{line}");
-                }
-                Err(e) => {
-                    eprintln!("\x1b[33mWarning:\x1b[0m Error reading output: {e}");
-                    break;
-                }
+        match line {
+            Ok(line) => {
+                println!("{line}");
+            }
+            Err(e) => {
+                eprintln!("\x1b[33mWarning:\x1b[0m Error reading output: {e}");
+                break;
             }
         }
     }
@@ -178,12 +173,16 @@ fn run_ai_cli_for_import(config: &AfkConfig, prompt: &str, output: &str) -> Impo
         s.stop();
     }
 
-    // Wait for process to finish
-    match child.wait() {
-        Ok(status) => {
+    // Wait for process to finish and collect drained stderr
+    match proc.wait() {
+        Ok((status, stderr)) => {
             if !status.success() {
                 let exit_code = status.code().unwrap_or(-1);
                 eprintln!("\x1b[31mError:\x1b[0m AI CLI exited with code {exit_code}");
+                let stderr = stderr.trim();
+                if !stderr.is_empty() {
+                    eprintln!("\x1b[2m{}\x1b[0m", crate::text::ellipsize(stderr, 1000));
+                }
                 return Err(ImportCommandError::ImportError(PrdError::ReadError(
                     std::io::Error::other(format!("AI CLI exited with code {exit_code}")),
                 )));
@@ -320,18 +319,10 @@ pub fn tasks_show_impl(
         };
 
         // Truncate title if too long
-        let title = if task.title.len() > 38 {
-            format!("{}…", &task.title[..37])
-        } else {
-            task.title.clone()
-        };
+        let title = crate::text::ellipsize(&task.title, 38);
 
         // Truncate ID if too long
-        let id = if task.id.len() > 18 {
-            format!("{}…", &task.id[..17])
-        } else {
-            task.id.clone()
-        };
+        let id = crate::text::ellipsize(&task.id, 18);
 
         let ac_count = task.acceptance_criteria.len();
 

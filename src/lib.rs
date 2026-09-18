@@ -15,14 +15,17 @@ pub mod bootstrap;
 pub mod cli;
 pub mod config;
 pub mod feedback;
+pub mod fsutil;
 pub mod git;
 pub mod parser;
 pub mod path_matcher;
 pub mod prd;
+pub mod process;
 pub mod progress;
 pub mod prompt;
 pub mod runner;
 pub mod sources;
+pub mod text;
 pub mod tui;
 pub mod watcher;
 

@@ -281,7 +281,7 @@ impl PrdDocument {
         }
 
         let contents = serde_json::to_string_pretty(self)?;
-        fs::write(&path, contents)?;
+        crate::fsutil::write_atomic(&path, contents.as_bytes())?;
         Ok(())
     }
 
@@ -291,6 +291,28 @@ impl PrdDocument {
         let mut pending: Vec<&UserStory> = self.user_stories.iter().filter(|s| !s.passes).collect();
         pending.sort_unstable_by_key(|s| s.priority);
         pending
+    }
+
+    /// Get stories that are still actionable: pending and not skipped.
+    ///
+    /// Excludes stories whose progress record is marked `Skipped` or whose
+    /// failure count has reached `max_failures`. Sorted by priority.
+    #[must_use]
+    pub fn get_actionable_stories(
+        &self,
+        progress: &crate::progress::SessionProgress,
+        max_failures: u32,
+    ) -> Vec<&UserStory> {
+        let mut actionable: Vec<&UserStory> = self
+            .user_stories
+            .iter()
+            .filter(|s| {
+                !s.passes
+                    && !crate::progress::limits::is_task_skipped(progress, &s.id, max_failures)
+            })
+            .collect();
+        actionable.sort_unstable_by_key(|s| s.priority);
+        actionable
     }
 
     /// Get the next story to work on (highest priority, not passed).

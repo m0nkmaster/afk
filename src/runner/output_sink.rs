@@ -4,15 +4,18 @@
 //! the console (non-TUI) and TUI code paths, fixing the NDJSON bug where
 //! the TUI path would display raw JSON lines that the console path correctly suppressed.
 
+use std::io::BufRead;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::parser::{StreamEvent, ToolType};
+use crate::text::ellipsize;
 use crate::tui::TuiEvent;
 
 use super::make_path_relative;
-use super::output_handler::OutputHandler;
+use super::output_handler::{OutputHandler, COMPLETION_SIGNALS};
 
 /// Trait for receiving streaming output from AI CLI subprocesses.
 ///
@@ -42,6 +45,8 @@ pub trait OutputSink {
 pub struct ConsoleSink<'a> {
     pub output: &'a mut OutputHandler,
     pub tui_sender: Option<&'a Sender<TuiEvent>>,
+    /// Shared interrupt flag (e.g. set by the Ctrl+C handler).
+    pub interrupted: Arc<AtomicBool>,
 }
 
 impl OutputSink for ConsoleSink<'_> {
@@ -74,7 +79,7 @@ impl OutputSink for ConsoleSink<'_> {
     }
 
     fn is_interrupted(&self) -> bool {
-        false // Console path doesn't support TUI interrupts
+        self.interrupted.load(Ordering::SeqCst)
     }
 }
 
@@ -109,12 +114,7 @@ impl OutputSink for TuiSink {
                 if text.is_empty() {
                     return;
                 }
-                let display_text = if text.len() > 200 {
-                    format!("{}...", &text[..197])
-                } else {
-                    text.clone()
-                };
-                let _ = self.tx.send(TuiEvent::OutputLine(display_text));
+                let _ = self.tx.send(TuiEvent::OutputLine(ellipsize(text, 200)));
             }
             ToolStarted {
                 tool_name,
@@ -204,9 +204,7 @@ impl OutputSink for TuiSink {
     }
 
     fn contains_completion_signal(&self, text: &str) -> bool {
-        text.contains("<promise>COMPLETE</promise>")
-            || text.contains("AFK_COMPLETE")
-            || text.contains("AFK_STOP")
+        COMPLETION_SIGNALS.iter().any(|s| text.contains(s))
     }
 
     fn is_interrupted(&self) -> bool {
@@ -222,9 +220,15 @@ impl OutputSink for TuiSink {
 pub struct StreamResult {
     /// Whether a completion signal was detected.
     pub completion_detected: bool,
-    /// Whether the user interrupted (TUI Q press).
+    /// Whether the user interrupted (Q press in TUI, Ctrl+C in console).
     pub user_interrupted: bool,
+    /// Whether the child was killed for exceeding the inactivity timeout.
+    pub stalled: bool,
 }
+
+/// How often the stream loop wakes to poll for interrupts and stalls while
+/// the child produces no output.
+const POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Stream stdout from an AI CLI subprocess through an `OutputSink`.
 ///
@@ -232,93 +236,139 @@ pub struct StreamResult {
 /// shared by both the console and TUI paths. When the parser returns `None` for
 /// a line, JSON-shaped lines are silently suppressed (fixing the TUI bug where
 /// raw NDJSON was forwarded to the display).
+///
+/// Lines are pumped to a channel on a background thread so the main loop can
+/// poll for user interrupts and `inactivity_timeout` stalls even while the
+/// child produces no output. Without this, a hung child (or a silent one while
+/// the user presses Q/Ctrl+C) would block `read_line` indefinitely.
 pub fn stream_subprocess_output(
-    reader: Box<dyn std::io::BufRead>,
+    reader: impl BufRead + Send + 'static,
     kill_fn: &mut dyn FnMut(),
     parser: &mut Option<crate::parser::StreamJsonParser>,
     sink: &mut dyn OutputSink,
     output_buf: &mut String,
+    inactivity_timeout: Option<Duration>,
 ) -> StreamResult {
-    use std::io::BufRead;
+    let (tx, rx) = mpsc::channel::<std::io::Result<String>>();
+    std::thread::spawn(move || {
+        for line in reader.lines() {
+            let is_err = line.is_err();
+            if tx.send(line).is_err() || is_err {
+                break;
+            }
+        }
+    });
 
-    let mut completion_detected = false;
-    let mut user_interrupted = false;
+    let mut result = StreamResult {
+        completion_detected: false,
+        user_interrupted: false,
+        stalled: false,
+    };
+    let mut last_line_at = Instant::now();
 
-    for line in reader.lines() {
-        // Check for user interrupt
+    loop {
+        // Poll the interrupt flag even when the child is silent — otherwise a
+        // quiet long-running child can't be interrupted until it next prints.
         if sink.is_interrupted() {
-            user_interrupted = true;
+            result.user_interrupted = true;
             kill_fn();
             break;
         }
 
-        match line {
+        let line = match rx.recv_timeout(POLL_INTERVAL) {
             Ok(line) => {
-                if let Some(ref mut p) = parser {
-                    // NDJSON mode
-                    if let Some(event) = p.parse_line(&line) {
-                        // Check for completion signal in assistant messages
-                        if let StreamEvent::AssistantMessage { ref text } = event {
-                            if sink.contains_completion_signal(text) {
-                                completion_detected = true;
-                                sink.on_completion();
-                                kill_fn();
-                                break;
-                            }
-                        }
-
-                        sink.on_stream_event(&event);
-                    } else {
-                        // Parser returned None — decide whether to display or suppress.
-                        // JSON-shaped lines are suppressed (they're NDJSON metadata);
-                        // plain text is displayed (fallback for CLIs without stream-json).
-                        let is_json =
-                            line.trim_start().starts_with('{') && line.trim_end().ends_with('}');
-
-                        if is_json {
-                            // Silently skip, but still check for embedded completion signals
-                            if sink.contains_completion_signal(&line) {
-                                completion_detected = true;
-                                sink.on_completion();
-                                kill_fn();
-                                break;
-                            }
-                        } else {
-                            // Plain text fallback — display as-is
-                            sink.on_line(&line);
-                            if sink.contains_completion_signal(&line) {
-                                completion_detected = true;
-                                sink.on_completion();
-                                kill_fn();
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    // Plain text mode — display every line
-                    sink.on_line(&line);
-                    if sink.contains_completion_signal(&line) {
-                        completion_detected = true;
-                        sink.on_completion();
+                last_line_at = Instant::now();
+                line
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                if let Some(limit) = inactivity_timeout {
+                    if last_line_at.elapsed() >= limit {
+                        sink.on_warning(&format!(
+                            "No output for {}s — AI CLI appears stalled, killing it",
+                            limit.as_secs()
+                        ));
+                        result.stalled = true;
                         kill_fn();
                         break;
                     }
                 }
-
-                output_buf.push_str(&line);
-                output_buf.push('\n');
+                continue;
             }
+            // Sender dropped: stdout hit EOF (or the reader thread errored).
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        };
+
+        let line = match line {
+            Ok(line) => line,
             Err(e) => {
                 sink.on_warning(&format!("Error reading output: {e}"));
                 break;
             }
+        };
+
+        if let Some(ref mut p) = parser {
+            // NDJSON mode
+            if let Some(event) = p.parse_line(&line) {
+                // Check for completion signal in assistant messages
+                if let StreamEvent::AssistantMessage { ref text } = event {
+                    if sink.contains_completion_signal(text) {
+                        result.completion_detected = true;
+                        sink.on_completion();
+                        kill_fn();
+                        output_buf.push_str(&line);
+                        output_buf.push('\n');
+                        break;
+                    }
+                }
+
+                sink.on_stream_event(&event);
+            } else {
+                // Parser returned None — decide whether to display or suppress.
+                // JSON-shaped lines are suppressed (they're NDJSON metadata);
+                // plain text is displayed (fallback for CLIs without stream-json).
+                let is_json = line.trim_start().starts_with('{') && line.trim_end().ends_with('}');
+
+                if is_json {
+                    // Silently skip, but still check for embedded completion signals
+                    if sink.contains_completion_signal(&line) {
+                        result.completion_detected = true;
+                        sink.on_completion();
+                        kill_fn();
+                        output_buf.push_str(&line);
+                        output_buf.push('\n');
+                        break;
+                    }
+                } else {
+                    // Plain text fallback — display as-is
+                    sink.on_line(&line);
+                    if sink.contains_completion_signal(&line) {
+                        result.completion_detected = true;
+                        sink.on_completion();
+                        kill_fn();
+                        output_buf.push_str(&line);
+                        output_buf.push('\n');
+                        break;
+                    }
+                }
+            }
+        } else {
+            // Plain text mode — display every line
+            sink.on_line(&line);
+            if sink.contains_completion_signal(&line) {
+                result.completion_detected = true;
+                sink.on_completion();
+                kill_fn();
+                output_buf.push_str(&line);
+                output_buf.push('\n');
+                break;
+            }
         }
+
+        output_buf.push_str(&line);
+        output_buf.push('\n');
     }
 
-    StreamResult {
-        completion_detected,
-        user_interrupted,
-    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -341,11 +391,7 @@ fn stream_event_to_display(event: &StreamEvent) -> (Option<String>, Option<TuiEv
             if text.is_empty() {
                 return (None, None);
             }
-            let display_text = if text.len() > 200 {
-                format!("{}...", &text[..197])
-            } else {
-                text.clone()
-            };
+            let display_text = ellipsize(text, 200);
             let display = format!("\x1b[37m{}\x1b[0m", display_text);
             let tui_event = TuiEvent::OutputLine(text.clone());
             (Some(display), Some(tui_event))

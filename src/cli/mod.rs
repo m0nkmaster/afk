@@ -288,8 +288,9 @@ pub struct GoCommand {
 
     /// Feedback display mode.
     ///
-    /// Options: tui (rich dashboard), full, minimal, off
-    #[arg(long, value_parser = ["tui", "full", "minimal", "off"], default_value = "tui")]
+    /// Options: tui (rich dashboard), full, minimal, off.
+    /// Defaults to the `feedback.mode` config value (tui unless changed).
+    #[arg(long, value_parser = ["tui", "full", "minimal", "off"])]
     pub feedback: Option<String>,
 
     /// Disable ASCII mascot in feedback display.
@@ -992,7 +993,8 @@ mod tests {
                 assert!(!cmd.until_complete);
                 assert!(!cmd.init);
                 assert!(cmd.timeout.is_none());
-                assert_eq!(cmd.feedback, Some("tui".to_string()));
+                // No flag default — falls back to feedback.mode config (tui)
+                assert_eq!(cmd.feedback, None);
                 assert!(!cmd.no_mascot);
             }
             _ => panic!("Expected Go command"),

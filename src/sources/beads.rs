@@ -3,9 +3,25 @@
 //! Loads tasks from the beads issue tracker via the `bd` CLI.
 
 use crate::prd::UserStory;
+use crate::process::{run_with_timeout, ProcessError};
 use regex::Regex;
-use std::process::Command;
 use std::sync::LazyLock;
+use std::time::Duration;
+
+/// Timeout for `bd` subprocess calls — a hung `bd` must not wedge the session.
+const BD_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Run `bd` with a timeout, mapping failures to `BeadsError`.
+fn bd_output(args: &[&str]) -> Result<std::process::Output, BeadsError> {
+    match run_with_timeout("bd", args, BD_TIMEOUT) {
+        Ok(output) => Ok(output),
+        Err(ProcessError::Spawn(e)) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(BeadsError::NotInstalled)
+        }
+        Err(ProcessError::Timeout(d)) => Err(BeadsError::Timeout(d)),
+        Err(_) => Err(BeadsError::CommandFailed),
+    }
+}
 
 // Static regexes for acceptance criteria extraction (compiled once)
 static AC_SECTION_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
@@ -39,28 +55,42 @@ pub fn load_beads_tasks() -> Vec<UserStory> {
 
     let mut tasks = Vec::new();
     let mut seen_ids: HashSet<String> = HashSet::new();
+    let mut warned = false;
+    let mut warn = |e: &BeadsError| {
+        if !warned {
+            eprintln!("Warning: beads source failed: {e}");
+            warned = true;
+        }
+    };
 
     // Get open issues (beads doesn't support comma-separated statuses)
-    if let Ok(open_tasks) = run_bd_list_json("open") {
-        for task in open_tasks {
-            seen_ids.insert(task.id.clone());
-            tasks.push(task);
-        }
-    }
-
-    // Get in_progress issues, deduplicating by ID
-    if let Ok(in_progress_tasks) = run_bd_list_json("in_progress") {
-        for task in in_progress_tasks {
-            if seen_ids.insert(task.id.clone()) {
+    match run_bd_list_json("open") {
+        Ok(open_tasks) => {
+            for task in open_tasks {
+                seen_ids.insert(task.id.clone());
                 tasks.push(task);
             }
         }
+        Err(e) => warn(&e),
+    }
+
+    // Get in_progress issues, deduplicating by ID
+    match run_bd_list_json("in_progress") {
+        Ok(in_progress_tasks) => {
+            for task in in_progress_tasks {
+                if seen_ids.insert(task.id.clone()) {
+                    tasks.push(task);
+                }
+            }
+        }
+        Err(e) => warn(&e),
     }
 
     // If no JSON results, fall back to text parsing of `bd ready`
     if tasks.is_empty() {
-        if let Ok(text_tasks) = parse_beads_text_output() {
-            return text_tasks;
+        match parse_beads_text_output() {
+            Ok(text_tasks) => return text_tasks,
+            Err(e) => warn(&e),
         }
     }
 
@@ -77,10 +107,7 @@ pub fn load_beads_tasks() -> Vec<UserStory> {
 ///
 /// `true` if successfully started, `false` otherwise.
 pub fn start_beads_issue(issue_id: &str) -> bool {
-    match Command::new("bd")
-        .args(["update", issue_id, "--status", "in_progress"])
-        .output()
-    {
+    match bd_output(&["update", issue_id, "--status", "in_progress"]) {
         Ok(output) => output.status.success(),
         Err(_) => false,
     }
@@ -96,7 +123,7 @@ pub fn start_beads_issue(issue_id: &str) -> bool {
 ///
 /// `true` if successfully closed, `false` otherwise.
 pub fn close_beads_issue(issue_id: &str) -> bool {
-    match Command::new("bd").args(["close", issue_id]).output() {
+    match bd_output(&["close", issue_id]) {
         Ok(output) => output.status.success(),
         Err(_) => false,
     }
@@ -104,16 +131,7 @@ pub fn close_beads_issue(issue_id: &str) -> bool {
 
 /// Run `bd list --status <status> --json` and parse the output.
 fn run_bd_list_json(status: &str) -> Result<Vec<UserStory>, BeadsError> {
-    let output = Command::new("bd")
-        .args(["list", "--status", status, "--json"])
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                BeadsError::NotInstalled
-            } else {
-                BeadsError::CommandFailed
-            }
-        })?;
+    let output = bd_output(&["list", "--status", status, "--json"])?;
 
     if !output.status.success() {
         return Err(BeadsError::NonZeroExit);
@@ -193,13 +211,7 @@ fn parse_beads_item(item: &serde_json::Value) -> Option<UserStory> {
 
 /// Parse text output from `bd ready` (fallback).
 fn parse_beads_text_output() -> Result<Vec<UserStory>, BeadsError> {
-    let output = Command::new("bd").args(["ready"]).output().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            BeadsError::NotInstalled
-        } else {
-            BeadsError::CommandFailed
-        }
-    })?;
+    let output = bd_output(&["ready"])?;
 
     if !output.status.success() {
         return Err(BeadsError::NonZeroExit);
@@ -354,6 +366,19 @@ enum BeadsError {
     CommandFailed,
     NonZeroExit,
     InvalidJson,
+    Timeout(Duration),
+}
+
+impl std::fmt::Display for BeadsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BeadsError::NotInstalled => write!(f, "bd CLI not installed"),
+            BeadsError::CommandFailed => write!(f, "failed to run bd"),
+            BeadsError::NonZeroExit => write!(f, "bd exited with an error"),
+            BeadsError::InvalidJson => write!(f, "bd returned invalid JSON"),
+            BeadsError::Timeout(d) => write!(f, "bd timed out after {d:?}"),
+        }
+    }
 }
 
 #[cfg(test)]

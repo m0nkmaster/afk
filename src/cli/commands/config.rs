@@ -256,11 +256,7 @@ fn explain_all() -> ConfigCommandResult {
                         .split('.')
                         .next()
                         .unwrap_or(meta.description);
-                    let desc = if desc.len() > 55 {
-                        format!("{}...", &desc[..52])
-                    } else {
-                        desc.to_string()
-                    };
+                    let desc = crate::text::ellipsize(desc, 55);
                     println!("  \x1b[36m{field}\x1b[0m");
                     println!("    {desc}");
                 } else {

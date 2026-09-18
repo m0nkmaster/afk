@@ -45,6 +45,14 @@ pub static METADATA: &[KeyMetadata] = &[
         default: "120",
         examples: &["30", "60", "240"],
     },
+    KeyMetadata {
+        key: "limits.stall_timeout_minutes",
+        description: "Kill the AI CLI if it produces no output for this many minutes. \
+                      Guards against hung or stalled subprocesses. Set to 0 to disable.",
+        value_type: "non-negative integer",
+        default: "10",
+        examples: &["0", "5", "15"],
+    },
     // output section
     KeyMetadata {
         key: "output.default",
@@ -136,8 +144,8 @@ pub static METADATA: &[KeyMetadata] = &[
     // git section
     KeyMetadata {
         key: "git.auto_commit",
-        description: "Whether to automatically commit after task completion. When true, \
-                      successful task completions trigger a git commit.",
+        description: "Whether to automatically commit after task completion during the \
+                      autonomous loop. Quality gates (feedback_loops) must pass first.",
         value_type: "bool",
         default: "true",
         examples: &["true", "false"],
@@ -176,11 +184,12 @@ pub static METADATA: &[KeyMetadata] = &[
     },
     KeyMetadata {
         key: "feedback.mode",
-        description: "Display mode for feedback. 'full' shows all details, 'minimal' shows \
-                      progress only, 'off' disables display.",
-        value_type: "full | minimal | off",
-        default: "full",
-        examples: &["full", "minimal", "off"],
+        description: "Display mode used by 'afk go' when --feedback is not passed. 'tui' \
+                      shows the rich dashboard, 'full' shows all console details, \
+                      'minimal' shows progress only, 'off' disables display.",
+        value_type: "tui | full | minimal | off",
+        default: "tui",
+        examples: &["tui", "full", "minimal", "off"],
     },
     KeyMetadata {
         key: "feedback.show_files",
@@ -342,7 +351,7 @@ mod tests {
     #[test]
     fn test_keys_for_section() {
         let limits_keys = keys_for_section("limits");
-        assert_eq!(limits_keys.len(), 3);
+        assert_eq!(limits_keys.len(), 4);
         assert!(limits_keys.iter().all(|m| m.key.starts_with("limits.")));
 
         let git_keys = keys_for_section("git");

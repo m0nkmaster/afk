@@ -229,21 +229,29 @@ pub fn go(options: GoOptions) -> GoCommandResult {
         });
     }
 
+    // Resolve feedback mode: --feedback flag wins, then feedback.mode config,
+    // then the default (tui). feedback.enabled=false forces off when the flag
+    // is absent.
+    let feedback = match options.feedback.as_deref() {
+        Some(flag) => Some(flag.to_string()),
+        None if !config.feedback.enabled => Some("off".to_string()),
+        None => Some(config.feedback.mode.as_flag_value().to_string()),
+    };
+
     // Build run options with feedback settings
     let effective_iterations = options.iterations.or(Some(config.limits.max_iterations));
     let run_opts = RunOptions::new()
         .with_iterations(effective_iterations)
         .with_until_complete(options.until_complete)
         .with_timeout(options.timeout)
-        .with_resume(false)
-        .with_feedback_mode(RunOptions::parse_feedback_mode(options.feedback.as_deref()))
-        .with_mascot(!options.no_mascot);
+        .with_feedback_mode(RunOptions::parse_feedback_mode(feedback.as_deref()))
+        .with_mascot(!options.no_mascot && config.feedback.show_mascot);
 
     // Store current branch in progress for next run's comparison
     let _ = update_stored_branch();
 
     // Run the loop - use TUI if requested
-    let result = if RunOptions::is_tui_mode(options.feedback.as_deref()) {
+    let result = if RunOptions::is_tui_mode(feedback.as_deref()) {
         run_loop_with_tui(&config, run_opts)
     } else {
         run_loop_with_options(&config, run_opts)

@@ -16,37 +16,41 @@ mod sleep_guard;
 
 pub use sleep_guard::SleepGuard;
 
-/// Cached current working directory for path relativisation.
+/// Cached (canonicalised) current working directory for path relativisation.
 static CWD: OnceLock<String> = OnceLock::new();
 
-/// Cached cwd with trailing slash for efficient prefix stripping.
-static CWD_WITH_SLASH: OnceLock<String> = OnceLock::new();
+/// Canonicalised cwd, cached. Canonicalisation matters on macOS where
+/// `std::env::current_dir` can return a symlinked path (e.g. /var → /private/var)
+/// while watchers report canonical absolute paths.
+fn cwd_str() -> &'static str {
+    CWD.get_or_init(|| {
+        std::env::current_dir()
+            .and_then(|p| p.canonicalize())
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    })
+}
 
 /// Strip the current working directory from a path to make it relative.
 ///
-/// If the path starts with the cwd, returns the relative portion.
+/// Only strips on a component boundary (cwd + separator) — a bare string
+/// prefix match would wrongly strip `/foo/barbaz` when cwd is `/foo/bar`.
 /// Otherwise returns the original path unchanged.
 pub fn make_path_relative(path: &str) -> &str {
-    let cwd = CWD.get_or_init(|| {
-        std::env::current_dir()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
+    let cwd = cwd_str();
 
     if cwd.is_empty() {
         return path;
     }
 
-    // Use cached cwd with slash to avoid allocation on every call
-    let cwd_with_slash = CWD_WITH_SLASH.get_or_init(|| format!("{cwd}/"));
-
-    if let Some(relative) = path.strip_prefix(cwd_with_slash.as_str()) {
-        return relative;
+    if path == cwd {
+        return ".";
     }
 
-    // Also try without trailing slash (for exact matches)
-    if let Some(relative) = path.strip_prefix(cwd.as_str()) {
-        return relative.strip_prefix('/').unwrap_or(relative);
+    for sep in ['/', '\\'] {
+        if let Some(relative) = path.strip_prefix(&format!("{cwd}{sep}")) {
+            return relative;
+        }
     }
 
     path
@@ -65,8 +69,6 @@ pub struct RunOptions {
     pub until_complete: bool,
     /// Timeout override in minutes.
     pub timeout_minutes: Option<u32>,
-    /// Resume from previous session.
-    pub resume: bool,
     /// Feedback display mode.
     pub feedback_mode: FeedbackMode,
     /// Show ASCII mascot in feedback.
@@ -98,12 +100,6 @@ impl RunOptions {
     /// Set timeout override.
     pub fn with_timeout(mut self, minutes: Option<u32>) -> Self {
         self.timeout_minutes = minutes;
-        self
-    }
-
-    /// Set resume flag.
-    pub fn with_resume(mut self, resume: bool) -> Self {
-        self.resume = resume;
         self
     }
 
@@ -155,6 +151,8 @@ pub enum StopReason {
     UserInterrupt,
     /// AI CLI error with optional details.
     AiError(Option<String>),
+    /// All remaining tasks were skipped (each exceeded max_task_failures).
+    TasksExhausted,
 }
 
 impl std::fmt::Display for StopReason {
@@ -165,15 +163,12 @@ impl std::fmt::Display for StopReason {
             StopReason::Timeout => write!(f, "Session timeout reached"),
             StopReason::NoTasks => write!(f, "No tasks available"),
             StopReason::UserInterrupt => write!(f, "User interrupted"),
+            StopReason::TasksExhausted => {
+                write!(f, "All remaining tasks exceeded max_task_failures")
+            }
             StopReason::AiError(None) => write!(f, "AI CLI error"),
             StopReason::AiError(Some(msg)) => {
-                // Truncate long messages for display
-                let truncated = if msg.len() > 60 {
-                    format!("{}...", &msg[..57])
-                } else {
-                    msg.clone()
-                };
-                write!(f, "AI CLI error: {}", truncated)
+                write!(f, "AI CLI error: {}", crate::text::ellipsize(msg, 60))
             }
         }
     }
@@ -208,6 +203,10 @@ mod tests {
         assert_eq!(StopReason::Timeout.to_string(), "Session timeout reached");
         assert_eq!(StopReason::NoTasks.to_string(), "No tasks available");
         assert_eq!(StopReason::UserInterrupt.to_string(), "User interrupted");
+        assert_eq!(
+            StopReason::TasksExhausted.to_string(),
+            "All remaining tasks exceeded max_task_failures"
+        );
         assert_eq!(StopReason::AiError(None).to_string(), "AI CLI error");
         assert_eq!(
             StopReason::AiError(Some("out of credits".to_string())).to_string(),

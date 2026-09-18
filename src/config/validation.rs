@@ -15,6 +15,7 @@ impl ConfigField for LimitsConfig {
             "max_iterations" => Some(self.max_iterations.to_string()),
             "max_task_failures" => Some(self.max_task_failures.to_string()),
             "timeout_minutes" => Some(self.timeout_minutes.to_string()),
+            "stall_timeout_minutes" => Some(self.stall_timeout_minutes.to_string()),
             "prevent_sleep" => Some(self.prevent_sleep.to_string()),
             _ => None,
         }
@@ -43,6 +44,14 @@ impl ConfigField for LimitsConfig {
                 })?;
                 Ok(())
             }
+            "stall_timeout_minutes" => {
+                self.stall_timeout_minutes =
+                    value.parse().map_err(|_| FieldError::InvalidValue {
+                        key: key.into(),
+                        expected: "non-negative integer (0 disables)".into(),
+                    })?;
+                Ok(())
+            }
             "prevent_sleep" => {
                 self.prevent_sleep = parse_bool(value).map_err(|_| FieldError::InvalidValue {
                     key: key.into(),
@@ -59,6 +68,7 @@ impl ConfigField for LimitsConfig {
             "max_iterations",
             "max_task_failures",
             "timeout_minutes",
+            "stall_timeout_minutes",
             "prevent_sleep",
         ]
     }
@@ -324,14 +334,7 @@ impl ConfigField for FeedbackConfig {
     fn get_field(&self, key: &str) -> Option<String> {
         match key {
             "enabled" => Some(self.enabled.to_string()),
-            "mode" => Some(
-                match self.mode {
-                    FeedbackMode::Full => "full",
-                    FeedbackMode::Minimal => "minimal",
-                    FeedbackMode::Off => "off",
-                }
-                .to_string(),
-            ),
+            "mode" => Some(self.mode.as_flag_value().to_string()),
             "show_files" => Some(self.show_files.to_string()),
             "show_metrics" => Some(self.show_metrics.to_string()),
             "show_mascot" => Some(self.show_mascot.to_string()),
@@ -354,13 +357,14 @@ impl ConfigField for FeedbackConfig {
             }
             "mode" => {
                 self.mode = match value.to_lowercase().as_str() {
+                    "tui" => FeedbackMode::Tui,
                     "full" => FeedbackMode::Full,
                     "minimal" => FeedbackMode::Minimal,
                     "off" => FeedbackMode::Off,
                     _ => {
                         return Err(FieldError::InvalidValue {
                             key: key.into(),
-                            expected: "full, minimal, or off".into(),
+                            expected: "tui, full, minimal, or off".into(),
                         })
                     }
                 };

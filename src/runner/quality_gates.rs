@@ -70,6 +70,18 @@ impl Default for QualityGateResult {
 ///
 /// QualityGateResult with pass/fail status for each gate.
 pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) -> QualityGateResult {
+    run_quality_gates_reporting(feedback_loops, verbose, &|line| println!("{line}"))
+}
+
+/// Run all configured quality gates, routing status lines through `report`.
+///
+/// Used by the TUI path so gate progress is delivered as `TuiEvent`s instead
+/// of raw prints that would corrupt the alternate screen.
+pub fn run_quality_gates_reporting(
+    feedback_loops: &FeedbackLoopsConfig,
+    verbose: bool,
+    report: &dyn Fn(&str),
+) -> QualityGateResult {
     let mut result = QualityGateResult::new();
 
     // Collect gates to run
@@ -94,16 +106,16 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
     }
 
     if gates.is_empty() {
-        println!("\x1b[2mNo quality gates configured.\x1b[0m");
+        report("\x1b[2mNo quality gates configured.\x1b[0m");
         return result;
     }
 
-    println!();
-    println!(
+    report("");
+    report(&format!(
         "\x1b[1mRunning {} quality gates in parallel...\x1b[0m",
         gates.len()
-    );
-    println!();
+    ));
+    report("");
 
     // Spawn all gates concurrently
     let handles: Vec<_> = gates
@@ -129,29 +141,29 @@ pub fn run_quality_gates(feedback_loops: &FeedbackLoopsConfig, verbose: bool) ->
             "\x1b[31m✗\x1b[0m"
         };
 
-        println!(
+        report(&format!(
             "  {} {} ({:.1}s)",
             status, gate_result.name, gate_result.duration_seconds
-        );
+        ));
 
         if verbose && !gate_result.output.is_empty() {
             for line in gate_result.output.lines() {
-                println!("      {line}");
+                report(&format!("      {line}"));
             }
         }
 
         result.add_gate(gate_result);
     }
 
-    println!();
+    report("");
 
     if result.all_passed {
-        println!("\x1b[32m✓ All gates passed\x1b[0m");
+        report("\x1b[32m✓ All gates passed\x1b[0m");
     } else {
-        println!(
+        report(&format!(
             "\x1b[31m✗ Some gates failed: {}\x1b[0m",
             result.failed_gates.join(", ")
-        );
+        ));
     }
 
     result

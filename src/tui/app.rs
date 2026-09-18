@@ -6,7 +6,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -142,11 +144,6 @@ pub struct TuiState {
 const DEFAULT_MAX_OUTPUT_LINES: usize = 500;
 
 impl TuiState {
-    /// Create a new TuiState with default settings.
-    fn new() -> Self {
-        Self::with_max_output_lines(DEFAULT_MAX_OUTPUT_LINES)
-    }
-
     /// Create a new TuiState with a custom max output lines limit.
     pub fn with_max_output_lines(max_output_lines: usize) -> Self {
         let now = Instant::now();
@@ -230,11 +227,18 @@ pub struct TuiApp {
     state: TuiState,
     /// Last tick time.
     last_tick: Instant,
+    /// Tick rate for spinner/redraw.
+    tick_rate: Duration,
 }
 
 impl TuiApp {
     /// Create a new TUI application.
     pub fn new() -> io::Result<Self> {
+        Self::with_options(DEFAULT_MAX_OUTPUT_LINES, Duration::from_millis(100))
+    }
+
+    /// Create a TUI application with configured buffer size and tick rate.
+    pub fn with_options(max_output_lines: usize, tick_rate: Duration) -> io::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -247,8 +251,9 @@ impl TuiApp {
             terminal,
             rx,
             tx,
-            state: TuiState::new(),
+            state: TuiState::with_max_output_lines(max_output_lines),
             last_tick: Instant::now(),
+            tick_rate,
         })
     }
 
@@ -259,7 +264,7 @@ impl TuiApp {
 
     /// Run the TUI event loop.
     pub fn run(&mut self) -> io::Result<()> {
-        let tick_rate = Duration::from_millis(100);
+        let tick_rate = self.tick_rate;
 
         loop {
             // Draw UI - borrow state separately
@@ -273,6 +278,10 @@ impl TuiApp {
                     if key.kind == KeyEventKind::Press {
                         match key.code {
                             KeyCode::Char('q') | KeyCode::Esc => break,
+                            // Ctrl+C arrives as a key event in raw mode
+                            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                                break;
+                            }
                             KeyCode::Up | KeyCode::Char('k') => self.state.scroll_up(),
                             KeyCode::Down | KeyCode::Char('j') => self.state.scroll_down(),
                             KeyCode::Char('g') => self.state.scroll_to_top(),

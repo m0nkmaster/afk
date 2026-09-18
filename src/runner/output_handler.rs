@@ -54,6 +54,10 @@ pub struct OutputHandler {
     feedback_mode: FeedbackMode,
     /// Whether to show mascot.
     show_mascot: bool,
+    /// Whether to show changed files in feedback/summaries.
+    show_files: bool,
+    /// Whether to show metrics (tool calls, line counts) in feedback/summaries.
+    show_metrics: bool,
     /// Current iteration context.
     iteration_current: u32,
     /// Maximum iterations.
@@ -77,6 +81,8 @@ impl OutputHandler {
             metrics_collector: MetricsCollector::new(),
             feedback_mode: FeedbackMode::None,
             show_mascot: true,
+            show_files: true,
+            show_metrics: true,
             iteration_current: 0,
             iteration_max: 0,
             task_id: None,
@@ -110,6 +116,18 @@ impl OutputHandler {
     /// Set whether to show mascot.
     pub fn set_show_mascot(&mut self, show: bool) {
         self.show_mascot = show;
+    }
+
+    /// Set which detail sections to show (`feedback.show_files` /
+    /// `feedback.show_metrics` config). Applied to both the console summary
+    /// and the live `FeedbackDisplay`.
+    pub fn set_display_options(&mut self, show_files: bool, show_metrics: bool) {
+        self.show_files = show_files;
+        self.show_metrics = show_metrics;
+        if let Some(ref mut display) = self.feedback_display {
+            display.set_show_files(show_files);
+            display.set_show_metrics(show_metrics);
+        }
     }
 
     /// Set activity thresholds for the metrics collector.
@@ -150,6 +168,8 @@ impl OutputHandler {
         // Create and start feedback display if mode is not None
         if let Some(display_mode) = self.feedback_mode.to_display_mode() {
             let mut display = FeedbackDisplay::with_options(display_mode, self.show_mascot);
+            display.set_show_files(self.show_files);
+            display.set_show_metrics(self.show_metrics);
             display.start();
             self.feedback_display = Some(display);
         }
@@ -227,12 +247,10 @@ impl OutputHandler {
 
         // Show task description if available
         if let Some(ref desc) = self.task_description {
-            let truncated = if desc.len() > 70 {
-                format!("{}...", &desc[..67])
-            } else {
-                desc.clone()
-            };
-            println!("\x1b[36m│\x1b[0m \x1b[2;3m{}\x1b[0m", truncated);
+            println!(
+                "\x1b[36m│\x1b[0m \x1b[2;3m{}\x1b[0m",
+                crate::text::ellipsize(desc, 70)
+            );
         }
 
         println!(
@@ -421,8 +439,8 @@ impl OutputHandler {
             summary.push_str(&format!("\x1b[2m{:02}:{:02}\x1b[0m ", mins, secs));
         }
 
-        // Tool calls
-        if metrics.tool_calls > 0 {
+        // Tool calls (metrics section)
+        if self.show_metrics && metrics.tool_calls > 0 {
             summary.push_str(&format!(
                 "\x1b[33m{}\x1b[0m \x1b[2mcalls\x1b[0m  ",
                 metrics.tool_calls
@@ -431,15 +449,15 @@ impl OutputHandler {
 
         // Files changed (only created/modified/deleted, not reads)
         let total_files = metrics.files_changed();
-        if total_files > 0 {
+        if self.show_files && total_files > 0 {
             summary.push_str(&format!(
                 "\x1b[34m{}\x1b[0m \x1b[2mfiles\x1b[0m  ",
                 total_files
             ));
         }
 
-        // Lines added/removed
-        if metrics.lines_added > 0 || metrics.lines_removed > 0 {
+        // Lines added/removed (metrics section)
+        if self.show_metrics && (metrics.lines_added > 0 || metrics.lines_removed > 0) {
             summary.push_str(&format!(
                 "\x1b[32m+{}\x1b[0m\x1b[2m/\x1b[0m\x1b[31m-{}\x1b[0m  ",
                 metrics.lines_added, metrics.lines_removed

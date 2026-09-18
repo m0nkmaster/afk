@@ -97,16 +97,11 @@ pub fn commit(message: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Auto-commit with a conventional commit message.
+/// Auto-commit all changes with the given message.
 ///
-/// Format: `feat: [task_id] - message`
-pub fn auto_commit(task_id: &str, message: &str) -> bool {
-    let commit_msg = if message.is_empty() {
-        format!("feat: {task_id}")
-    } else {
-        format!("feat: {task_id} - {message}")
-    };
-
+/// Stages everything (`git add -A`) and commits. Returns true when a commit
+/// was created or there was nothing to commit.
+pub fn auto_commit(message: &str) -> bool {
     // Stage all changes first
     if !stage_all() {
         return false;
@@ -117,7 +112,7 @@ pub fn auto_commit(task_id: &str, message: &str) -> bool {
         return true; // Nothing to commit is still success
     }
 
-    commit(&commit_msg)
+    commit(message)
 }
 
 /// Get the short hash of the current commit.

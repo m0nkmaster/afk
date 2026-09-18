@@ -157,6 +157,10 @@ pub struct LimitsConfig {
     /// Maximum time in minutes before timeout.
     #[serde(default = "default_timeout_minutes")]
     pub timeout_minutes: u32,
+    /// Kill the AI CLI if it produces no output for this many minutes.
+    /// Guards against hung/stalled subprocesses; `0` disables the watchdog.
+    #[serde(default = "default_stall_timeout_minutes")]
+    pub stall_timeout_minutes: u32,
     /// Prevent system sleep during autonomous sessions.
     /// Uses `caffeinate` on macOS, `systemd-inhibit` on Linux.
     #[serde(default = "default_true")]
@@ -175,12 +179,17 @@ fn default_timeout_minutes() -> u32 {
     120
 }
 
+fn default_stall_timeout_minutes() -> u32 {
+    10
+}
+
 impl Default for LimitsConfig {
     fn default() -> Self {
         Self {
             max_iterations: default_max_iterations(),
             max_task_failures: default_max_task_failures(),
             timeout_minutes: default_timeout_minutes(),
+            stall_timeout_minutes: default_stall_timeout_minutes(),
             prevent_sleep: default_true(),
         }
     }
@@ -489,13 +498,27 @@ impl Default for ArchiveConfig {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FeedbackMode {
-    /// Full TUI with all panels (default).
+    /// Rich terminal dashboard (default).
     #[default]
+    Tui,
+    /// Full console output with all details.
     Full,
     /// Minimal output display.
     Minimal,
     /// No feedback display.
     Off,
+}
+
+impl FeedbackMode {
+    /// The `--feedback` CLI flag value corresponding to this mode.
+    pub fn as_flag_value(&self) -> &'static str {
+        match self {
+            FeedbackMode::Tui => "tui",
+            FeedbackMode::Full => "full",
+            FeedbackMode::Minimal => "minimal",
+            FeedbackMode::Off => "off",
+        }
+    }
 }
 
 /// Configuration for feedback display settings.
@@ -647,7 +670,7 @@ impl AfkConfig {
         }
 
         let contents = serde_json::to_string_pretty(self)?;
-        fs::write(&path, contents)?;
+        crate::fsutil::write_atomic(&path, contents.as_bytes())?;
         Ok(())
     }
 
@@ -919,6 +942,7 @@ mod tests {
         assert_eq!(config.max_iterations, 200);
         assert_eq!(config.max_task_failures, 50);
         assert_eq!(config.timeout_minutes, 120);
+        assert_eq!(config.stall_timeout_minutes, 10);
         assert!(config.prevent_sleep);
     }
 
@@ -928,6 +952,7 @@ mod tests {
             max_iterations: 5,
             max_task_failures: 1,
             timeout_minutes: 30,
+            stall_timeout_minutes: 2,
             prevent_sleep: false,
         };
         assert_eq!(config.max_iterations, 5);
@@ -1264,7 +1289,7 @@ mod tests {
     fn test_feedback_config_defaults() {
         let config = FeedbackConfig::default();
         assert!(config.enabled);
-        assert_eq!(config.mode, FeedbackMode::Full);
+        assert_eq!(config.mode, FeedbackMode::Tui);
         assert!(config.show_files);
         assert!(config.show_metrics);
         assert!(config.show_mascot);

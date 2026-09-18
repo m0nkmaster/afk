@@ -3,8 +3,12 @@
 //! Uses the `gh` CLI to fetch issues and convert them to UserStory.
 
 use crate::prd::UserStory;
+use crate::process::run_with_timeout;
 use serde::Deserialize;
-use std::process::Command;
+use std::time::Duration;
+
+/// Timeout for `gh` subprocess calls — a network hang must not wedge the loop.
+const GH_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// A GitHub issue as returned by `gh issue list --json`.
 #[derive(Debug, Clone, Deserialize)]
@@ -74,7 +78,7 @@ pub fn load_github_tasks(repo: Option<&str>, labels: &[String]) -> Vec<UserStory
     }
 
     // Run gh command
-    let output = match Command::new("gh").args(&args).output() {
+    let output = match run_with_timeout("gh", &args, GH_TIMEOUT) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("Warning: Failed to run gh: {e}");
@@ -219,9 +223,7 @@ fn extract_list_item(line: &str) -> Option<String> {
 
 /// Check if gh CLI is available.
 fn gh_available() -> bool {
-    Command::new("gh")
-        .arg("--version")
-        .output()
+    run_with_timeout("gh", &["--version"], Duration::from_secs(10))
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -245,17 +247,18 @@ pub fn close_github_issue(issue_number: i64, repo: Option<&str>) -> bool {
     }
 
     let issue_str = issue_number.to_string();
-    let mut cmd = Command::new("gh");
-    cmd.args(["issue", "close", &issue_str]);
+    let mut args = vec!["issue", "close", issue_str.as_str()];
 
     // Add repo if specified
+    let repo_arg;
     if let Some(r) = repo {
         if !r.is_empty() {
-            cmd.arg(format!("--repo={r}"));
+            repo_arg = format!("--repo={r}");
+            args.push(repo_arg.as_str());
         }
     }
 
-    match cmd.output() {
+    match run_with_timeout("gh", &args, GH_TIMEOUT) {
         Ok(output) => output.status.success(),
         Err(_) => false,
     }

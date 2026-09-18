@@ -327,11 +327,7 @@ fn generate_slug(text: &str) -> String {
 
 /// Truncate a string to a maximum length, adding ellipsis if needed.
 fn truncate_string(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len])
-    }
+    crate::text::ellipsize(s, max_len + 3)
 }
 
 #[cfg(test)]

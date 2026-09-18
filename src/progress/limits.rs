@@ -120,6 +120,18 @@ pub fn should_skip_task(progress: &SessionProgress, task_id: &str, max_failures:
     }
 }
 
+/// Check if a task is excluded from selection entirely.
+///
+/// True when the task is explicitly marked `Skipped` or has reached the
+/// failure cap. Tasks marked `Failed` remain actionable (they may be retried)
+/// until they hit the cap.
+pub fn is_task_skipped(progress: &SessionProgress, task_id: &str, max_failures: u32) -> bool {
+    progress
+        .get_task(task_id)
+        .is_some_and(|t| t.status == TaskStatus::Skipped)
+        || should_skip_task(progress, task_id, max_failures)
+}
+
 /// Get the failure count for a task.
 pub fn get_failure_count(progress: &SessionProgress, task_id: &str) -> u32 {
     progress

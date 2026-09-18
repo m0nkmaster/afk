@@ -191,12 +191,7 @@ fn draw_header(f: &mut Frame, area: Rect, state: &TuiState) {
         ));
         if let Some(ref title) = state.task_title {
             // Truncate title if too long
-            let max_title_len = 30;
-            let display_title = if title.len() > max_title_len {
-                format!("{}...", &title[..max_title_len - 3])
-            } else {
-                title.clone()
-            };
+            let display_title = crate::text::ellipsize(title, 30);
             spans.push(Span::styled(
                 format!(": {}", display_title),
                 Style::default().fg(Color::DarkGray),

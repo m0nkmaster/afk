@@ -11,7 +11,8 @@ pub use archive::{
     ArchiveMetadata, BranchChangeInfo,
 };
 pub use limits::{
-    check_limits, get_failure_count, should_skip_task, LimitCheckResult, LimitSignal,
+    check_limits, get_failure_count, is_task_skipped, should_skip_task, LimitCheckResult,
+    LimitSignal,
 };
 
 use crate::config::PROGRESS_FILE;
@@ -195,7 +196,7 @@ impl SessionProgress {
         }
 
         let contents = serde_json::to_string_pretty(self)?;
-        fs::write(&path, contents)?;
+        crate::fsutil::write_atomic(&path, contents.as_bytes())?;
         Ok(())
     }
 
@@ -393,6 +394,19 @@ impl SessionProgress {
             },
         )
     }
+}
+
+/// Record that an iteration has started: increments the session counter and
+/// persists it. Returns the new iteration number.
+///
+/// Kept separate from prompt generation so that `afk prompt` previews and
+/// spawn failures don't record phantom iterations.
+pub fn record_iteration(root: Option<&Path>) -> Result<u32, ProgressError> {
+    let path = root.map(|r| r.join(PROGRESS_FILE));
+    let mut progress = SessionProgress::load(path.as_deref())?;
+    let iteration = progress.increment_iteration();
+    progress.save(path.as_deref())?;
+    Ok(iteration)
 }
 
 #[cfg(test)]

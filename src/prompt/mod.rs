@@ -114,18 +114,19 @@ pub fn generate_prompt_with_root(
     limit_override: Option<u32>,
     root: Option<&Path>,
 ) -> Result<PromptResult, PromptError> {
-    // Load progress
+    // Load progress (read-only — iteration accounting happens in the runner
+    // once the AI CLI has actually spawned, via `progress::record_iteration`)
     let progress_path = root.map(|r| r.join(".afk/progress.json"));
-    let mut progress = SessionProgress::load(progress_path.as_deref())?;
+    let progress = SessionProgress::load(progress_path.as_deref())?;
 
     // Load tasks
     let tasks_path = root.map(|r| r.join(".afk/tasks.json"));
     let prd = PrdDocument::load(tasks_path.as_deref())?;
 
-    // Calculate counts
-    let pending_stories = prd.get_pending_stories();
+    // Calculate counts over actionable stories (pending minus skipped)
+    let actionable = prd.get_actionable_stories(&progress, config.limits.max_task_failures);
     let total_stories = prd.user_stories.len();
-    let completed_count = total_stories - pending_stories.len();
+    let completed_count = total_stories - prd.get_pending_stories().len();
 
     // Max iterations for display (limit enforcement is in loop controller)
     let max_iterations = limit_override.unwrap_or(config.limits.max_iterations);
@@ -138,18 +139,12 @@ pub fn generate_prompt_with_root(
         None
     };
 
-    // Increment iteration for tracking (skip when all complete to avoid phantom counts)
+    // The next iteration number (recorded by the runner when it spawns).
     let iteration = if all_complete {
         progress.iterations
     } else {
-        progress.increment_iteration()
+        progress.iterations + 1
     };
-
-    // Save the updated progress (skip when all complete — nothing changed)
-    if !all_complete {
-        let progress_save_path = root.map(|r| r.join(".afk/progress.json"));
-        progress.save(progress_save_path.as_deref())?;
-    }
 
     // Build feedback loops dict (filter out None values)
     let gate_count = [
@@ -183,8 +178,8 @@ pub fn generate_prompt_with_root(
     // Get template
     let template_str = get_template_with_root(config, root);
 
-    // Get next story for context
-    let next_story: Option<NextStoryContext> = pending_stories.first().map(|s| NextStoryContext {
+    // Get next story for context (first actionable story)
+    let next_story: Option<NextStoryContext> = actionable.first().map(|s| NextStoryContext {
         id: s.id.clone(),
         priority: s.priority,
     });
@@ -275,7 +270,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_prompt_increments_iteration() {
+    fn test_generate_prompt_reports_next_iteration_without_saving() {
         let temp = TempDir::new().unwrap();
         let (progress_path, tasks_path) = setup_test_env(&temp);
 
@@ -294,13 +289,44 @@ mod tests {
         let config = AfkConfig::default();
         let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
 
-        // Should increment from 5 to 6
+        // Should report the next iteration (6) without mutating progress —
+        // the counter is recorded by the runner once the AI CLI spawns.
         assert_eq!(result.iteration, 6);
         assert!(result.prompt.contains("Iteration: 6/200"));
 
-        // Verify progress was saved
+        // Verify progress file was NOT updated (prompt generation is read-only)
         let loaded_progress = SessionProgress::load(Some(&progress_path)).unwrap();
-        assert_eq!(loaded_progress.iterations, 6);
+        assert_eq!(loaded_progress.iterations, 5);
+    }
+
+    #[test]
+    fn test_generate_prompt_skips_exhausted_tasks() {
+        let temp = TempDir::new().unwrap();
+        let (progress_path, tasks_path) = setup_test_env(&temp);
+
+        // Task story-1 has hit the failure cap — it should not be "next"
+        let mut progress = SessionProgress::new();
+        progress.set_task_status(
+            "story-1",
+            crate::progress::TaskStatus::Skipped,
+            "test",
+            Some("too many failures".to_string()),
+        );
+        progress.save(Some(&progress_path)).unwrap();
+
+        let mut story2 = UserStory::new("story-2", "Second Story");
+        story2.priority = 2;
+        let prd = PrdDocument {
+            user_stories: vec![UserStory::new("story-1", "First Story"), story2],
+            ..Default::default()
+        };
+        prd.save(Some(&tasks_path)).unwrap();
+
+        let config = AfkConfig::default();
+        let result = generate_prompt_with_root(&config, false, None, Some(temp.path())).unwrap();
+
+        assert!(result.prompt.contains("Next story: story-2"));
+        assert!(!result.prompt.contains("Next story: story-1"));
     }
 
     #[test]

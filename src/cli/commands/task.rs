@@ -73,13 +73,13 @@ pub fn task(task_id: &str) -> TaskCommandResult {
         if let Some(ref started) = task.started_at {
             println!(
                 "\x1b[1mStarted:\x1b[0m {}",
-                &started[..19].replace('T', " ")
+                crate::text::truncate_chars(started, 19).replace('T', " ")
             );
         }
         if let Some(ref completed) = task.completed_at {
             println!(
                 "\x1b[1mCompleted:\x1b[0m {}",
-                &completed[..19].replace('T', " ")
+                crate::text::truncate_chars(completed, 19).replace('T', " ")
             );
         }
     }

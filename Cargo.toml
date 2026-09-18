@@ -53,6 +53,9 @@ crossterm = "0.28"
 # HTTP client for self-update
 reqwest = { version = "0.12", features = ["json"] }
 
+# SHA-256 verification of self-update downloads
+sha2 = "0.10"
+
 # PTY support (opt-in)
 portable-pty = { version = "0.8", optional = true }
 vte = { version = "0.14", optional = true }

@@ -53,25 +53,18 @@ pub fn status(verbose: bool) -> StatusCommandResult {
                 .user_stories
                 .iter()
                 .find(|s| s.id == task.id)
-                .map(|s| {
-                    if s.title.len() > 50 {
-                        format!("{}...", &s.title[..47])
-                    } else {
-                        s.title.clone()
-                    }
-                })
+                .map(|s| crate::text::ellipsize(&s.title, 50))
                 .unwrap_or_else(|| "(unknown)".to_string());
             println!("  Current: \x1b[33m{}\x1b[0m - {}", task.id, title);
         }
 
         // Show next pending task
         if let Some(next) = prd.get_next_story() {
-            let title = if next.title.len() > 50 {
-                format!("{}...", &next.title[..47])
-            } else {
-                next.title.clone()
-            };
-            println!("  Next: \x1b[36m{}\x1b[0m - {}", next.id, title);
+            println!(
+                "  Next: \x1b[36m{}\x1b[0m - {}",
+                next.id,
+                crate::text::ellipsize(&next.title, 50)
+            );
         }
     }
     println!();
@@ -80,7 +73,7 @@ pub fn status(verbose: bool) -> StatusCommandResult {
     println!("\x1b[1mSession\x1b[0m");
     println!(
         "  Started: {}",
-        &progress.started_at[..19].replace('T', " ")
+        crate::text::truncate_chars(&progress.started_at, 19).replace('T', " ")
     );
     println!("  Iterations: {}", progress.iterations);
 
@@ -237,11 +230,7 @@ fn print_verbose_details(config: &AfkConfig, prd: &PrdDocument, progress: &Sessi
         println!("  (none recorded)");
     } else {
         for (i, (task_id, learning)) in learnings.iter().enumerate() {
-            let truncated = if learning.len() > 60 {
-                format!("{}...", &learning[..57])
-            } else {
-                learning.clone()
-            };
+            let truncated = crate::text::ellipsize(learning, 60);
             println!("  {}. [{}] {}", i + 1, task_id, truncated);
         }
     }

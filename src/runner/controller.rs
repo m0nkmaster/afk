@@ -10,10 +10,16 @@ use std::time::{Instant, SystemTime};
 
 use crate::config::AfkConfig;
 use crate::prd::{mark_story_in_progress, sync_prd_with_root, PrdDocument};
+use crate::progress::{SessionProgress, TaskStatus};
 
 use super::iteration::IterationRunner;
 use super::output_handler::{FeedbackMode, OutputHandler};
 use super::{RunOptions, RunResult, StopReason};
+
+/// Abort the session after this many consecutive iteration failures —
+/// protects against infinite failure loops burning tokens when something
+/// is systematically broken (bad CLI config, exhausted quota, etc.).
+const MAX_CONSECUTIVE_FAILURES: u32 = 5;
 
 /// Cache for PrdDocument that only re-reads from disk when the file's mtime changes.
 /// Replaces redundant `PrdDocument::load(None)` calls in the hot loop with a single `stat()`.
@@ -51,6 +57,21 @@ impl PrdCache {
         }
         &self.prd
     }
+
+    /// Force a fresh read from disk, bypassing the mtime check.
+    ///
+    /// Used after each iteration: the AI CLI may rewrite tasks.json within the
+    /// same mtime tick or via atomic replace, which the mtime check can miss.
+    /// On load failure the last known good state is kept.
+    fn refresh(&mut self) -> &PrdDocument {
+        if let Ok(prd) = PrdDocument::load(None) {
+            self.prd = prd;
+            self.last_modified = std::fs::metadata(&self.path)
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
+        }
+        &self.prd
+    }
 }
 
 /// Controls the main loop lifecycle.
@@ -78,33 +99,40 @@ impl LoopController {
             config.feedback.active_threshold_secs,
             config.feedback.thinking_threshold_secs,
         );
+        output.set_display_options(config.feedback.show_files, config.feedback.show_metrics);
 
         let mut iter_output = OutputHandler::with_feedback(feedback_mode, show_mascot);
         iter_output.set_activity_thresholds(
             config.feedback.active_threshold_secs,
             config.feedback.thinking_threshold_secs,
         );
+        iter_output.set_display_options(config.feedback.show_files, config.feedback.show_metrics);
 
-        let iteration_runner = IterationRunner::with_output_handler(config.clone(), iter_output);
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let mut iteration_runner =
+            IterationRunner::with_output_handler(config.clone(), iter_output);
+        iteration_runner.set_interrupted(interrupted.clone());
 
         Self {
             config,
             output,
             iteration_runner,
-            interrupted: Arc::new(AtomicBool::new(false)),
+            interrupted,
         }
     }
 
     /// Create with custom output handler (legacy).
     pub fn with_output(config: AfkConfig, output: OutputHandler) -> Self {
-        let iteration_runner =
+        let interrupted = Arc::new(AtomicBool::new(false));
+        let mut iteration_runner =
             IterationRunner::with_output_handler(config.clone(), OutputHandler::new());
+        iteration_runner.set_interrupted(interrupted.clone());
 
         Self {
             config,
             output,
             iteration_runner,
-            interrupted: Arc::new(AtomicBool::new(false)),
+            interrupted,
         }
     }
 
@@ -120,7 +148,6 @@ impl LoopController {
     /// * `max_iterations` - Override for max iterations (uses config default if None)
     /// * `until_complete` - If true, run until all tasks done
     /// * `timeout_override` - Override timeout in minutes
-    /// * `resume` - If true, continue from last session
     ///
     /// # Returns
     ///
@@ -130,7 +157,6 @@ impl LoopController {
         max_iterations: Option<u32>,
         until_complete: bool,
         timeout_override: Option<u32>,
-        _resume: bool,
     ) -> RunResult {
         let start_time = Instant::now();
 
@@ -229,6 +255,9 @@ impl LoopController {
         let mut tasks_completed: u32 = 0;
         let stop_reason;
         let mut prd_cache = PrdCache::new(prd);
+        let mut consecutive_failures: u32 = 0;
+        let mut last_marked: Option<String> = None;
+        let max_failures = self.config.limits.max_task_failures;
 
         let timeout_minutes = timeout_override.unwrap_or(self.config.limits.timeout_minutes);
         let timeout_duration = std::time::Duration::from_secs(timeout_minutes as u64 * 60);
@@ -299,9 +328,25 @@ impl LoopController {
                 break;
             }
 
-            // Mark current task as in progress in source (e.g. beads)
-            if let Some(task) = pending.first() {
-                let _ = mark_story_in_progress(&task.id);
+            // Filter out tasks that are skipped or over the failure cap
+            let progress = SessionProgress::load(None).unwrap_or_default();
+            let actionable = current_prd.get_actionable_stories(&progress, max_failures);
+            if !pending.is_empty() && actionable.is_empty() {
+                stop_reason = StopReason::TasksExhausted;
+                self.output.warning(&format!(
+                    "All {} remaining task(s) skipped — each exceeded max_task_failures ({max_failures})",
+                    pending.len()
+                ));
+                break;
+            }
+
+            // Mark current task as in progress in source (e.g. beads) —
+            // once per task, not every iteration
+            if let Some(task) = actionable.first() {
+                if last_marked.as_deref() != Some(task.id.as_str()) {
+                    let _ = mark_story_in_progress(&task.id);
+                    last_marked = Some(task.id.clone());
+                }
             }
 
             // Run iteration
@@ -310,32 +355,73 @@ impl LoopController {
 
             iterations_completed += 1;
 
-            // Handle result
-            if !result.success {
-                if let Some(ref error) = result.error {
-                    if error == "AFK_COMPLETE" {
-                        stop_reason = StopReason::Complete;
-                        break;
-                    } else if error == "AFK_LIMIT_REACHED" {
-                        stop_reason = StopReason::MaxIterations;
-                        break;
-                    } else {
-                        self.output.error(error);
-                        stop_reason = StopReason::AiError(Some(error.clone()));
-                        break;
+            // Stop signals take priority over success/failure handling —
+            // AFK_COMPLETE arrives with success: true, so check error first.
+            match result.error.as_deref() {
+                Some("AFK_COMPLETE") => {
+                    stop_reason = StopReason::Complete;
+                    break;
+                }
+                Some("AFK_LIMIT_REACHED") => {
+                    stop_reason = StopReason::MaxIterations;
+                    break;
+                }
+                Some("User interrupted") => {
+                    stop_reason = StopReason::UserInterrupt;
+                    break;
+                }
+                _ => {}
+            }
+
+            if result.success {
+                consecutive_failures = 0;
+            } else {
+                consecutive_failures += 1;
+                let error = result
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "Iteration failed".to_string());
+                self.output.error(&error);
+
+                // Circuit breaker: abort if every iteration is failing —
+                // something is systematically wrong (bad CLI, quota, etc.)
+                if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                    stop_reason = StopReason::AiError(Some(format!(
+                        "{error} (aborting after {consecutive_failures} consecutive iteration failures)"
+                    )));
+                    break;
+                }
+
+                // Record the failure and skip the task once it exceeds
+                // max_task_failures, then move on to the next task.
+                if let Some(task) = actionable.first() {
+                    let failures = record_task_failure(&task.id, &error);
+                    if failures >= max_failures {
+                        mark_task_skipped(&task.id, max_failures);
+                        self.output.warning(&format!(
+                            "Skipping task '{}' after {} failures (max_task_failures={max_failures})",
+                            task.id, failures
+                        ));
                     }
                 }
             }
 
-            // Check if task was completed (PRD updated by AI CLI)
-            let updated_prd = prd_cache.get().clone();
+            // Check if task was completed (PRD updated by AI CLI).
+            // Force a fresh read — the AI may have rewritten tasks.json within
+            // the same mtime tick or via atomic replace.
+            let updated_prd = prd_cache.refresh().clone();
             let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
             let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
             if new_completed > old_completed {
                 tasks_completed += (new_completed - old_completed) as u32;
 
-                // Sync completed beads tasks back to beads
-                sync_completed_tasks(&current_prd, &updated_prd);
+                // Sync completed tasks back to their sources, then auto-commit
+                let newly_completed = sync_completed_tasks(&current_prd, &updated_prd);
+                for msg in
+                    auto_commit_messages(&self.config, &newly_completed, &|line| println!("{line}"))
+                {
+                    self.output.info(&msg);
+                }
             }
         }
 
@@ -387,11 +473,15 @@ pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResu
     let mut controller =
         LoopController::with_feedback(config.clone(), options.feedback_mode, options.show_mascot);
 
-    // Set up Ctrl+C handler
+    // Set up Ctrl+C handler: first press sets the interrupt flag (the running
+    // child is killed via ConsoleSink's interrupt check), second press exits
+    // immediately in case the child is wedged.
     let interrupt_flag = controller.interrupt_flag();
     let handler_result = ctrlc::set_handler(move || {
-        // Set the interrupt flag
-        interrupt_flag.store(true, Ordering::SeqCst);
+        if interrupt_flag.swap(true, Ordering::SeqCst) {
+            eprintln!("\nForce quitting.");
+            std::process::exit(130);
+        }
         eprintln!("\n\x1b[33mInterrupting... press Ctrl+C again to force quit\x1b[0m");
     });
 
@@ -415,7 +505,6 @@ pub fn run_loop_with_options(config: &AfkConfig, options: RunOptions) -> RunResu
         options.max_iterations,
         options.until_complete,
         options.timeout_minutes,
-        options.resume,
     )
 }
 
@@ -428,13 +517,11 @@ pub fn run_loop(
     max_iterations: Option<u32>,
     until_complete: bool,
     timeout_override: Option<u32>,
-    resume: bool,
 ) -> RunResult {
     let options = RunOptions {
         max_iterations,
         until_complete,
         timeout_minutes: timeout_override,
-        resume,
         feedback_mode: FeedbackMode::Minimal,
         show_mascot: true,
     };
@@ -452,8 +539,9 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
     use std::thread;
 
-    // Try to create TUI app
-    let mut tui_app = match TuiApp::new() {
+    // Try to create TUI app — buffer cap and tick rate come from config
+    let tick_rate = std::time::Duration::from_secs_f64(config.feedback.refresh_rate.max(0.05));
+    let mut tui_app = match TuiApp::with_options(config.feedback.max_output_lines, tick_rate) {
         Ok(app) => app,
         Err(e) => {
             eprintln!("\x1b[33mWarning:\x1b[0m Failed to start TUI: {e}");
@@ -461,6 +549,18 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
             return run_loop_with_options(config, options);
         }
     };
+
+    // Ctrl+C: first press asks the runner to stop (it polls the flag while
+    // streaming, even when the child is silent); second press force-exits.
+    // In raw mode SIGINT isn't delivered — Ctrl+C is handled as a key event
+    // by the TUI — but this covers the pre/post-TUI windows.
+    let ctrlc_interrupted = Arc::new(AtomicBool::new(false));
+    let ctrlc_flag = ctrlc_interrupted.clone();
+    let _ = ctrlc::set_handler(move || {
+        if ctrlc_flag.swap(true, Ordering::SeqCst) {
+            std::process::exit(130);
+        }
+    });
 
     // Prevent system sleep during autonomous session (guard releases on drop)
     let _sleep_guard = if config.limits.prevent_sleep {
@@ -476,8 +576,9 @@ pub fn run_loop_with_tui(config: &AfkConfig, options: RunOptions) -> RunResult {
     let config_clone = config.clone();
     let options_clone = options.clone();
 
-    // Shared interrupt flag for graceful shutdown
-    let interrupted = Arc::new(AtomicBool::new(false));
+    // Shared interrupt flag for graceful shutdown — the Ctrl+C flag above also
+    // feeds into it so a SIGINT outside raw mode still stops the runner.
+    let interrupted = ctrlc_interrupted.clone();
     let interrupted_runner = interrupted.clone();
 
     // Start file watcher in a separate thread
@@ -637,6 +738,9 @@ fn run_loop_with_tui_sender(
     let mut tasks_completed: u32 = 0;
     let stop_reason;
     let mut prd_cache = PrdCache::new(&prd);
+    let mut consecutive_failures: u32 = 0;
+    let mut last_marked: Option<String> = None;
+    let max_failures = config.limits.max_task_failures;
 
     let timeout_minutes = options
         .timeout_minutes
@@ -703,9 +807,25 @@ fn run_loop_with_tui_sender(
             break;
         }
 
-        // Mark current task as in progress in source (e.g. beads)
-        if let Some(task) = pending.first() {
-            let _ = mark_story_in_progress(&task.id);
+        // Filter out tasks that are skipped or over the failure cap
+        let progress = SessionProgress::load(None).unwrap_or_default();
+        let actionable = current_prd.get_actionable_stories(&progress, max_failures);
+        if !pending.is_empty() && actionable.is_empty() {
+            stop_reason = super::StopReason::TasksExhausted;
+            let _ = tx.send(TuiEvent::Warning(format!(
+                "All {} remaining task(s) skipped — each exceeded max_task_failures ({max_failures})",
+                pending.len()
+            )));
+            break;
+        }
+
+        // Mark current task as in progress in source (e.g. beads) —
+        // once per task, not every iteration
+        if let Some(task) = actionable.first() {
+            if last_marked.as_deref() != Some(task.id.as_str()) {
+                let _ = mark_story_in_progress(&task.id);
+                last_marked = Some(task.id.clone());
+            }
         }
 
         // Send iteration start event
@@ -716,7 +836,7 @@ fn run_loop_with_tui_sender(
         });
 
         // Update task info
-        if let Some(task) = pending.first() {
+        if let Some(task) = actionable.first() {
             let _ = tx.send(TuiEvent::TaskInfo {
                 id: task.id.clone(),
                 title: task.title.clone(),
@@ -733,35 +853,68 @@ fn run_loop_with_tui_sender(
             duration_secs: iter_start.elapsed().as_secs_f64(),
         });
 
-        // Handle result
-        if !result.success {
-            if let Some(ref error) = result.error {
-                if error == "AFK_COMPLETE" {
-                    stop_reason = super::StopReason::Complete;
-                    break;
-                } else if error == "AFK_LIMIT_REACHED" {
-                    stop_reason = super::StopReason::MaxIterations;
-                    break;
-                } else if error == "User interrupted" {
-                    stop_reason = super::StopReason::UserInterrupt;
-                    break;
-                } else {
-                    let _ = tx.send(TuiEvent::Error(error.clone()));
-                    stop_reason = super::StopReason::AiError(Some(error.clone()));
-                    break;
+        // Stop signals take priority over success/failure handling
+        match result.error.as_deref() {
+            Some("AFK_COMPLETE") => {
+                stop_reason = super::StopReason::Complete;
+                break;
+            }
+            Some("AFK_LIMIT_REACHED") => {
+                stop_reason = super::StopReason::MaxIterations;
+                break;
+            }
+            Some("User interrupted") => {
+                stop_reason = super::StopReason::UserInterrupt;
+                break;
+            }
+            _ => {}
+        }
+
+        if result.success {
+            consecutive_failures = 0;
+        } else {
+            consecutive_failures += 1;
+            let error = result
+                .error
+                .clone()
+                .unwrap_or_else(|| "Iteration failed".to_string());
+            let _ = tx.send(TuiEvent::Error(error.clone()));
+
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                stop_reason = super::StopReason::AiError(Some(format!(
+                    "{error} (aborting after {consecutive_failures} consecutive iteration failures)"
+                )));
+                break;
+            }
+
+            if let Some(task) = actionable.first() {
+                let failures = record_task_failure(&task.id, &error);
+                if failures >= max_failures {
+                    mark_task_skipped(&task.id, max_failures);
+                    let _ = tx.send(TuiEvent::Warning(format!(
+                        "Skipping task '{}' after {} failures (max_task_failures={max_failures})",
+                        task.id, failures
+                    )));
                 }
             }
         }
 
-        // Check if task was completed (PRD updated by AI CLI)
-        let updated_prd = prd_cache.get().clone();
+        // Check if task was completed (PRD updated by AI CLI) — force a fresh
+        // read so mtime granularity can't hide the update.
+        let updated_prd = prd_cache.refresh().clone();
         let old_completed = current_prd.user_stories.iter().filter(|s| s.passes).count();
         let new_completed = updated_prd.user_stories.iter().filter(|s| s.passes).count();
         if new_completed > old_completed {
             tasks_completed += (new_completed - old_completed) as u32;
 
-            // Sync completed beads tasks back to beads
-            sync_completed_tasks(&current_prd, &updated_prd);
+            // Sync completed tasks back to their sources, then auto-commit
+            let newly_completed = sync_completed_tasks(&current_prd, &updated_prd);
+            let rtx = tx.clone();
+            for msg in auto_commit_messages(config, &newly_completed, &move |line| {
+                let _ = rtx.send(TuiEvent::OutputLine(line.to_string()));
+            }) {
+                let _ = tx.send(TuiEvent::OutputLine(msg));
+            }
         }
 
         // Update task counts
@@ -843,28 +996,28 @@ fn prepare_ai_command(
 }
 
 /// Build and spawn the AI CLI command with piped stdout/stderr.
+///
+/// stderr is drained concurrently by a background thread (see
+/// [`crate::process::spawn_streaming`]) so a verbose child can't fill its
+/// stderr pipe and deadlock while we wait on stdout.
 #[cfg(not(feature = "pty"))]
 fn build_ai_command(
     config: &AfkConfig,
     prompt: &str,
     tx: &std::sync::mpsc::Sender<crate::tui::TuiEvent>,
-) -> Result<std::process::Child, super::iteration::IterationResult> {
-    use std::process::{Command, Stdio};
+) -> Result<crate::process::SpawnedProcess, super::iteration::IterationResult> {
+    use std::process::Command;
 
     let cmd_parts = prepare_ai_command(config, tx)?;
 
     let command = &cmd_parts[0];
-    let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
 
     let mut cmd = Command::new(command);
-    cmd.args(&args)
-        .arg(prompt)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(cmd_parts[1..].iter().map(|s| s.as_str()))
+        .arg(prompt);
 
-    match cmd.spawn() {
-        Ok(child) => Ok(child),
+    match crate::process::spawn_streaming(&mut cmd) {
+        Ok(proc) => Ok(proc),
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
                 Err(super::iteration::IterationResult::failure(format!(
@@ -883,29 +1036,19 @@ fn build_ai_command(
 #[cfg(not(feature = "pty"))]
 /// Wait for the AI CLI child process to complete.
 ///
-/// Returns a success result if the process exits cleanly, or a failure
-/// result with the exit code and stderr content if it fails.
+/// Reaps the child and collects stderr that was drained concurrently during
+/// streaming. Returns a success result if the process exits cleanly, or a
+/// failure result with the exit code and stderr content if it fails.
 fn wait_for_completion(
-    mut child: std::process::Child,
+    proc: crate::process::SpawnedProcess,
     output: String,
 ) -> super::iteration::IterationResult {
-    use std::io::{BufRead, BufReader};
-
-    // Capture stderr before waiting
-    let stderr_output = if let Some(stderr) = child.stderr.take() {
-        let reader = BufReader::new(stderr);
-        let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
-        lines.join("\n")
-    } else {
-        String::new()
-    };
-
-    match child.wait() {
-        Ok(status) => {
+    match proc.wait() {
+        Ok((status, stderr_output)) => {
             if !status.success() {
                 let exit_code = status.code().unwrap_or(-1);
                 // Include full stderr in error message
-                let error_msg = if stderr_output.is_empty() {
+                let error_msg = if stderr_output.trim().is_empty() {
                     format!("AI CLI exited with code {exit_code}")
                 } else {
                     format!(
@@ -977,6 +1120,15 @@ fn run_iteration_with_tui(
         interrupted,
     };
 
+    let stall_timeout = {
+        let mins = config.limits.stall_timeout_minutes;
+        if mins == 0 {
+            None
+        } else {
+            Some(std::time::Duration::from_secs(mins as u64 * 60))
+        }
+    };
+
     #[cfg(feature = "pty")]
     {
         use super::pty_spawn::PtyProcess;
@@ -995,7 +1147,10 @@ fn run_iteration_with_tui(
             }
         };
 
-        let reader: Box<dyn std::io::BufRead> = pty.take_reader();
+        // Count the iteration only once the child is actually running.
+        let _ = crate::progress::record_iteration(None);
+
+        let reader = pty.take_reader();
         let mut kill = || pty.kill();
         let stream_result = stream_subprocess_output(
             reader,
@@ -1003,7 +1158,11 @@ fn run_iteration_with_tui(
             &mut stream_parser,
             &mut sink,
             &mut output,
+            stall_timeout,
         );
+
+        // Reap the child on every exit path — killed or exited naturally.
+        let exit_ok = pty.wait();
 
         if stream_result.user_interrupted {
             return super::iteration::IterationResult {
@@ -1014,12 +1173,21 @@ fn run_iteration_with_tui(
             };
         }
 
+        if stream_result.stalled {
+            return super::iteration::IterationResult::failure_with_output(
+                format!(
+                    "AI CLI produced no output for {}m — killed as stalled",
+                    config.limits.stall_timeout_minutes
+                ),
+                output,
+            );
+        }
+
         if stream_result.completion_detected {
             return super::iteration::IterationResult::success(output);
         }
 
         // PTY merges stdout+stderr — just check exit status
-        let exit_ok = pty.wait();
         if exit_ok {
             super::iteration::IterationResult::success(output)
         } else {
@@ -1032,26 +1200,31 @@ fn run_iteration_with_tui(
 
     #[cfg(not(feature = "pty"))]
     {
-        // Build and spawn the AI CLI command (piped stdout/stderr)
-        let mut child = match build_ai_command(config, &prompt, &tx) {
-            Ok(child) => child,
+        // Build and spawn the AI CLI command (piped stdout/stderr, stderr
+        // drained concurrently on a background thread)
+        let mut proc = match build_ai_command(config, &prompt, &tx) {
+            Ok(proc) => proc,
             Err(result) => return result,
         };
 
-        let stdout = child.stdout.take().expect("stdout was piped");
-        let reader: Box<dyn std::io::BufRead> = Box::new(std::io::BufReader::new(stdout));
-        let mut kill = || {
-            let _ = child.kill();
-        };
+        // Count the iteration only once the child is actually running.
+        let _ = crate::progress::record_iteration(None);
+
+        let stdout = proc.take_stdout();
+        let mut kill = || proc.kill();
         let stream_result = stream_subprocess_output(
-            reader,
+            stdout,
             &mut kill,
             &mut stream_parser,
             &mut sink,
             &mut output,
+            stall_timeout,
         );
 
+        // Reap the child on every path — a killed child dropped without wait()
+        // leaks a zombie process per iteration.
         if stream_result.user_interrupted {
+            let _ = proc.kill_reap();
             return super::iteration::IterationResult {
                 success: false,
                 task_id: None,
@@ -1060,11 +1233,23 @@ fn run_iteration_with_tui(
             };
         }
 
+        if stream_result.stalled {
+            let (_stderr, _status) = proc.kill_reap();
+            return super::iteration::IterationResult::failure_with_output(
+                format!(
+                    "AI CLI produced no output for {}m — killed as stalled",
+                    config.limits.stall_timeout_minutes
+                ),
+                output,
+            );
+        }
+
         if stream_result.completion_detected {
+            let _ = proc.wait();
             return super::iteration::IterationResult::success(output);
         }
 
-        wait_for_completion(child, output)
+        wait_for_completion(proc, output)
     }
 }
 
@@ -1072,7 +1257,9 @@ fn run_iteration_with_tui(
 ///
 /// Compares old and new PRD states to find tasks that changed from
 /// `passes: false` to `passes: true` and closes them in beads or GitHub.
-fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
+///
+/// Returns the `(id, title)` pairs of newly completed tasks.
+fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) -> Vec<(String, String)> {
     use std::collections::HashSet;
 
     // Collect IDs of previously completed tasks
@@ -1084,6 +1271,7 @@ fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
         .collect();
 
     // Find and sync newly completed tasks
+    let mut completed = Vec::new();
     for story in new_prd
         .user_stories
         .iter()
@@ -1095,7 +1283,88 @@ fn sync_completed_tasks(old_prd: &PrdDocument, new_prd: &PrdDocument) {
         {
             crate::sources::close_github_issue(issue_number, None);
         }
+        completed.push((story.id.clone(), story.title.clone()));
     }
+    completed
+}
+
+/// Record an iteration failure against a task and return its failure count.
+fn record_task_failure(task_id: &str, error: &str) -> u32 {
+    let mut progress = SessionProgress::load(None).unwrap_or_default();
+    let count = {
+        let task = progress.set_task_status(
+            task_id,
+            TaskStatus::Failed,
+            "afk",
+            Some(crate::text::ellipsize(error, 200)),
+        );
+        task.failure_count
+    };
+    if let Err(e) = progress.save(None) {
+        eprintln!("\x1b[33mWarning: failed to save progress: {e}\x1b[0m");
+    }
+    count
+}
+
+/// Mark a task as skipped after exceeding the failure cap.
+fn mark_task_skipped(task_id: &str, max_failures: u32) {
+    let mut progress = SessionProgress::load(None).unwrap_or_default();
+    progress.set_task_status(
+        task_id,
+        TaskStatus::Skipped,
+        "afk",
+        Some(format!("Skipped after {max_failures} failures")),
+    );
+    let _ = progress.save(None);
+}
+
+/// Run quality gates and auto-commit completed work when `git.auto_commit` is
+/// enabled. Returns status messages to surface to the user; gate progress is
+/// routed through `report` (println for console, TuiEvent for TUI).
+fn auto_commit_messages(
+    config: &AfkConfig,
+    completed: &[(String, String)],
+    report: &dyn Fn(&str),
+) -> Vec<String> {
+    let mut messages = Vec::new();
+
+    if completed.is_empty() || !config.git.auto_commit || !crate::git::is_git_repo() {
+        return messages;
+    }
+
+    let gates =
+        super::quality_gates::run_quality_gates_reporting(&config.feedback_loops, false, report);
+    if !gates.all_passed {
+        messages.push(format!(
+            "Auto-commit skipped: quality gates failed ({})",
+            gates.failed_gates.join(", ")
+        ));
+        return messages;
+    }
+
+    let ids = completed
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let summary = if completed.len() == 1 {
+        completed[0].1.clone()
+    } else {
+        format!("{} tasks completed", completed.len())
+    };
+    let message = config
+        .git
+        .commit_message_template
+        .replace("{task_id}", &ids)
+        .replace("{message}", &summary);
+
+    if crate::git::auto_commit(&message) {
+        messages.push(format!("Auto-committed: {message}"));
+    } else {
+        messages.push("Auto-commit failed (git add/commit error)".to_string());
+    }
+
+    messages
 }
 
 #[cfg(test)]

@@ -82,15 +82,11 @@ pub fn archive_list() -> ArchiveCommandResult {
 
     for (_name, metadata) in archives.iter().take(20) {
         let branch = metadata.branch.as_deref().unwrap_or("-");
-        let date = &metadata.archived_at[..19]; // Trim microseconds
+        let date = crate::text::truncate_chars(&metadata.archived_at, 19); // Trim microseconds
         println!(
             "{:<24} {:<20} {:<8} {:<10} {}",
             date.replace('T', " "),
-            if branch.len() > 18 {
-                &branch[..18]
-            } else {
-                branch
-            },
+            crate::text::truncate_chars(branch, 18),
             metadata.iterations,
             format!(
                 "{}/{}",

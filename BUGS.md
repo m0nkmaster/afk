@@ -1,20 +1,15 @@
 # Bugs
 
-## GitHub Source Handling
+This file previously tracked known issues. All entries have been resolved:
 
-1. Should only allow one GitHub source - adding one should overwrite existing
-2. If added without a repo, infer from the current folder's git remote
-3. Close GitHub issues when tasks are marked complete (like beads sync does)
+- GitHub source handling (single-source replacement, remote inference, issue
+  closing on completion) — fixed; see `src/cli/commands/source.rs` and
+  `src/runner/controller.rs::sync_completed_tasks`
+- `afk status` task counts / current task display — fixed; session progress is
+  merged over PRD state
+- `afk init` inside a `.afk` folder — rejected with a helpful error
+- Slow iteration overhead — the runner now drains subprocess pipes
+  concurrently, enforces stall timeouts, and retries/skips failing tasks
+  instead of aborting the session
 
-## Status Command
-
-1. `afk status` should show current task as well as next task
-2. Task counts under "Session" don't match "Tasks" section (Session shows 0 pending when Tasks shows 4 pending)
-
-## Init Command
-
-1. Don't allow `afk init` to run inside a .afk folder - show helpful error message
-
-## Performance
-
-1. Iterations can be 2-5 minutes which is unacceptable if the number of tasks are 30+
+New issues are tracked with **beads** (`bd`). Run `bd ready` to see open work.

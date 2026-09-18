@@ -96,7 +96,7 @@ pub fn archive_session(reason: &str) -> Result<Option<PathBuf>, ProgressError> {
     };
     let metadata_path = archive_dir.join("metadata.json");
     let metadata_json = serde_json::to_string_pretty(&metadata)?;
-    fs::write(&metadata_path, metadata_json)?;
+    crate::fsutil::write_atomic(&metadata_path, metadata_json.as_bytes())?;
 
     Ok(Some(archive_dir))
 }

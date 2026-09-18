@@ -71,9 +71,20 @@ jobs:
       - name: Build
         run: cargo build --locked --release
 
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit dependencies
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   ci-success:
     name: CI Success
-    needs: [fmt, clippy, test]
+    needs: [fmt, clippy, test, audit]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -81,7 +92,8 @@ jobs:
         run: |
           if [[ "${{ needs.fmt.result }}" != "success" || 
                 "${{ needs.clippy.result }}" != "success" || 
-                "${{ needs.test.result }}" != "success" ]]; then
+                "${{ needs.test.result }}" != "success" ||
+                "${{ needs.audit.result }}" != "success" ]]; then
             echo "Some CI jobs failed"
             exit 1
           fi

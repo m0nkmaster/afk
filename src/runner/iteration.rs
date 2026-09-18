@@ -4,10 +4,11 @@
 //! Supports both plain text and NDJSON stream-json output formats.
 
 #[cfg(not(feature = "pty"))]
-use std::io::{BufRead, BufReader};
-#[cfg(not(feature = "pty"))]
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
+use std::time::Duration;
 
 use crate::config::AfkConfig;
 use crate::parser::StreamJsonParser;
@@ -74,6 +75,9 @@ pub struct IterationRunner {
     tui_sender: Option<Sender<TuiEvent>>,
     /// NDJSON parser for stream-json format.
     stream_parser: Option<StreamJsonParser>,
+    /// Shared interrupt flag — set by the Ctrl+C handler; checked while
+    /// streaming so a running child can be killed mid-iteration.
+    interrupted: Arc<AtomicBool>,
 }
 
 impl IterationRunner {
@@ -100,6 +104,7 @@ impl IterationRunner {
             current_task_description: None,
             tui_sender: None,
             stream_parser,
+            interrupted: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -120,7 +125,14 @@ impl IterationRunner {
             current_task_description: None,
             tui_sender: None,
             stream_parser,
+            interrupted: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// Set the shared interrupt flag (Ctrl+C). Checked while streaming so a
+    /// running child can be killed mid-iteration.
+    pub fn set_interrupted(&mut self, interrupted: Arc<AtomicBool>) {
+        self.interrupted = interrupted;
     }
 
     /// Set a TUI event sender for real-time updates.
@@ -250,13 +262,15 @@ impl IterationRunner {
 
         // Stream stdout through the unified streaming function
         let mut output = String::with_capacity(64 * 1024);
+        let stall_timeout = self.stall_timeout();
         let mut sink = ConsoleSink {
             output: &mut self.output,
             tui_sender: self.tui_sender.as_ref(),
+            interrupted: self.interrupted.clone(),
         };
 
         #[cfg(feature = "pty")]
-        let (completion_detected, stderr_output, wait_result) = {
+        let (stream_result, stderr_output, wait_result) = {
             use super::pty_spawn::PtyProcess;
 
             let mut pty = match PtyProcess::spawn(cmd_parts, prompt) {
@@ -279,7 +293,10 @@ impl IterationRunner {
                 }
             };
 
-            let reader: Box<dyn std::io::BufRead> = pty.take_reader();
+            // Count the iteration only once the child is actually running.
+            let _ = crate::progress::record_iteration(None);
+
+            let reader = pty.take_reader();
             let mut kill = || pty.kill();
             let stream_result = stream_subprocess_output(
                 reader,
@@ -287,31 +304,28 @@ impl IterationRunner {
                 &mut self.stream_parser,
                 &mut sink,
                 &mut output,
+                stall_timeout,
             );
 
             // PTY merges stdout+stderr — no separate stderr capture
             let exit_ok = pty.wait();
             (
-                stream_result.completion_detected,
+                stream_result,
                 String::new(),
                 Ok::<bool, std::io::Error>(exit_ok),
             )
         };
 
         #[cfg(not(feature = "pty"))]
-        let (completion_detected, stderr_output, wait_result) = {
+        let (stream_result, stderr_output, wait_result) = {
             let command = &cmd_parts[0];
-            let args: Vec<&str> = cmd_parts[1..].iter().map(|s| s.as_str()).collect();
 
             let mut cmd = Command::new(command);
-            cmd.args(&args)
-                .arg(prompt)
-                .stdin(Stdio::null())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+            cmd.args(cmd_parts[1..].iter().map(|s| s.as_str()))
+                .arg(prompt);
 
-            let mut child = match cmd.spawn() {
-                Ok(child) => child,
+            let mut proc = match crate::process::spawn_streaming(&mut cmd) {
+                Ok(proc) => proc,
                 Err(e) => {
                     self.output.stop_feedback();
                     if e.kind() == std::io::ErrorKind::NotFound {
@@ -324,34 +338,28 @@ impl IterationRunner {
                 }
             };
 
-            let stdout = child.stdout.take().expect("stdout was piped");
-            let reader: Box<dyn std::io::BufRead> = Box::new(BufReader::new(stdout));
-            let mut kill = || {
-                let _ = child.kill();
-            };
+            // Count the iteration only once the child is actually running.
+            let _ = crate::progress::record_iteration(None);
+
+            let stdout = proc.take_stdout();
+            let mut kill = || proc.kill();
             let stream_result = stream_subprocess_output(
-                reader,
+                stdout,
                 &mut kill,
                 &mut self.stream_parser,
                 &mut sink,
                 &mut output,
+                stall_timeout,
             );
 
-            // Capture stderr before waiting for process
-            let stderr_output = if let Some(stderr) = child.stderr.take() {
-                let reader = BufReader::new(stderr);
-                let lines: Vec<String> = reader.lines().map_while(Result::ok).collect();
-                lines.join("\n")
-            } else {
-                String::new()
-            };
-
-            let wait_result = child.wait().map(|status| status.success());
-            (
-                stream_result.completion_detected,
-                stderr_output,
-                wait_result,
-            )
+            // stderr was drained concurrently during streaming; reap the child.
+            let wait_result = proc
+                .wait()
+                .map(|(status, stderr)| (status.success(), stderr));
+            match wait_result {
+                Ok((success, stderr)) => (stream_result, stderr, Ok(success)),
+                Err(e) => (stream_result, String::new(), Err::<bool, std::io::Error>(e)),
+            }
         };
 
         // Show iteration summary with stats
@@ -360,8 +368,25 @@ impl IterationRunner {
         // Stop feedback display
         self.output.stop_feedback();
 
-        if completion_detected {
+        if stream_result.user_interrupted {
+            return IterationResult {
+                success: false,
+                task_id: None,
+                error: Some("User interrupted".to_string()),
+                output,
+            };
+        }
+
+        if stream_result.completion_detected {
             return IterationResult::success(output);
+        }
+
+        if stream_result.stalled {
+            let mins = self.config.limits.stall_timeout_minutes;
+            return IterationResult::failure_with_output(
+                format!("AI CLI produced no output for {mins}m — killed as stalled"),
+                output,
+            );
         }
 
         // Check process exit status
@@ -385,6 +410,17 @@ impl IterationRunner {
                 format!("Failed to wait for AI CLI: {e}"),
                 output,
             ),
+        }
+    }
+
+    /// Kill the child if it produces no output for `limits.stall_timeout_minutes`.
+    /// `0` disables the watchdog.
+    fn stall_timeout(&self) -> Option<Duration> {
+        let mins = self.config.limits.stall_timeout_minutes;
+        if mins == 0 {
+            None
+        } else {
+            Some(Duration::from_secs(mins as u64 * 60))
         }
     }
 

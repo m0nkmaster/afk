@@ -35,6 +35,10 @@ pub struct FeedbackDisplay {
     mode: DisplayMode,
     /// Whether to show the ASCII mascot.
     show_mascot: bool,
+    /// Whether to show the changed-files section.
+    show_files: bool,
+    /// Whether to show metric counts (tools, lines).
+    show_metrics: bool,
     /// Whether the display has been started.
     started: bool,
     /// Start time of the current session.
@@ -61,6 +65,8 @@ impl FeedbackDisplay {
         Self {
             mode: DisplayMode::Minimal,
             show_mascot: true,
+            show_files: true,
+            show_metrics: true,
             started: false,
             start_time: None,
             spinner_frame: 0,
@@ -88,6 +94,16 @@ impl FeedbackDisplay {
             show_mascot,
             ..Self::new()
         }
+    }
+
+    /// Set whether to show the changed-files section.
+    pub fn set_show_files(&mut self, show: bool) {
+        self.show_files = show;
+    }
+
+    /// Set whether to show metric counts (tools, lines).
+    pub fn set_show_metrics(&mut self, show: bool) {
+        self.show_metrics = show;
     }
 
     /// Start the feedback display.
@@ -236,23 +252,25 @@ impl FeedbackDisplay {
                 bar.push_str(&format!("\x1b[36;1m{}\x1b[0m ", spinner));
             }
         }
-        bar.push_str(&format!("\x1b[33m{} calls\x1b[0m", metrics.tool_calls));
-
-        // Separator
-        bar.push_str(" \x1b[2m│\x1b[0m ");
+        if self.show_metrics {
+            bar.push_str(&format!("\x1b[33m{} calls\x1b[0m", metrics.tool_calls));
+        }
 
         // Files count (only changed files, not reads)
-        let files_count = metrics.files_changed();
-        bar.push_str(&format!("\x1b[34m{} files\x1b[0m", files_count));
-
-        // Separator
-        bar.push_str(" \x1b[2m│\x1b[0m ");
+        if self.show_files {
+            let files_count = metrics.files_changed();
+            bar.push_str(" \x1b[2m│\x1b[0m ");
+            bar.push_str(&format!("\x1b[34m{} files\x1b[0m", files_count));
+        }
 
         // Line changes
-        bar.push_str(&format!(
-            "\x1b[32;1m+{}\x1b[0m\x1b[2m/\x1b[0m\x1b[31;1m-{}\x1b[0m",
-            metrics.lines_added, metrics.lines_removed
-        ));
+        if self.show_metrics {
+            bar.push_str(" \x1b[2m│\x1b[0m ");
+            bar.push_str(&format!(
+                "\x1b[32;1m+{}\x1b[0m\x1b[2m/\x1b[0m\x1b[31;1m-{}\x1b[0m",
+                metrics.lines_added, metrics.lines_removed
+            ));
+        }
 
         vec![bar]
     }
@@ -298,8 +316,10 @@ impl FeedbackDisplay {
         lines.extend(self.render_activity_section(metrics, activity_state));
 
         // Files section
-        lines.push("\x1b[36m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m".to_string());
-        lines.extend(self.render_files_section(metrics));
+        if self.show_files {
+            lines.push("\x1b[36m├─────────────────────────────────────────────────────────────────────────────┤\x1b[0m".to_string());
+            lines.extend(self.render_files_section(metrics));
+        }
 
         // Mascot section (if enabled)
         if self.show_mascot {
@@ -342,26 +362,32 @@ impl FeedbackDisplay {
         lines.push(self.pad_line(&activity_line));
 
         // Tool calls
-        let tools_line = format!(
-            "\x1b[36m│\x1b[0m    \x1b[2mTools:\x1b[0m \x1b[33;1m{}\x1b[0m",
-            metrics.tool_calls
-        );
-        lines.push(self.pad_line(&tools_line));
+        if self.show_metrics {
+            let tools_line = format!(
+                "\x1b[36m│\x1b[0m    \x1b[2mTools:\x1b[0m \x1b[33;1m{}\x1b[0m",
+                metrics.tool_calls
+            );
+            lines.push(self.pad_line(&tools_line));
+        }
 
         // Files changed (only created/modified/deleted, not reads)
-        let files_count = metrics.files_changed();
-        let files_line = format!(
-            "\x1b[36m│\x1b[0m    \x1b[2mFiles:\x1b[0m \x1b[34;1m{}\x1b[0m",
-            files_count
-        );
-        lines.push(self.pad_line(&files_line));
+        if self.show_files {
+            let files_count = metrics.files_changed();
+            let files_line = format!(
+                "\x1b[36m│\x1b[0m    \x1b[2mFiles:\x1b[0m \x1b[34;1m{}\x1b[0m",
+                files_count
+            );
+            lines.push(self.pad_line(&files_line));
+        }
 
         // Lines added/removed
-        let lines_line = format!(
-            "\x1b[36m│\x1b[0m    \x1b[2mLines:\x1b[0m \x1b[32;1m+{}\x1b[0m \x1b[2m/\x1b[0m \x1b[31;1m-{}\x1b[0m",
-            metrics.lines_added, metrics.lines_removed
-        );
-        lines.push(self.pad_line(&lines_line));
+        if self.show_metrics {
+            let lines_line = format!(
+                "\x1b[36m│\x1b[0m    \x1b[2mLines:\x1b[0m \x1b[32;1m+{}\x1b[0m \x1b[2m/\x1b[0m \x1b[31;1m-{}\x1b[0m",
+                metrics.lines_added, metrics.lines_removed
+            );
+            lines.push(self.pad_line(&lines_line));
+        }
 
         lines
     }
@@ -439,12 +465,10 @@ impl FeedbackDisplay {
 
         // Task description
         if let Some(ref desc) = self.task_description {
-            let truncated = if desc.len() > 50 {
-                format!("{}...", &desc[..47])
-            } else {
-                desc.clone()
-            };
-            let desc_line = format!("\x1b[36m│\x1b[0m    \x1b[2;3m{}\x1b[0m", truncated);
+            let desc_line = format!(
+                "\x1b[36m│\x1b[0m    \x1b[2;3m{}\x1b[0m",
+                crate::text::ellipsize(desc, 50)
+            );
             lines.push(self.pad_line(&desc_line));
         }
 
@@ -480,25 +504,37 @@ impl FeedbackDisplay {
         // Split into directory and filename
         if let Some(pos) = path.rfind('/') {
             let (directory, filename) = path.split_at(pos + 1);
-            if filename.len() >= max_length - 4 {
-                // Filename alone is too long
-                return format!(
-                    "...{}",
-                    &filename[filename.len().saturating_sub(max_length - 3)..]
-                );
+            if filename.len() >= max_length.saturating_sub(4) {
+                // Filename alone is too long — keep its tail (chars, not bytes)
+                let tail: String = filename
+                    .chars()
+                    .rev()
+                    .take(max_length.saturating_sub(3))
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
+                return format!("...{}", tail);
             }
 
-            // Truncate directory
+            // Truncate directory, keeping its tail
             let remaining = max_length.saturating_sub(filename.len()).saturating_sub(4);
             if remaining > 0 {
-                let dir_truncated = &directory[directory.len().saturating_sub(remaining)..];
-                return format!("...{}{}", dir_truncated, filename);
+                let dir_tail: String = directory
+                    .chars()
+                    .rev()
+                    .take(remaining)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
+                return format!("...{}{}", dir_tail, filename);
             }
             return format!(".../{}", filename);
         }
 
         // No directory, just truncate
-        format!("{}...", &path[..max_length.saturating_sub(3)])
+        crate::text::ellipsize(path, max_length)
     }
 
     // =========================================================================

@@ -49,6 +49,8 @@ pub struct UpdateCheckResult {
     pub download_url: Option<String>,
     /// Asset name.
     pub asset_name: Option<String>,
+    /// Download URL for the checksums.sha256 manifest, if present.
+    pub checksums_url: Option<String>,
 }
 
 /// Error type for update operations.
@@ -77,6 +79,14 @@ pub enum UpdateError {
     /// Self-update not available for pip installations.
     #[error("Self-update not supported when installed via pip")]
     InstalledViaPip,
+    /// Downloaded binary did not match the published SHA-256 checksum.
+    #[error("Checksum mismatch: expected {expected}, got {actual}")]
+    ChecksumMismatch {
+        /// Expected SHA-256 from checksums.sha256.
+        expected: String,
+        /// Actual SHA-256 of the downloaded binary.
+        actual: String,
+    },
 }
 
 /// Get the platform-specific binary name.
@@ -212,6 +222,7 @@ async fn check_for_updates(include_prerelease: bool) -> Result<UpdateCheckResult
     // Find the binary for this platform
     let platform_binary = get_platform_binary();
     let asset = release.assets.iter().find(|a| a.name == platform_binary);
+    let checksums = release.assets.iter().find(|a| a.name == "checksums.sha256");
 
     Ok(UpdateCheckResult {
         current_version: CURRENT_VERSION.to_string(),
@@ -219,11 +230,37 @@ async fn check_for_updates(include_prerelease: bool) -> Result<UpdateCheckResult
         update_available,
         download_url: asset.map(|a| a.browser_download_url.clone()),
         asset_name: asset.map(|a| a.name.clone()),
+        checksums_url: checksums.map(|a| a.browser_download_url.clone()),
+    })
+}
+
+/// SHA-256 hex digest of `data`.
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(data))
+}
+
+/// Parse the expected checksum for `asset_name` out of a checksums.sha256
+/// manifest (format: `<hash>  <name>` per line, name optionally `*`-prefixed).
+fn parse_checksum(manifest: &str, asset_name: &str) -> Option<String> {
+    manifest.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let name = parts.next()?.trim_start_matches('*');
+        (name == asset_name).then(|| hash.to_string())
     })
 }
 
 /// Download and install the update.
-async fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
+///
+/// The binary is verified against the release's checksums.sha256 manifest when
+/// available, written to a temp file next to the current executable (so the
+/// final rename stays on one filesystem), and swapped in atomically.
+async fn perform_update(
+    download_url: &str,
+    checksums_url: Option<&str>,
+    asset_name: &str,
+) -> Result<PathBuf, UpdateError> {
     // Check if running from pip
     if is_pip_install() {
         return Err(UpdateError::InstalledViaPip);
@@ -234,14 +271,43 @@ async fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
 
     let client = create_client()?;
 
-    // Download to temp file
-    let temp_dir = env::temp_dir();
-    let temp_file = temp_dir.join(format!("afk-update-{}", std::process::id()));
+    // Fetch the expected checksum from the release manifest
+    let expected_checksum = match checksums_url {
+        Some(url) => match client.get(url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                parse_checksum(&resp.text().await?, asset_name)
+            }
+            _ => None,
+        },
+        None => None,
+    };
+
+    if expected_checksum.is_none() {
+        println!(
+            "\x1b[33m⚠\x1b[0m  No checksum manifest for this release — skipping integrity check"
+        );
+    }
 
     println!("\x1b[2mDownloading update...\x1b[0m");
 
     let response = client.get(download_url).send().await?;
     let bytes = response.bytes().await?;
+
+    // Verify integrity before touching the current binary
+    if let Some(ref expected) = expected_checksum {
+        let actual = sha256_hex(&bytes);
+        if actual != *expected {
+            return Err(UpdateError::ChecksumMismatch {
+                expected: expected.clone(),
+                actual,
+            });
+        }
+        println!("\x1b[2mChecksum verified.\x1b[0m");
+    }
+
+    // Write to a temp file in the SAME directory as the target so the rename
+    // is atomic on a single filesystem (env::temp_dir may be a different mount).
+    let temp_file = current_exe.with_extension("afk-new");
 
     {
         let mut file = File::create(&temp_file)?;
@@ -271,7 +337,10 @@ async fn perform_update(download_url: &str) -> Result<PathBuf, UpdateError> {
 
     #[cfg(not(windows))]
     {
-        fs::rename(&temp_file, &current_exe)?;
+        if let Err(e) = fs::rename(&temp_file, &current_exe) {
+            let _ = fs::remove_file(&temp_file);
+            return Err(UpdateError::IoError(e));
+        }
     }
 
     Ok(current_exe)
@@ -342,6 +411,11 @@ async fn execute_update_async(beta: bool, check_only: bool) -> Result<(), Update
             .download_url
             .as_ref()
             .expect("download_url must be Some when can_update() is true"),
+        result.checksums_url.as_deref(),
+        result
+            .asset_name
+            .as_deref()
+            .unwrap_or_else(|| get_platform_binary()),
     )
     .await?;
 
@@ -436,6 +510,35 @@ mod tests {
     #[allow(clippy::const_is_empty)]
     fn test_current_version_defined() {
         assert!(!CURRENT_VERSION.is_empty());
+    }
+
+    #[test]
+    fn test_sha256_hex() {
+        // SHA-256 of empty input is well known
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn test_parse_checksum() {
+        let manifest = "abc123  afk-darwin-arm64\ndef456  afk-linux-x86_64\n";
+        assert_eq!(
+            parse_checksum(manifest, "afk-linux-x86_64"),
+            Some("def456".to_string())
+        );
+        assert_eq!(parse_checksum(manifest, "afk-windows-x86_64.exe"), None);
+    }
+
+    #[test]
+    fn test_parse_checksum_binary_marker() {
+        // sha256sum -b emits `*name`
+        let manifest = "abc123 *afk-darwin-arm64\n";
+        assert_eq!(
+            parse_checksum(manifest, "afk-darwin-arm64"),
+            Some("abc123".to_string())
+        );
     }
 
     // Note: Network tests are skipped to avoid external dependencies
