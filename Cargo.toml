@@ -51,7 +51,7 @@ ratatui = "0.29"
 crossterm = "0.28"
 
 # HTTP client for self-update
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.13", features = ["json"] }
 
 # SHA-256 verification of self-update downloads
 sha2 = "0.10"
