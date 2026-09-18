@@ -57,7 +57,7 @@ reqwest = { version = "0.12", features = ["json"] }
 sha2 = "0.10"
 
 # PTY support (opt-in)
-portable-pty = { version = "0.8", optional = true }
+portable-pty = { version = "0.9", optional = true }
 vte = { version = "0.14", optional = true }
 
 [features]
