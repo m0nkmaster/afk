@@ -54,7 +54,7 @@ crossterm = "0.28"
 reqwest = { version = "0.12", features = ["json"] }
 
 # SHA-256 verification of self-update downloads
-sha2 = "0.10"
+sha2 = "0.11"
 
 # PTY support (opt-in)
 portable-pty = { version = "0.8", optional = true }
